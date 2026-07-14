@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
-import type { EngineInput } from './types.js';
-import { NamingEngine } from './engine.js';
+import type { EngineInput } from '@mediafox/naming-engine';
+import { NamingEngine } from '@mediafox/naming-engine';
 import { generateMarkdownReport } from './report.js';
 
 function usage(): void {
@@ -69,7 +69,6 @@ function main(): void {
     console.log(`  ${c.scores.final.toFixed(1).padStart(5)}  ${c.name}`);
   }
 
-  // Note: top3 brand identities must be authored (see branding report)
   const markdown = generateMarkdownReport(report, [], {
     name: report.top10[0]?.name ?? '',
     score: report.top10[0]?.scores.final ?? 0,

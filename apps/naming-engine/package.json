@@ -1,7 +1,7 @@
 {
-  "name": "@mediafox/naming-engine",
+  "name": "@mediafox/naming-engine-cli",
   "version": "1.0.0",
-  "description": "MediaFOX Forge institutional naming engine — generates, scores, filters and ranks brand name candidates",
+  "description": "MediaFOX Forge naming engine CLI — thin wrapper over @mediafox/naming-engine",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.5.3",
@@ -13,7 +13,9 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint ."
   },
-  "dependencies": {},
+  "dependencies": {
+    "@mediafox/naming-engine": "workspace:*"
+  },
   "devDependencies": {
     "@mediafox/eslint-config": "workspace:*",
     "@mediafox/typescript-config": "workspace:*",

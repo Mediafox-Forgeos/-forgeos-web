@@ -8,6 +8,7 @@ import {
   BriefcaseBusiness,
   ClipboardList,
   FileCheck2,
+  FlaskConical,
   FolderKanban,
   Menu,
   Settings,
@@ -31,6 +32,8 @@ const navigation: NavigationItem[] = [
   { label: 'Knowledge', href: '/knowledge', icon: BookOpen },
   { label: 'Settings', href: '/settings', icon: Settings },
 ];
+
+const FORGE_LABS_URL = process.env.NEXT_PUBLIC_FORGE_LABS_URL ?? 'http://localhost:3001';
 
 export function AppSidebar() {
   const pathname = usePathname();
@@ -100,6 +103,22 @@ export function AppSidebar() {
             );
           })}
         </nav>
+
+        {/* Forge Labs external link */}
+        <div className="border-border mx-2 mb-2 border-t pt-2">
+          <a
+            href={FORGE_LABS_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-muted-foreground hover:bg-accent hover:text-foreground group flex h-10 items-center gap-3 rounded-lg px-3 text-sm transition-colors"
+          >
+            <FlaskConical className="size-4" aria-hidden="true" />
+            <span className="flex-1">Forge Labs</span>
+            <span className="rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
+              New
+            </span>
+          </a>
+        </div>
 
         <div className="mt-auto px-3 pb-2">
           <p className="text-muted-foreground text-xs">Mediafox · Alpha</p>

@@ -1,4 +1,4 @@
-import type { BrandingReport, CandidateName, BrandIdentity, Strategy } from './types.js';
+import type { BrandingReport, CandidateName, BrandIdentity, Strategy } from '@mediafox/naming-engine';
 
 function strategyLabel(s: Strategy): string {
   const map: Record<Strategy, string> = {
@@ -18,8 +18,6 @@ function scoreBar(score: number): string {
   const filled = Math.round(score / 10);
   return '█'.repeat(filled) + '░'.repeat(10 - filled) + ` ${score.toFixed(1)}`;
 }
-
-// ─── Report sections ──────────────────────────────────────────────────────────
 
 export function formatHeader(report: BrandingReport): string {
   const input = report.input;
@@ -176,7 +174,6 @@ export function generateMarkdownReport(
     `## TOP 3 — Full Brand Identity\n\n${top3Identities.map((id, i) => formatFinalist(id, i + 1)).join('\n')}`,
     formatWinner(winner),
   ];
-
   return sections.join('\n\n');
 }
 
