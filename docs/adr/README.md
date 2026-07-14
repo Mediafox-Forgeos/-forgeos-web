@@ -52,6 +52,7 @@ Links to other ADRs, product documents, or engineering documents.
 | ADR-0002 | EV Platform is White Label | Approved | 2026-07-13 |
 | ADR-0003 | Kylum Energy is Pilot Customer | Approved | 2026-07-13 |
 | ADR-0004 | Technology Stack | Pending | 2026-07-13 |
+| ADR-0005 | [MOVOS is the commercial mobility platform](ADR-0005-movos-commercial-platform.md) | Approved | 2026-07-14 |
 
 > ADR-0001 through ADR-0004 are currently recorded as fixture data in the ForgeOS workspace (`apps/forgeos-web/data/decisions.ts`). Formal ADR documents will be migrated to this directory as part of Mission 003.
 

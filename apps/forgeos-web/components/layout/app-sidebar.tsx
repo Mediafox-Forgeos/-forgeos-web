@@ -15,6 +15,7 @@ import {
   Sparkles,
   PanelsTopLeft,
   X,
+  Zap,
 } from 'lucide-react';
 import * as React from 'react';
 
@@ -35,6 +36,8 @@ const navigation: NavigationItem[] = [
 
 const FORGE_LABS_URL =
   process.env.NEXT_PUBLIC_FORGE_LABS_URL ?? 'http://localhost:3001';
+
+const MOVOS_URL = process.env.NEXT_PUBLIC_MOVOS_URL ?? 'http://localhost:3002';
 
 export function AppSidebar() {
   const pathname = usePathname();
@@ -105,8 +108,8 @@ export function AppSidebar() {
           })}
         </nav>
 
-        {/* Forge Labs external link */}
-        <div className="border-border mx-2 mb-2 border-t pt-2">
+        {/* External product links */}
+        <div className="border-border mx-2 mb-2 space-y-1 border-t pt-2">
           <a
             href={FORGE_LABS_URL}
             target="_blank"
@@ -115,6 +118,18 @@ export function AppSidebar() {
           >
             <FlaskConical className="size-4" aria-hidden="true" />
             <span className="flex-1">Forge Labs</span>
+            <span className="bg-muted text-muted-foreground rounded-full px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide">
+              New
+            </span>
+          </a>
+          <a
+            href={MOVOS_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-muted-foreground hover:bg-accent hover:text-foreground group flex h-10 items-center gap-3 rounded-lg px-3 text-sm transition-colors"
+          >
+            <Zap className="size-4" aria-hidden="true" />
+            <span className="flex-1">MOVOS</span>
             <span className="bg-muted text-muted-foreground rounded-full px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide">
               New
             </span>
