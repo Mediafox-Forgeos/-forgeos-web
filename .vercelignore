@@ -1,0 +1,6 @@
+apps/forgeos-web/.next
+apps/forge-labs/.next
+apps/movos-web/.next
+node_modules
+.claude
+.git
