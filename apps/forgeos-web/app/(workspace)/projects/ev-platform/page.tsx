@@ -17,13 +17,23 @@ export default function EvPlatformPage() {
   return (
     <div className="mx-auto max-w-6xl px-5 py-8 sm:px-8 lg:px-12 lg:py-10">
       <PageHeader
-        eyebrow="Projects / EV Platform"
-        title="EV Platform"
+        eyebrow="Projects / MOVOS"
+        title="MOVOS"
         description={evPlatform.description}
         action={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <StatusBadge status={evPlatform.status} />
             <StatusBadge status={evPlatform.priority} />
+            <a
+              href={
+                process.env.NEXT_PUBLIC_MOVOS_URL ?? 'http://localhost:3002'
+              }
+              target="_blank"
+              rel="noopener noreferrer"
+              className="border-border hover:bg-accent inline-flex items-center rounded-md border px-3 py-1 text-sm transition-colors"
+            >
+              Open MOVOS
+            </a>
           </div>
         }
       />

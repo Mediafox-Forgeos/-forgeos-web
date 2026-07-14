@@ -1,0 +1,55 @@
+import type { User } from '@/types';
+
+/** Demo operator directory. No authentication is wired. Not production data. */
+export const users: User[] = [
+  {
+    id: 'user-01',
+    name: 'Ana María Gómez',
+    email: 'ana.gomez@kylum.example',
+    role: 'Administrador',
+    organizationName: 'Kylum Energy',
+    status: 'ACTIVE',
+    lastActivity: '2026-07-14T13:40:00-05:00',
+    isDemo: true,
+  },
+  {
+    id: 'user-02',
+    name: 'Carlos Restrepo',
+    email: 'carlos.restrepo@kylum.example',
+    role: 'Operador',
+    organizationName: 'Kylum Energy',
+    status: 'ACTIVE',
+    lastActivity: '2026-07-14T12:15:00-05:00',
+    isDemo: true,
+  },
+  {
+    id: 'user-03',
+    name: 'Diana Salazar',
+    email: 'diana.salazar@kylum.example',
+    role: 'Soporte',
+    organizationName: 'Kylum Energy',
+    status: 'ACTIVE',
+    lastActivity: '2026-07-14T10:02:00-05:00',
+    isDemo: true,
+  },
+  {
+    id: 'user-04',
+    name: 'Julián Ospina',
+    email: 'julian.ospina@kylum.example',
+    role: 'Analista',
+    organizationName: 'Kylum Energy',
+    status: 'INVITED',
+    lastActivity: '2026-07-12T16:48:00-05:00',
+    isDemo: true,
+  },
+  {
+    id: 'user-05',
+    name: 'Valentina Ruiz',
+    email: 'valentina.ruiz@kylum.example',
+    role: 'Visualizador',
+    organizationName: 'Kylum Energy',
+    status: 'SUSPENDED',
+    lastActivity: '2026-07-08T09:30:00-05:00',
+    isDemo: true,
+  },
+];
