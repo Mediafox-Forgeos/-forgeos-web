@@ -14,7 +14,12 @@ packages/
   typescript-config/     Shared strict TypeScript baselines
   ui/                    Reserved shared low-level UI primitives
 docs/
-  architecture/          Architecture decisions and package boundaries
+  architecture/          Long-form architecture documents and system design
+  adr/                   Architecture Decision Records (indexed, immutable)
+  agents/                Agent operating protocols and context contracts
+  company/               Founding documents, organizational structure, and principles
+  engineering/           Engineering standards, testing strategy, and CI/CD playbooks
+  product/               Product vision, roadmaps, and requirements
 ```
 
 ## Prerequisites
@@ -71,3 +76,18 @@ Settings → General → Root Directory: apps/forgeos-web
 Keep the production branch set to `main`. No repository secrets or environment variables are required by the current application. Vercel should install from the pnpm workspace lockfile and build the selected application directory.
 
 See [the monorepo architecture document](docs/architecture/MONOREPO.md) for package boundaries and dependency rules.
+
+## Company Documentation
+
+MediaFOX Forge institutional documentation — organizational structure, founding principles, engineering standards, product strategy, and agent protocols.
+
+| Section | Description |
+| --- | --- |
+| [Company](docs/company/README.md) | Founding documents, organizational structure, and operating principles |
+| [Architecture](docs/architecture/README.md) | Long-form system design documents |
+| [ADR](docs/adr/README.md) | Architecture Decision Records |
+| [Engineering](docs/engineering/README.md) | Engineering standards, testing strategy, CI/CD |
+| [Product](docs/product/README.md) | Product vision, roadmaps, and requirements |
+| [Agents](docs/agents/README.md) | AI agent protocols, context contracts, and behavioral boundaries |
+
+The founding organizational structure, executive roles, engineering principles, and AI collaboration model are defined in the [Founder Team Constitution](docs/company/FOUNDER_TEAM_CONSTITUTION.md).
