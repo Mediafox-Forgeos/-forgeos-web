@@ -7,6 +7,7 @@ ForgeOS is the AI operating workspace for MediaFOX Forge. It currently provides 
 ```text
 apps/
   forgeos-web/           Next.js ForgeOS application
+  naming-engine/         Internal naming engine — generates, scores, and ranks brand names
 packages/
   core-domain/           Framework-independent domain boundary (Mission 003 placeholder)
   eslint-config/         Shared framework-neutral ESLint support values
@@ -56,7 +57,8 @@ Use `pnpm format` to apply formatting.
 
 ## Packages
 
-- `@mediafox/forgeos-web`: the existing ForgeOS Next.js application.
+- `@mediafox/forgeos-web`: the ForgeOS Next.js application.
+- `@mediafox/naming-engine`: internal naming engine. Generates 500,000+ candidates, scores across 13 dimensions, and produces investor-ready Branding Reports. See [`apps/naming-engine/`](apps/naming-engine/).
 - `@mediafox/core-domain`: framework-independent future domain model. It is intentionally a Mission 003 scaffold.
 - `@mediafox/shared-types`: future cross-application contracts. ForgeOS view types remain local until another consumer needs them.
 - `@mediafox/ui`: future low-level shared primitives. Existing UI primitives remain in ForgeOS to preserve Tailwind behavior during this migration.

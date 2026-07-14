@@ -1,0 +1,24 @@
+{
+  "name": "@mediafox/naming-engine",
+  "version": "1.0.0",
+  "description": "MediaFOX Forge institutional naming engine — generates, scores, filters and ranks brand name candidates",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.5.3",
+  "scripts": {
+    "dev": "tsx src/cli.ts",
+    "run:example": "tsx src/cli.ts --input example-input.json --output reports/output.md",
+    "build": "tsc --outDir dist",
+    "start": "node dist/cli.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@mediafox/eslint-config": "workspace:*",
+    "@mediafox/typescript-config": "workspace:*",
+    "@types/node": "^22.10.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

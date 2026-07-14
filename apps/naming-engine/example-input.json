@@ -1,0 +1,37 @@
+{
+  "description": "AI SaaS platform for Electric Vehicle Charging Infrastructure Management. White-label, multi-tenant, API-first, OCPP-compliant.",
+  "industry": "AI SaaS for EV Infrastructure",
+  "keywords": [
+    "Mobility",
+    "Infrastructure",
+    "Intelligence",
+    "Automation",
+    "Platform",
+    "Network",
+    "Energy",
+    "Scalability",
+    "Reliability",
+    "Orchestration"
+  ],
+  "brandPersonality": [
+    "Modern",
+    "Premium",
+    "Engineering",
+    "Trustworthy",
+    "Innovative",
+    "Minimal",
+    "Global"
+  ],
+  "languages": ["Spanish", "English"],
+  "lengthConstraints": {
+    "min": 4,
+    "max": 7,
+    "preferred": [5, 6]
+  },
+  "forbidden": {
+    "words": ["EV", "Charge", "Volt", "Grid", "Power", "Energy", "Link", "Plug", "Tech", "Soft", "System"],
+    "suffixes": ["-ion", "-ora", "-ova", "-ium", "-iq", "-ify"]
+  },
+  "targetDomains": ["com", "io", "ai", "app"],
+  "trademarkJurisdictions": ["USPTO", "EUIPO", "WIPO"]
+}
