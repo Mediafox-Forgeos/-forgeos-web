@@ -38,6 +38,9 @@ importers:
         specifier: ^2.6.0
         version: 2.6.1
     devDependencies:
+      '@mediafox/eslint-config':
+        specifier: workspace:*
+        version: link:../../packages/eslint-config
       '@mediafox/typescript-config':
         specifier: workspace:*
         version: link:../../packages/typescript-config

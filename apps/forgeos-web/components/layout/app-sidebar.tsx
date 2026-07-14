@@ -33,7 +33,8 @@ const navigation: NavigationItem[] = [
   { label: 'Settings', href: '/settings', icon: Settings },
 ];
 
-const FORGE_LABS_URL = process.env.NEXT_PUBLIC_FORGE_LABS_URL ?? 'http://localhost:3001';
+const FORGE_LABS_URL =
+  process.env.NEXT_PUBLIC_FORGE_LABS_URL ?? 'http://localhost:3001';
 
 export function AppSidebar() {
   const pathname = usePathname();
@@ -114,7 +115,7 @@ export function AppSidebar() {
           >
             <FlaskConical className="size-4" aria-hidden="true" />
             <span className="flex-1">Forge Labs</span>
-            <span className="rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
+            <span className="bg-muted text-muted-foreground rounded-full px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide">
               New
             </span>
           </a>

@@ -1,7 +1,7 @@
 'use client';
 
 import type { WebNamingResult } from '@mediafox/naming-engine';
-import { Sparkles, TrendingUp, Filter, BarChart3, Trophy } from 'lucide-react';
+import { Sparkles, Filter, BarChart3, Trophy } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface RunPanelProps {

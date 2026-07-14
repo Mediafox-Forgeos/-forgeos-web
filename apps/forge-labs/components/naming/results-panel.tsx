@@ -4,7 +4,6 @@ import type { WebNamingResult } from '@mediafox/naming-engine';
 import { CandidateCard } from './candidate-card';
 import { Button } from '@/components/ui/button';
 import { GitCompare, LayoutList } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 interface ResultsPanelProps {
   results: WebNamingResult | null;

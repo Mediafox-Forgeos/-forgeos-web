@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition, useEffect, useCallback } from 'react';
+import { useState, useTransition, useEffect } from 'react';
 import type { EngineInput } from '@mediafox/naming-engine';
 import type { WebNamingResult, WebCandidateFull } from '@mediafox/naming-engine';
 import { generateNames } from '@/actions/naming';
@@ -154,6 +154,7 @@ export function NamingClient() {
         <FounderReview
           name={selectedName}
           data={selectedData}
+          initialReview={founderReviews[selectedName]}
           onClose={() => setCenterView('detail')}
           onSave={handleSaveFounderReview}
         />

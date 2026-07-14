@@ -11,6 +11,7 @@ import { computeFounderScore } from '@/lib/session';
 interface FounderReviewProps {
   name: string;
   data: WebCandidateFull | null;
+  initialReview?: FounderReviewData;
   onClose: () => void;
   onSave?: (name: string, review: FounderReviewData) => void;
 }
@@ -55,14 +56,14 @@ function StarRating({
   );
 }
 
-export function FounderReview({ name, data, onClose, onSave }: FounderReviewProps) {
+export function FounderReview({ name, data, initialReview, onClose, onSave }: FounderReviewProps) {
   const [review, setReview] = useState<Omit<FounderReviewData, 'founderScore'>>({
-    wouldInvest: 0,
-    wouldRemember: 0,
-    imagineNasdaq: 0,
-    wouldAnnounce: 0,
-    billionDollar: 0,
-    notes: '',
+    wouldInvest: initialReview?.wouldInvest ?? 0,
+    wouldRemember: initialReview?.wouldRemember ?? 0,
+    imagineNasdaq: initialReview?.imagineNasdaq ?? 0,
+    wouldAnnounce: initialReview?.wouldAnnounce ?? 0,
+    billionDollar: initialReview?.billionDollar ?? 0,
+    notes: initialReview?.notes ?? '',
   });
 
   const algorithmScore = data?.score ?? 0;
