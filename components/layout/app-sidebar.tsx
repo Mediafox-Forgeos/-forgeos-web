@@ -6,12 +6,11 @@ import {
   Bot,
   BookOpen,
   BriefcaseBusiness,
-  ChevronRight,
   FolderKanban,
-  LayoutGrid,
   Menu,
   Settings,
   Sparkles,
+  PanelsTopLeft,
   X,
 } from 'lucide-react';
 import * as React from 'react';
@@ -21,8 +20,8 @@ import { cn } from '@/lib/utils';
 import type { NavigationItem } from '@/types';
 
 const navigation: NavigationItem[] = [
-  { label: 'Inicio', href: '/', icon: LayoutGrid },
   { label: 'ARGOS', href: '/#argos', icon: Bot },
+  { label: 'Workspace', href: '/#workspace', icon: PanelsTopLeft },
   { label: 'Clientes', href: '/#clientes', icon: BriefcaseBusiness },
   { label: 'Proyectos', href: '/#proyectos', icon: FolderKanban },
   { label: 'Knowledge', href: '/#knowledge', icon: BookOpen },
@@ -57,11 +56,11 @@ export function AppSidebar() {
 
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-border bg-[#0d0d10] p-4 transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0',
+          'fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-border bg-[#0d0d10] p-3 transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0',
           isOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >
-        <div className="mb-8 flex items-center justify-between px-2">
+        <div className="mb-10 flex items-center justify-between px-2">
           <Brand />
           <Button
             variant="ghost"
@@ -90,30 +89,13 @@ export function AppSidebar() {
               >
                 <Icon className="size-4" aria-hidden="true" />
                 <span className="flex-1">{item.label}</span>
-                {item.label === 'ARGOS' && (
-                  <span
-                    className="size-1.5 rounded-full bg-emerald-400"
-                    aria-label="Activo"
-                  />
-                )}
               </Link>
             );
           })}
         </nav>
 
-        <div className="mt-auto rounded-xl border border-border bg-card p-3">
-          <div className="flex items-center gap-3">
-            <span className="grid size-8 place-items-center rounded-full bg-[#27272a] text-xs font-semibold">
-              MF
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">Mediafox</p>
-              <p className="truncate text-xs text-muted-foreground">
-                Plan Alpha
-              </p>
-            </div>
-            <ChevronRight className="size-4 text-muted-foreground" />
-          </div>
+        <div className="mt-auto px-3 pb-2">
+          <p className="text-xs text-muted-foreground">Mediafox · Alpha</p>
         </div>
       </aside>
     </>
