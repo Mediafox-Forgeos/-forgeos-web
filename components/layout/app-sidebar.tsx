@@ -6,6 +6,8 @@ import {
   Bot,
   BookOpen,
   BriefcaseBusiness,
+  ClipboardList,
+  FileCheck2,
   FolderKanban,
   Menu,
   Settings,
@@ -20,12 +22,14 @@ import { cn } from '@/lib/utils';
 import type { NavigationItem } from '@/types';
 
 const navigation: NavigationItem[] = [
-  { label: 'ARGOS', href: '/#argos', icon: Bot },
-  { label: 'Workspace', href: '/#workspace', icon: PanelsTopLeft },
-  { label: 'Clientes', href: '/#clientes', icon: BriefcaseBusiness },
-  { label: 'Proyectos', href: '/#proyectos', icon: FolderKanban },
-  { label: 'Knowledge', href: '/#knowledge', icon: BookOpen },
-  { label: 'Configuración', href: '/#configuracion', icon: Settings },
+  { label: 'ARGOS', href: '/argos', icon: Bot },
+  { label: 'Workspace', href: '/workspace', icon: PanelsTopLeft },
+  { label: 'Projects', href: '/projects', icon: FolderKanban },
+  { label: 'Clients', href: '/clients', icon: BriefcaseBusiness },
+  { label: 'Roadmap', href: '/roadmap', icon: ClipboardList },
+  { label: 'Decisions', href: '/decisions', icon: FileCheck2 },
+  { label: 'Knowledge', href: '/knowledge', icon: BookOpen },
+  { label: 'Settings', href: '/settings', icon: Settings },
 ];
 
 export function AppSidebar() {
@@ -76,7 +80,10 @@ export function AppSidebar() {
         <nav className="space-y-1" aria-label="Navegación principal">
           {navigation.map((item) => {
             const Icon = item.icon;
-            const active = item.href === '/' ? pathname === '/' : false;
+            const active =
+              item.href === '/projects'
+                ? pathname.startsWith('/projects')
+                : pathname === item.href;
             return (
               <Link
                 key={item.label}
