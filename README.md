@@ -7,6 +7,8 @@ ForgeOS is the AI operating workspace for MediaFOX Forge. It currently provides 
 ```text
 apps/
   forgeos-web/           Next.js ForgeOS application
+  movos-web/             MOVOS operator console (Next.js)
+  movos-api/             MOVOS backend API (NestJS + Prisma + PostgreSQL)
   naming-engine/         Internal naming engine — generates, scores, and ranks brand names
 packages/
   core-domain/           Framework-independent domain boundary (Mission 003 placeholder)
@@ -25,8 +27,10 @@ docs/
 
 ## Prerequisites
 
-- Node.js 20 or newer
+- Node.js 20 LTS (the repository declares Node 20; the MOVOS API and its jest
+  toolchain target Node 20)
 - pnpm 11.5.3 (the repository declares its required version)
+- Docker (for the MOVOS PostgreSQL database)
 
 ## Installation
 
@@ -44,6 +48,24 @@ pnpm dev
 
 The web application is available at `http://localhost:3000` by default.
 
+### Start MOVOS (web + API + database)
+
+```bash
+pnpm install
+docker compose up -d                                    # PostgreSQL on :5432
+cp apps/movos-api/.env.example apps/movos-api/.env       # then set real secrets
+cp apps/movos-web/.env.example apps/movos-web/.env.local
+pnpm --filter @mediafox/movos-api prisma:generate
+pnpm --filter @mediafox/movos-api prisma:migrate:dev     # create schema
+pnpm --filter @mediafox/movos-api seed                   # Kylum org + owner user
+pnpm --filter @mediafox/movos-web dev                    # http://localhost:3002
+pnpm --filter @mediafox/movos-api dev                    # http://localhost:4000
+```
+
+API docs (non-production) are served at `http://localhost:4000/api/docs`.
+See [`docs/architecture/MOVOS_PLATFORM_FOUNDATION.md`](docs/architecture/MOVOS_PLATFORM_FOUNDATION.md)
+for the auth model, tenancy design, and the permission matrix.
+
 ## Quality commands
 
 ```bash
@@ -58,6 +80,8 @@ Use `pnpm format` to apply formatting.
 ## Packages
 
 - `@mediafox/forgeos-web`: the ForgeOS Next.js application.
+- `@mediafox/movos-web`: the MOVOS operator console (Next.js). Requires `NEXT_PUBLIC_MOVOS_API_URL`.
+- `@mediafox/movos-api`: the MOVOS backend (NestJS + Prisma + PostgreSQL). Provides auth, tenancy, and persistent Sites under `/api/v1`.
 - `@mediafox/naming-engine`: internal naming engine. Generates 500,000+ candidates, scores across 13 dimensions, and produces investor-ready Branding Reports. See [`apps/naming-engine/`](apps/naming-engine/).
 - `@mediafox/core-domain`: framework-independent future domain model. It is intentionally a Mission 003 scaffold.
 - `@mediafox/shared-types`: future cross-application contracts. ForgeOS view types remain local until another consumer needs them.

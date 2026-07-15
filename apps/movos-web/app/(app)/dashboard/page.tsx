@@ -29,6 +29,7 @@ import { getChargerById } from '@/data/chargers';
 import { tenant } from '@/config/tenant';
 import { formatCurrency, formatRelative } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { DashboardLive } from './_dashboard-live';
 
 const metricIcons: Record<string, LucideIcon> = {
   'metric-availability': Gauge,
@@ -76,7 +77,12 @@ export default function DashboardPage() {
         description="Supervisa la infraestructura, las sesiones y el estado de tu red desde un solo lugar."
       />
 
-      <section className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <DashboardLive />
+
+      <p className="text-muted-foreground mt-8 text-xs font-medium uppercase tracking-[0.16em]">
+        Datos de demostración
+      </p>
+      <section className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {executiveMetrics.map((metric) => (
           <MetricCard
             key={metric.id}

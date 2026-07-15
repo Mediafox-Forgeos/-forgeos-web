@@ -1,0 +1,14 @@
+version: '3.9'
+services:
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - '5432:5432'
+    environment:
+      POSTGRES_USER: movos
+      POSTGRES_PASSWORD: movos
+      POSTGRES_DB: movos_dev
+    volumes:
+      - movos_postgres_data:/var/lib/postgresql/data
+volumes:
+  movos_postgres_data:

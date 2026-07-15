@@ -3,11 +3,11 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  Bell,
   Cable,
   CircleGauge,
   FileBarChart,
   LayoutDashboard,
+  LogOut,
   Menu,
   MapPin,
   Plug,
@@ -25,6 +25,7 @@ import * as React from 'react';
 
 import { tenant } from '@/config/tenant';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/context/auth-context';
 import { cn } from '@/lib/utils';
 
 type NavItem = { label: string; href: string; icon: LucideIcon };
@@ -45,7 +46,11 @@ const navigation: NavItem[] = [
 
 export function MovosSidebar() {
   const pathname = usePathname();
+  const { currentUser, currentOrg, logout } = useAuth();
   const [isOpen, setIsOpen] = React.useState(false);
+
+  const orgName = currentOrg?.name ?? tenant.orgName;
+  const userName = currentUser?.displayName ?? 'Operador';
 
   return (
     <>
@@ -89,9 +94,7 @@ export function MovosSidebar() {
         </div>
 
         <div className="border-border mx-1 mb-4 rounded-lg border px-3 py-2">
-          <p className="text-foreground text-sm font-medium">
-            {tenant.orgName}
-          </p>
+          <p className="text-foreground text-sm font-medium">{orgName}</p>
           <span className="border-movos-blue/40 bg-movos-blue/10 text-movos-blue mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide">
             {tenant.orgDescription}
           </span>
@@ -122,22 +125,26 @@ export function MovosSidebar() {
         </nav>
 
         <div className="border-border mt-auto flex items-center justify-between gap-2 border-t px-2 pt-3">
-          <div className="flex items-center gap-2">
-            <span className="bg-movos-blue/20 text-movos-blue grid size-8 place-items-center rounded-full">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="bg-movos-blue/20 text-movos-blue grid size-8 shrink-0 place-items-center rounded-full">
               <UserRound className="size-4" aria-hidden="true" />
             </span>
-            <div className="leading-tight">
-              <p className="text-xs font-medium">Operador</p>
-              <p className="text-muted-foreground text-[10px]">Sesión demo</p>
+            <div className="min-w-0 leading-tight">
+              <p className="truncate text-xs font-medium">{userName}</p>
+              <p className="text-muted-foreground truncate text-[10px]">
+                {currentUser?.email ?? 'Sesión'}
+              </p>
             </div>
           </div>
           <Button
             variant="ghost"
             size="icon"
-            aria-label="Notificaciones"
-            disabled
+            aria-label="Cerrar sesión"
+            onClick={() => {
+              void logout();
+            }}
           >
-            <Bell className="size-4" />
+            <LogOut className="size-4" />
           </Button>
         </div>
       </aside>

@@ -1,4 +1,4 @@
 /**
- * Reserved for contracts that are truly shared by multiple applications.
+ * Cross-application contracts shared by MediaFOX Forge products.
  */
-export const sharedTypesStatus = 'No cross-application contracts yet' as const;
+export * from './movos-api';

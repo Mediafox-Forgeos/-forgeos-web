@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 
-import { MovosShell } from '@/components/layout/movos-shell';
+import { AuthProvider } from '@/context/auth-context';
 import { tenant } from '@/config/tenant';
 
 import './globals.css';
@@ -17,7 +17,7 @@ export default function RootLayout({
   return (
     <html lang={tenant.locale} className="dark">
       <body>
-        <MovosShell>{children}</MovosShell>
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );

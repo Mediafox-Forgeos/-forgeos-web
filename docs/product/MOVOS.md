@@ -74,11 +74,32 @@ English.
 
 ---
 
+## Operational foundation (Mission 006)
+
+The first operational vertical slice is implemented in `apps/movos-api`
+(NestJS + Prisma + PostgreSQL):
+
+- **Real authentication.** Email/password login, logout, rotating refresh
+  tokens (httpOnly cookie), `/auth/me`, and organization selection. Access
+  tokens are held in memory on the web client; refresh tokens are httpOnly.
+- **Multi-tenant isolation.** Organizations, memberships, and roles. Every
+  tenant-scoped request re-validates ACTIVE membership server-side and is
+  additionally org-scoped in the query layer.
+- **Persistent Sites.** Sites are stored in PostgreSQL (create, list, detail,
+  update, archive) with role-based permissions and audit events.
+- **Protected web routes.** MOVOS Web gates routes via middleware and integrates
+  a login page, auth context, and an API client with silent token refresh.
+
+See `docs/architecture/MOVOS_PLATFORM_FOUNDATION.md` and
+`docs/adr/ADR-0006-movos-api-and-tenancy.md`.
+
+The remaining domains below are still demo-only pending future missions.
+
 ## Known constraints
 
-- **No backend.** All content is centralized demo data under `src/data/`.
-  Nothing persists; alert acknowledge/resolve is a client-only demo toggle.
-- **No authentication.** The user module is an operational placeholder.
+- **Partial backend.** Auth, organizations, memberships, and Sites persist via
+  `apps/movos-api`. The other domains (stations, chargers, connectors, sessions,
+  tariffs, alerts) remain centralized demo data under `src/data/`.
 - **No live OCPP.** Charger remote actions (Reiniciar, Desbloquear conector,
   Cambiar disponibilidad, Actualizar firmware) are rendered but disabled with the
   message "Disponible cuando se conecte el servicio OCPP."
@@ -93,9 +114,10 @@ English.
 
 - OCPP backend selection and CSMS integration (protocol version, endpoint,
   message model).
-- Persistence layer and multi-tenant data isolation strategy.
-- Authentication, authorization, and role enforcement (roles are currently
-  presentational).
+- Persistence for the remaining domains (stations, chargers, connectors,
+  sessions, tariffs, alerts). Sites are already persisted.
+- Hardening of the auth foundation: rate limiting, email verification, MFA,
+  CSRF tokens, and password reset.
 - Billing / roaming integrations.
 - Report generation pipeline and export formats.
 - Live telemetry and websocket updates for session/charger state.
