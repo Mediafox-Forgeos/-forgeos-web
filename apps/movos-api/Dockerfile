@@ -17,6 +17,7 @@ FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/movos-api/node_modules ./apps/movos-api/node_modules
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY packages/ packages/
 COPY apps/movos-api/ apps/movos-api/
 WORKDIR /app/apps/movos-api
