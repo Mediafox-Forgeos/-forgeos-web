@@ -1,0 +1,11 @@
+**/.git
+**/.next
+**/node_modules
+**/.env
+**/*.env.local
+**/dist
+**/.claude
+**/.vercel
+**/coverage
+**/*.log
+**/npm-debug.log*

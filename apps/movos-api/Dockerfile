@@ -1,6 +1,10 @@
-FROM node:20-alpine AS base
-RUN npm i -g pnpm
+# Build context: monorepo root
+# docker build -f apps/movos-api/Dockerfile .
 
+FROM node:22-alpine AS base
+RUN npm i -g pnpm@11.5.3
+
+# ── Install all workspace deps (build tools + runtime) ─────────────────────
 FROM base AS deps
 WORKDIR /app
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
@@ -8,6 +12,7 @@ COPY packages/ packages/
 COPY apps/movos-api/package.json apps/movos-api/
 RUN pnpm install --frozen-lockfile --filter @mediafox/movos-api...
 
+# ── Compile TypeScript → JavaScript ────────────────────────────────────────
 FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
@@ -18,13 +23,19 @@ WORKDIR /app/apps/movos-api
 RUN pnpm prisma generate
 RUN pnpm build
 
-FROM node:20-alpine AS runner
+# ── Runtime image ──────────────────────────────────────────────────────────
+FROM node:22-alpine AS runner
 WORKDIR /app
-RUN npm i -g pnpm
-COPY --from=builder /app/apps/movos-api/dist dist/
-COPY --from=builder /app/apps/movos-api/prisma prisma/
-COPY --from=builder /app/apps/movos-api/package.json .
-RUN pnpm install --prod
-RUN pnpm prisma generate
+# Copy workspace node_modules (includes prisma CLI for migrate deploy)
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/apps/movos-api/node_modules ./apps/movos-api/node_modules
+COPY --from=deps /app/packages ./packages
+# Override with Prisma client binaries generated for this exact platform
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+# Application artifacts
+COPY --from=builder /app/apps/movos-api/dist ./apps/movos-api/dist
+COPY --from=builder /app/apps/movos-api/prisma ./apps/movos-api/prisma
+WORKDIR /app/apps/movos-api
 EXPOSE 4000
-CMD ["node", "dist/main"]
+# Run pending migrations then start the API
+CMD ["sh", "-c", "node_modules/.bin/prisma migrate deploy && node dist/main"]
