@@ -145,19 +145,19 @@ export class AuthController {
     const secure = this.isProduction();
     const maxAge = refresh.expiresAt.getTime() - Date.now();
 
+    // sameSite: 'none' is required for cross-domain deployments (API on
+    // railway.app, frontend on vercel.app). Requires secure: true.
     res.cookie(REFRESH_COOKIE, refresh.token, {
       httpOnly: true,
-      sameSite: 'strict',
+      sameSite: 'none',
       secure,
       path: '/',
       maxAge,
     });
 
-    // Non-httpOnly presence flag used by the web middleware. Contains no
-    // secret material — only a boolean-like marker.
     res.cookie(SESSION_COOKIE, '1', {
       httpOnly: false,
-      sameSite: 'strict',
+      sameSite: 'none',
       secure,
       path: '/',
       maxAge,

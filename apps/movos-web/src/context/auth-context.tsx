@@ -13,6 +13,19 @@ import type {
 import { apiClient, ApiError } from '@/lib/api-client';
 import { clearAuth, setAccessToken, setActiveOrganizationId } from '@/lib/auth';
 
+const SESSION_COOKIE = 'movos_session';
+const SESSION_MAX_AGE = 30 * 24 * 60 * 60; // 30 days in seconds
+
+function setSessionCookie(): void {
+  if (typeof document === 'undefined') return;
+  document.cookie = `${SESSION_COOKIE}=1; path=/; max-age=${SESSION_MAX_AGE}; SameSite=Lax; Secure`;
+}
+
+function clearSessionCookie(): void {
+  if (typeof document === 'undefined') return;
+  document.cookie = `${SESSION_COOKIE}=; path=/; max-age=0; SameSite=Lax; Secure`;
+}
+
 interface AuthContextValue {
   currentUser: ApiUser | null;
   currentOrg: ApiOrganization | null;
@@ -67,14 +80,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     async function restore(): Promise<void> {
       const token = await apiClient.attemptRefresh();
       if (!token) {
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) {
+          clearSessionCookie();
+          setIsLoading(false);
+        }
         return;
       }
       try {
         const me = await apiClient.get<MeResponse>('/auth/me');
-        if (!cancelled) applySession(me);
+        if (!cancelled) {
+          setSessionCookie();
+          applySession(me);
+        }
       } catch {
-        if (!cancelled) resetSession();
+        if (!cancelled) {
+          clearSessionCookie();
+          resetSession();
+        }
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -93,6 +115,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         { skipRefresh: true, skipOrgHeader: true },
       );
       setAccessToken(data.accessToken);
+      setSessionCookie();
       applySession(data);
     },
     [applySession],
@@ -106,6 +129,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw error;
       }
     } finally {
+      clearSessionCookie();
       resetSession();
       router.replace('/login');
     }
