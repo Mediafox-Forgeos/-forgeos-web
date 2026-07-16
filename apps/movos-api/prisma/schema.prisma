@@ -42,6 +42,21 @@ enum SiteStatus {
   ARCHIVED
 }
 
+enum LocationSource {
+  GOOGLE_PLACES
+  GOOGLE_GEOCODING
+  MANUAL
+  MANUAL_ADJUSTMENT
+}
+
+enum LocationValidationStatus {
+  UNVALIDATED
+  SUGGESTED
+  CONFIRMED
+  PARTIAL
+  INVALID
+}
+
 model User {
   id           String     @id @default(cuid())
   email        String     @unique
@@ -98,6 +113,18 @@ model Site {
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
   createdByUserId String
+
+  // Rich location fields — populated by Google or manual entry
+  formattedAddress         String?
+  addressLine1             String?
+  addressLine2             String?
+  state                    String?
+  postalCode               String?
+  countryCode              String?
+  googlePlaceId            String?
+  locationSource           LocationSource           @default(MANUAL)
+  locationValidationStatus LocationValidationStatus @default(UNVALIDATED)
+  locationValidatedAt      DateTime?
 
   organization Organization @relation(fields: [organizationId], references: [id])
   createdBy    User         @relation(fields: [createdByUserId], references: [id])

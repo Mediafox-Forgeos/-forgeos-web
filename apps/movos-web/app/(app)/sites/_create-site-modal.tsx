@@ -7,6 +7,10 @@ import type { ApiSite } from '@mediafox/shared-types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { apiClient, ApiError } from '@/lib/api-client';
+import {
+  LocationPicker,
+  type LocationValue,
+} from '@/components/location/location-picker';
 
 interface CreateSiteModalProps {
   open: boolean;
@@ -20,16 +24,18 @@ const STATUS_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'INACTIVE', label: 'Inactivo' },
 ];
 
+const EMPTY_LOCATION: LocationValue = {
+  address: '',
+  locationSource: 'MANUAL',
+};
+
 export function CreateSiteModal({
   open,
   onClose,
   onCreated,
 }: CreateSiteModalProps) {
   const [name, setName] = React.useState('');
-  const [city, setCity] = React.useState('');
-  const [address, setAddress] = React.useState('');
-  const [latitude, setLatitude] = React.useState('');
-  const [longitude, setLongitude] = React.useState('');
+  const [location, setLocation] = React.useState<LocationValue>(EMPTY_LOCATION);
   const [status, setStatus] = React.useState('DRAFT');
   const [error, setError] = React.useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -37,32 +43,42 @@ export function CreateSiteModal({
   React.useEffect(() => {
     if (open) {
       setName('');
-      setCity('');
-      setAddress('');
-      setLatitude('');
-      setLongitude('');
+      setLocation(EMPTY_LOCATION);
       setStatus('DRAFT');
       setError(null);
       setIsSubmitting(false);
     }
   }, [open]);
 
-  if (!open) {
-    return null;
-  }
+  if (!open) return null;
 
   async function handleSubmit(event: React.FormEvent): Promise<void> {
     event.preventDefault();
     setError(null);
 
+    if (!location.address.trim()) {
+      setError('La dirección es requerida.');
+      return;
+    }
+    const city = location.city ?? location.address.trim();
+
     const payload: Record<string, unknown> = {
       name: name.trim(),
-      city: city.trim(),
-      address: address.trim(),
+      city,
+      address: location.address,
       status,
+      formattedAddress: location.formattedAddress,
+      addressLine1: location.addressLine1,
+      addressLine2: location.addressLine2,
+      state: location.state,
+      postalCode: location.postalCode,
+      countryCode: location.countryCode,
+      googlePlaceId: location.googlePlaceId,
+      locationSource: location.locationSource,
+      locationValidationStatus: location.googlePlaceId ? 'CONFIRMED' : 'UNVALIDATED',
     };
-    if (latitude.trim()) payload.latitude = Number(latitude);
-    if (longitude.trim()) payload.longitude = Number(longitude);
+    if (location.latitude != null) payload.latitude = location.latitude;
+    if (location.longitude != null) payload.longitude = location.longitude;
 
     setIsSubmitting(true);
     try {
@@ -70,23 +86,23 @@ export function CreateSiteModal({
       onCreated(site);
       onClose();
     } catch (err) {
-      if (err instanceof ApiError) {
-        setError(err.message);
-      } else {
-        setError('No fue posible crear el sitio. Intenta nuevamente.');
-      }
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : 'No fue posible crear el sitio. Intenta nuevamente.',
+      );
       setIsSubmitting(false);
     }
   }
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 px-4 py-8"
       role="dialog"
       aria-modal="true"
       aria-labelledby="create-site-title"
     >
-      <div className="border-border bg-background w-full max-w-md rounded-xl border p-6 shadow-xl">
+      <div className="border-border bg-background w-full max-w-lg rounded-xl border p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
           <h2 id="create-site-title" className="text-lg font-semibold">
             Crear sitio
@@ -113,48 +129,11 @@ export function CreateSiteModal({
             />
           </Field>
 
-          <Field label="Ciudad" htmlFor="site-city">
-            <Input
-              id="site-city"
-              value={city}
-              onChange={(e) => setCity(e.target.value)}
-              required
-              disabled={isSubmitting}
-            />
-          </Field>
-
-          <Field label="Dirección" htmlFor="site-address">
-            <Input
-              id="site-address"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              required
-              disabled={isSubmitting}
-            />
-          </Field>
-
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Latitud (opcional)" htmlFor="site-lat">
-              <Input
-                id="site-lat"
-                type="number"
-                step="any"
-                value={latitude}
-                onChange={(e) => setLatitude(e.target.value)}
-                disabled={isSubmitting}
-              />
-            </Field>
-            <Field label="Longitud (opcional)" htmlFor="site-lng">
-              <Input
-                id="site-lng"
-                type="number"
-                step="any"
-                value={longitude}
-                onChange={(e) => setLongitude(e.target.value)}
-                disabled={isSubmitting}
-              />
-            </Field>
-          </div>
+          <LocationPicker
+            value={location}
+            onChange={setLocation}
+            disabled={isSubmitting}
+          />
 
           <Field label="Estado" htmlFor="site-status">
             <select

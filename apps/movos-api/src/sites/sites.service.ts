@@ -63,6 +63,15 @@ export class SitesService {
           latitude: dto.latitude ?? null,
           longitude: dto.longitude ?? null,
           status: dto.status ?? 'DRAFT',
+          formattedAddress: dto.formattedAddress ?? null,
+          addressLine1: dto.addressLine1 ?? null,
+          addressLine2: dto.addressLine2 ?? null,
+          state: dto.state ?? null,
+          postalCode: dto.postalCode ?? null,
+          countryCode: dto.countryCode ?? null,
+          googlePlaceId: dto.googlePlaceId ?? null,
+          locationSource: dto.locationSource ?? 'MANUAL',
+          locationValidationStatus: dto.locationValidationStatus ?? 'UNVALIDATED',
         },
       });
     } catch (error) {
@@ -105,6 +114,16 @@ export class SitesService {
     if (dto.latitude !== undefined) data.latitude = dto.latitude;
     if (dto.longitude !== undefined) data.longitude = dto.longitude;
     if (dto.status !== undefined) data.status = dto.status;
+    if (dto.formattedAddress !== undefined) data.formattedAddress = dto.formattedAddress;
+    if (dto.addressLine1 !== undefined) data.addressLine1 = dto.addressLine1;
+    if (dto.addressLine2 !== undefined) data.addressLine2 = dto.addressLine2;
+    if (dto.state !== undefined) data.state = dto.state;
+    if (dto.postalCode !== undefined) data.postalCode = dto.postalCode;
+    if (dto.countryCode !== undefined) data.countryCode = dto.countryCode;
+    if (dto.googlePlaceId !== undefined) data.googlePlaceId = dto.googlePlaceId;
+    if (dto.locationSource !== undefined) data.locationSource = dto.locationSource;
+    if (dto.locationValidationStatus !== undefined)
+      data.locationValidationStatus = dto.locationValidationStatus;
 
     const site = await this.prisma.site.update({
       where: { id: existing.id },

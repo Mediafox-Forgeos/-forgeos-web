@@ -51,5 +51,16 @@ export function toApiSite(site: Site): ApiSite {
     status: site.status,
     createdAt: site.createdAt.toISOString(),
     updatedAt: site.updatedAt.toISOString(),
+    formattedAddress: site.formattedAddress,
+    addressLine1: site.addressLine1,
+    addressLine2: site.addressLine2,
+    state: site.state,
+    postalCode: site.postalCode,
+    countryCode: site.countryCode,
+    googlePlaceId: site.googlePlaceId,
+    locationSource: site.locationSource as ApiSite['locationSource'],
+    locationValidationStatus:
+      site.locationValidationStatus as ApiSite['locationValidationStatus'],
+    locationValidatedAt: site.locationValidatedAt?.toISOString() ?? null,
   };
 }
