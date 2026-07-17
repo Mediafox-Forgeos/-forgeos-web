@@ -172,9 +172,9 @@ export function LocationPicker({
   function handleManualCoord(field: 'latitude' | 'longitude', raw: string) {
     const num = parseFloat(raw);
     if (Number.isNaN(num)) return;
+    const base: LocationValue = value ?? { address: query, locationSource: 'MANUAL' };
     const next: LocationValue = {
-      address: value?.address ?? query,
-      ...(value ?? { locationSource: 'MANUAL' as LocationSource }),
+      ...base,
       [field]: num,
       locationSource: 'MANUAL' as LocationSource,
     };
