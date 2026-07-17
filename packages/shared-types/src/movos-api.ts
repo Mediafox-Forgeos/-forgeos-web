@@ -25,6 +25,44 @@ export interface ApiMembership {
   status: string;
 }
 
+export type LocationSource =
+  | 'GOOGLE_PLACES'
+  | 'GOOGLE_GEOCODING'
+  | 'MANUAL'
+  | 'MANUAL_ADJUSTMENT';
+
+export type LocationValidationStatus =
+  | 'UNVALIDATED'
+  | 'SUGGESTED'
+  | 'CONFIRMED'
+  | 'PARTIAL'
+  | 'INVALID';
+
+export interface LocationSuggestion {
+  placeId: string;
+  description: string;
+  mainText: string;
+  secondaryText: string;
+}
+
+export interface AddressComponents {
+  addressLine1?: string;
+  addressLine2?: string;
+  city: string;
+  state?: string;
+  postalCode?: string;
+  countryCode?: string;
+}
+
+export interface ResolvedLocation {
+  placeId: string;
+  formattedAddress: string;
+  components: AddressComponents;
+  latitude: number;
+  longitude: number;
+  source: LocationSource;
+}
+
 export interface ApiSite {
   id: string;
   organizationId: string;
@@ -37,6 +75,17 @@ export interface ApiSite {
   status: string;
   createdAt: string;
   updatedAt: string;
+  // Rich location fields
+  formattedAddress: string | null;
+  addressLine1: string | null;
+  addressLine2: string | null;
+  state: string | null;
+  postalCode: string | null;
+  countryCode: string | null;
+  googlePlaceId: string | null;
+  locationSource: LocationSource;
+  locationValidationStatus: LocationValidationStatus;
+  locationValidatedAt: string | null;
 }
 
 export interface LoginResponse {

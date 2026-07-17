@@ -15,6 +15,7 @@
   "dependencies": {
     "@mediafox/shared-types": "workspace:*",
     "@radix-ui/react-slot": "^1.2.3",
+    "@vis.gl/react-google-maps": "^1.9.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.468.0",
@@ -24,9 +25,9 @@
     "tailwind-merge": "^2.6.0"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.6",
     "@mediafox/eslint-config": "workspace:*",
     "@mediafox/typescript-config": "workspace:*",
-    "@eslint/eslintrc": "^3.3.6",
     "@types/node": "^22.10.1",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",

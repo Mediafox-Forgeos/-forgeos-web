@@ -11,8 +11,24 @@ import { Tabs } from '@/components/movos/tabs';
 import { ApiSiteStatusBadge } from '@/components/movos/api-site-status-badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { apiClient, ApiError } from '@/lib/api-client';
+import { SiteMap } from '@/components/location/site-map';
 
 type LoadState = 'loading' | 'ready' | 'notfound' | 'error';
+
+const SOURCE_LABELS: Record<string, string> = {
+  GOOGLE_PLACES: 'Google Places',
+  GOOGLE_GEOCODING: 'Google Geocoding',
+  MANUAL: 'Manual',
+  MANUAL_ADJUSTMENT: 'Ajuste manual',
+};
+
+const VALIDATION_LABELS: Record<string, string> = {
+  UNVALIDATED: 'Sin validar',
+  SUGGESTED: 'Sugerida',
+  CONFIRMED: 'Confirmada',
+  PARTIAL: 'Parcial',
+  INVALID: 'Inválida',
+};
 
 export default function SiteDetailPage() {
   const params = useParams<{ siteId: string }>();
@@ -68,6 +84,9 @@ export default function SiteDetailPage() {
     );
   }
 
+  const hasCoords = site.latitude != null && site.longitude != null;
+  const displayAddress = site.formattedAddress ?? site.address;
+
   return (
     <PageContainer>
       <PageHeader
@@ -76,7 +95,7 @@ export default function SiteDetailPage() {
           { label: site.name },
         ]}
         title={site.name}
-        description={`${site.city} · ${site.address}`}
+        description={`${site.city} · ${displayAddress}`}
         actions={<ApiSiteStatusBadge status={site.status} />}
       />
 
@@ -93,11 +112,87 @@ export default function SiteDetailPage() {
                   <DetailCard
                     label="Coordenadas"
                     value={
-                      site.latitude !== null && site.longitude !== null
+                      hasCoords
                         ? `${site.latitude}, ${site.longitude}`
                         : 'Sin coordenadas'
                     }
                   />
+                </div>
+              ),
+            },
+            {
+              id: 'location',
+              label: 'Ubicación',
+              content: (
+                <div className="space-y-6">
+                  {hasCoords ? (
+                    <SiteMap
+                      lat={site.latitude as number}
+                      lng={site.longitude as number}
+                      height={280}
+                    />
+                  ) : (
+                    <div className="bg-muted flex h-[200px] items-center justify-center rounded-xl border">
+                      <p className="text-muted-foreground text-sm">
+                        Sin coordenadas — edita el sitio para agregar una ubicación
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {site.formattedAddress && (
+                      <LocationField
+                        label="Dirección completa"
+                        value={site.formattedAddress}
+                        wide
+                      />
+                    )}
+                    {site.addressLine1 && (
+                      <LocationField label="Línea 1" value={site.addressLine1} />
+                    )}
+                    {site.addressLine2 && (
+                      <LocationField label="Línea 2" value={site.addressLine2} />
+                    )}
+                    {site.city && (
+                      <LocationField label="Ciudad" value={site.city} />
+                    )}
+                    {site.state && (
+                      <LocationField label="Departamento / Estado" value={site.state} />
+                    )}
+                    {site.postalCode && (
+                      <LocationField label="Código postal" value={site.postalCode} />
+                    )}
+                    {site.countryCode && (
+                      <LocationField label="País" value={site.countryCode} />
+                    )}
+                    {hasCoords && (
+                      <LocationField
+                        label="Coordenadas"
+                        value={`${site.latitude}, ${site.longitude}`}
+                      />
+                    )}
+                    {site.locationSource && (
+                      <LocationField
+                        label="Fuente"
+                        value={SOURCE_LABELS[site.locationSource] ?? site.locationSource}
+                      />
+                    )}
+                    {site.locationValidationStatus && (
+                      <LocationField
+                        label="Validación"
+                        value={
+                          VALIDATION_LABELS[site.locationValidationStatus] ??
+                          site.locationValidationStatus
+                        }
+                      />
+                    )}
+                  </div>
+
+                  {!site.formattedAddress && !hasCoords && (
+                    <p className="text-muted-foreground text-sm">
+                      No hay información de ubicación registrada.
+                    </p>
+                  )}
                 </div>
               ),
             },
@@ -123,5 +218,22 @@ function DetailCard({ label, value }: { label: string; value: string }) {
         <p className="mt-2 text-lg font-semibold">{value}</p>
       </CardContent>
     </Card>
+  );
+}
+
+function LocationField({
+  label,
+  value,
+  wide,
+}: {
+  label: string;
+  value: string;
+  wide?: boolean;
+}) {
+  return (
+    <div className={wide ? 'sm:col-span-2' : undefined}>
+      <p className="text-muted-foreground mb-0.5 text-xs">{label}</p>
+      <p className="text-sm font-medium">{value}</p>
+    </div>
   );
 }

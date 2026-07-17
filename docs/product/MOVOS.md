@@ -95,6 +95,28 @@ See `docs/architecture/MOVOS_PLATFORM_FOUNDATION.md` and
 
 The remaining domains below are still demo-only pending future missions.
 
+## Google Maps Location Capability (Mission 007A)
+
+Sites now support Google-assisted address resolution and coordinate validation:
+
+- **Autocomplete search.** Operators type a free-text address and receive real-time
+  suggestions from the Google Places API (proxied through the MOVOS API — no key
+  ever reaches the browser for server-side calls).
+- **Structured address components.** Selecting a suggestion auto-populates
+  `formattedAddress`, `addressLine1`, `city`, `state`, `postalCode`,
+  `countryCode`, and `googlePlaceId` on the Site.
+- **Interactive map.** A draggable marker lets operators fine-tune the operational
+  GPS point. Dragging sets `locationSource: MANUAL_ADJUSTMENT` so the system knows
+  the postal address and the operational pin may differ.
+- **Graceful degradation.** Both API keys are optional. Without the server key the
+  autocomplete falls back to plain-text input; without the browser key the map tile
+  is replaced by a placeholder.
+- **Reusable `LocationPicker`.** The `<LocationPicker>` component is self-contained
+  and can be dropped into any future form that needs address + coordinate capture.
+
+See `docs/architecture/MOVOS_LOCATION_CAPABILITY.md` and
+`docs/adr/ADR-0007-google-maps-location-capability.md`.
+
 ## Known constraints
 
 - **Partial backend.** Auth, organizations, memberships, and Sites persist via
