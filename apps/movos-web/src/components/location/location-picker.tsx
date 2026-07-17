@@ -69,7 +69,7 @@ export function LocationPicker({
     value?.latitude != null ? SELECTED_ZOOM : DEFAULT_ZOOM,
   );
   const [showManual, setShowManual] = React.useState(false);
-  const debounceRef = React.useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const hasLocation =
     value?.latitude != null && value?.longitude != null;
@@ -149,9 +149,9 @@ export function LocationPicker({
 
   function handleMarkerDrag(lat: number, lng: number) {
     setMarkerPos({ lat, lng });
+    const base: LocationValue = value ?? { address: query, locationSource: 'MANUAL' };
     onChange({
-      address: value?.address ?? query,
-      ...(value ?? {}),
+      ...base,
       latitude: lat,
       longitude: lng,
       locationSource: 'MANUAL_ADJUSTMENT',
