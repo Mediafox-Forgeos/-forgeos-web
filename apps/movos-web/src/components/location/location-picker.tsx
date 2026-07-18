@@ -184,8 +184,8 @@ export function LocationPicker({
 
   return (
     <div className="space-y-3">
-      {/* Address search */}
-      <div>
+      {/* Address search — z-10 stacking context keeps dropdown above Google Maps */}
+      <div className="relative z-10">
         <label className="mb-1.5 block text-sm font-medium">Dirección</label>
         <div className="relative">
           <Search
@@ -220,7 +220,7 @@ export function LocationPicker({
           {showSuggestions && suggestions.length > 0 && (
             <ul
               role="listbox"
-              className="border-border bg-popover text-popover-foreground absolute z-50 mt-1 w-full overflow-hidden rounded-lg border shadow-lg"
+              className="border-border bg-popover text-popover-foreground absolute z-50 mt-1 w-full overflow-hidden rounded-lg border shadow-xl"
             >
               {suggestions.map((s) => (
                 <li key={s.placeId}>
@@ -228,7 +228,7 @@ export function LocationPicker({
                     type="button"
                     role="option"
                     aria-selected={false}
-                    className="hover:bg-accent flex w-full items-start gap-3 px-3 py-2.5 text-left text-sm"
+                    className="hover:bg-accent hover:text-accent-foreground flex w-full items-start gap-3 px-3 py-2.5 text-left text-sm transition-colors"
                     onMouseDown={() => void handleSelectSuggestion(s)}
                   >
                     <MapPin
@@ -281,7 +281,7 @@ export function LocationPicker({
 
       {/* Map */}
       {hasBrowserKey ? (
-        <div className="overflow-hidden rounded-xl border" style={{ height: 260 }}>
+        <div className="relative isolate overflow-hidden rounded-xl border" style={{ height: 260 }}>
           <APIProvider
             apiKey={BROWSER_KEY}
             onError={() =>
