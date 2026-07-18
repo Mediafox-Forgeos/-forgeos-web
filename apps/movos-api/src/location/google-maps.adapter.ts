@@ -3,7 +3,6 @@ import { ConfigService } from '@nestjs/config';
 import {
   Client,
   Language,
-  PlaceAutocompleteType,
 } from '@googlemaps/google-maps-services-js';
 // Language enum is used for the placeDetails language param
 import type {
@@ -49,7 +48,6 @@ export class GoogleMapsAdapter {
             sessiontoken: sessionToken,
             components: [`country:${region}`],
             language,
-            types: PlaceAutocompleteType.address,
           },
         });
       return (response.data.predictions ?? []).map((p) => ({

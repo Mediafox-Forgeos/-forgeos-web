@@ -53,7 +53,8 @@ export function LocationPicker({
 }: LocationPickerProps) {
   const [query, setQuery] = React.useState(value?.formattedAddress ?? value?.address ?? '');
   const [suggestions, setSuggestions] = React.useState<LocationSuggestion[]>([]);
-  const [isSearching, setIsSearching] = React.useState(false);
+  const [isFetchingSuggestions, setIsFetchingSuggestions] = React.useState(false);
+  const [isResolvingPlace, setIsResolvingPlace] = React.useState(false);
   const [sessionToken, setSessionToken] = React.useState(generateSessionToken);
   const [showSuggestions, setShowSuggestions] = React.useState(false);
   const [mapError, setMapError] = React.useState<string | null>(null);
@@ -97,7 +98,7 @@ export function LocationPicker({
   }
 
   async function fetchSuggestions(input: string) {
-    setIsSearching(true);
+    setIsFetchingSuggestions(true);
     try {
       const results = await apiClient.get<LocationSuggestion[]>(
         `/locations/autocomplete?input=${encodeURIComponent(input)}&sessionToken=${sessionToken}`,
@@ -108,14 +109,14 @@ export function LocationPicker({
     } catch {
       setSuggestions([]);
     } finally {
-      setIsSearching(false);
+      setIsFetchingSuggestions(false);
     }
   }
 
   async function handleSelectSuggestion(s: LocationSuggestion) {
     setShowSuggestions(false);
     setQuery(s.description);
-    setIsSearching(true);
+    setIsResolvingPlace(true);
     try {
       const resolved = await apiClient.get<ResolvedLocation>(
         `/locations/place/${encodeURIComponent(s.placeId)}?sessionToken=${sessionToken}`,
@@ -143,7 +144,7 @@ export function LocationPicker({
         'No fue posible obtener los detalles del lugar. Intenta nuevamente.',
       );
     } finally {
-      setIsSearching(false);
+      setIsResolvingPlace(false);
     }
   }
 
@@ -197,7 +198,7 @@ export function LocationPicker({
             onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
             onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
             placeholder="Buscar una dirección"
-            disabled={disabled || isSearching}
+            disabled={disabled || isResolvingPlace}
             className="pl-9 pr-8"
             aria-label="Buscar una dirección"
             aria-autocomplete="list"
@@ -219,7 +220,7 @@ export function LocationPicker({
           {showSuggestions && suggestions.length > 0 && (
             <ul
               role="listbox"
-              className="border-border bg-popover absolute z-50 mt-1 w-full overflow-hidden rounded-lg border shadow-lg"
+              className="border-border bg-popover text-popover-foreground absolute z-50 mt-1 w-full overflow-hidden rounded-lg border shadow-lg"
             >
               {suggestions.map((s) => (
                 <li key={s.placeId}>
@@ -253,7 +254,7 @@ export function LocationPicker({
 
           {showSuggestions &&
             suggestions.length === 0 &&
-            !isSearching &&
+            !isFetchingSuggestions &&
             query.length >= 3 && (
               <div className="border-border bg-popover absolute z-50 mt-1 w-full rounded-lg border p-3 text-sm shadow-lg">
                 <p className="text-muted-foreground">No encontramos coincidencias</p>
