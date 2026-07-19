@@ -184,7 +184,7 @@ export function LocationPicker({
 
   return (
     <div className="space-y-3">
-      {/* Address search — z-10 stacking context keeps dropdown above Google Maps */}
+      {/* Address search */}
       <div className="relative z-10">
         <label className="mb-1.5 block text-sm font-medium">Dirección</label>
         <div className="relative">
@@ -263,118 +263,126 @@ export function LocationPicker({
         </div>
       </div>
 
-      {/* Confirmed address pill */}
-      {hasLocation && value?.formattedAddress && (
-        <div className="bg-muted/50 flex items-start gap-2 rounded-lg p-3">
-          <MapPin
-            className="text-movos-blue mt-0.5 size-4 shrink-0"
-            aria-hidden
-          />
-          <div>
-            <p className="text-sm font-medium">Ubicación confirmada</p>
-            <p className="text-muted-foreground text-xs">
-              {value.formattedAddress}
+      {/* Map + details — hidden while suggestions are open, fade in on selection */}
+      <div
+        aria-hidden={showSuggestions}
+        className={`space-y-3 transition-opacity duration-300 ease-in-out ${
+          showSuggestions ? 'pointer-events-none opacity-0' : 'opacity-100'
+        }`}
+      >
+        {/* Confirmed address pill */}
+        {hasLocation && value?.formattedAddress && (
+          <div className="bg-muted/50 flex items-start gap-2 rounded-lg p-3">
+            <MapPin
+              className="text-movos-blue mt-0.5 size-4 shrink-0"
+              aria-hidden
+            />
+            <div>
+              <p className="text-sm font-medium">Ubicación confirmada</p>
+              <p className="text-muted-foreground text-xs">
+                {value.formattedAddress}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Map */}
+        {hasBrowserKey ? (
+          <div className="overflow-hidden rounded-xl border" style={{ height: 260 }}>
+            <APIProvider
+              apiKey={BROWSER_KEY}
+              onError={() =>
+                setMapError(
+                  'El mapa no está disponible. Puedes ingresar las coordenadas manualmente.',
+                )
+              }
+            >
+              <Map
+                defaultCenter={markerPos ?? COLOMBIA_CENTER}
+                center={markerPos ?? undefined}
+                zoom={mapZoom}
+                mapId="movos-location-picker"
+                gestureHandling="greedy"
+                disableDefaultUI
+                className="h-full w-full"
+              >
+                {markerPos && (
+                  <AdvancedMarker
+                    position={markerPos}
+                    draggable={!disabled}
+                    onDragEnd={(e) => {
+                      if (e.latLng) {
+                        handleMarkerDrag(e.latLng.lat(), e.latLng.lng());
+                      }
+                    }}
+                    title="Ajusta el marcador si el punto operativo es diferente"
+                  />
+                )}
+              </Map>
+            </APIProvider>
+          </div>
+        ) : (
+          <div className="bg-muted flex h-[260px] items-center justify-center rounded-xl border">
+            <p className="text-muted-foreground text-sm">
+              Vista de mapa no disponible
             </p>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Map */}
-      {hasBrowserKey ? (
-        <div className="relative isolate overflow-hidden rounded-xl border" style={{ height: 260 }}>
-          <APIProvider
-            apiKey={BROWSER_KEY}
-            onError={() =>
-              setMapError(
-                'El mapa no está disponible. Puedes ingresar las coordenadas manualmente.',
-              )
-            }
-          >
-            <Map
-              defaultCenter={markerPos ?? COLOMBIA_CENTER}
-              center={markerPos ?? undefined}
-              zoom={mapZoom}
-              mapId="movos-location-picker"
-              gestureHandling="greedy"
-              disableDefaultUI
-              className="h-full w-full"
-            >
-              {markerPos && (
-                <AdvancedMarker
-                  position={markerPos}
-                  draggable={!disabled}
-                  onDragEnd={(e) => {
-                    if (e.latLng) {
-                      handleMarkerDrag(e.latLng.lat(), e.latLng.lng());
-                    }
-                  }}
-                  title="Ajusta el marcador si el punto operativo es diferente"
-                />
-              )}
-            </Map>
-          </APIProvider>
-        </div>
-      ) : (
-        <div className="bg-muted flex h-[260px] items-center justify-center rounded-xl border">
-          <p className="text-muted-foreground text-sm">
-            Vista de mapa no disponible
+        {markerPos && (
+          <p className="text-muted-foreground text-xs">
+            Ajusta el marcador si el punto operativo es diferente a la dirección
+            postal
           </p>
+        )}
+
+        {/* Manual coordinates toggle */}
+        <div>
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-auto p-0 text-xs text-muted-foreground underline-offset-2 hover:underline"
+            onClick={() => setShowManual((s) => !s)}
+          >
+            {showManual ? 'Ocultar coordenadas' : 'Ingresar coordenadas manualmente'}
+          </Button>
         </div>
-      )}
 
-      {markerPos && (
-        <p className="text-muted-foreground text-xs">
-          Ajusta el marcador si el punto operativo es diferente a la dirección
-          postal
-        </p>
-      )}
-
-      {/* Manual coordinates toggle */}
-      <div>
-        <Button
-          type="button"
-          variant="ghost"
-          className="h-auto p-0 text-xs text-muted-foreground underline-offset-2 hover:underline"
-          onClick={() => setShowManual((s) => !s)}
-        >
-          {showManual ? 'Ocultar coordenadas' : 'Ingresar coordenadas manualmente'}
-        </Button>
+        {(showManual || hasLocation) && (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium">Latitud</label>
+              <Input
+                type="number"
+                step="any"
+                min={-90}
+                max={90}
+                value={value?.latitude ?? ''}
+                onChange={(e) => handleManualCoord('latitude', e.target.value)}
+                disabled={disabled}
+                placeholder="−90 a 90"
+                aria-label="Latitud"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium">Longitud</label>
+              <Input
+                type="number"
+                step="any"
+                min={-180}
+                max={180}
+                value={value?.longitude ?? ''}
+                onChange={(e) => handleManualCoord('longitude', e.target.value)}
+                disabled={disabled}
+                placeholder="−180 a 180"
+                aria-label="Longitud"
+              />
+            </div>
+          </div>
+        )}
       </div>
 
-      {(showManual || hasLocation) && (
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="mb-1 block text-xs font-medium">Latitud</label>
-            <Input
-              type="number"
-              step="any"
-              min={-90}
-              max={90}
-              value={value?.latitude ?? ''}
-              onChange={(e) => handleManualCoord('latitude', e.target.value)}
-              disabled={disabled}
-              placeholder="−90 a 90"
-              aria-label="Latitud"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium">Longitud</label>
-            <Input
-              type="number"
-              step="any"
-              min={-180}
-              max={180}
-              value={value?.longitude ?? ''}
-              onChange={(e) => handleManualCoord('longitude', e.target.value)}
-              disabled={disabled}
-              placeholder="−180 a 180"
-              aria-label="Longitud"
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Errors */}
+      {/* Errors — always visible */}
       {(mapError ?? error) && (
         <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
           <AlertCircle
