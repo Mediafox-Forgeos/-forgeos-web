@@ -28,3 +28,6 @@ yarn-error.log*
 
 # naming-engine generated output (committed reports are intentional)
 apps/naming-engine/reports/output.md
+
+# Claude Code artifacts (worktrees, cache, settings)
+.claude/
