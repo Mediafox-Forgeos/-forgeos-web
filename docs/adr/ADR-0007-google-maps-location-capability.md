@@ -73,7 +73,19 @@ No external dependency. Rejected because:
 **Negative / Trade-offs**
 - Two new environment variables to manage per environment (`MOVOS_GOOGLE_MAPS_SERVER_API_KEY`, `NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_API_KEY`).
 - Google Places billing applies to autocomplete + place detail calls. Session-token grouping is in place to minimize cost.
-- `PlaceAutocompleteType.address` restricts suggestions to addresses only (not businesses/POIs). This is intentional for charging-site use cases but limits discovery of business-named sites.
+- Autocomplete is restricted by country (`region`) and `language` only — it does not filter by Google place type, so business names and points of interest can appear alongside street addresses. See "Open questions" below.
+
+---
+
+## Security & privacy
+
+- The server key is optional/empty by default in `env.validation` and is never sent to the client; `.env.example` files ship empty values only (see the comments there for the graceful-degradation behavior when it's absent).
+- Both `LocationController` endpoints require a valid access JWT (`JwtAuthGuard`) and are per-route rate-limited (`@nestjs/throttler`) to bound abuse and Google billing exposure.
+- The adapter never returns raw Google payloads — only the normalized `LocationSuggestion` / `ResolvedLocation` contracts from `@mediafox/shared-types` cross the API boundary.
+
+## Open questions / Pending decisions
+
+- **Place-type restriction:** an earlier draft of this capability restricted autocomplete to `PlaceAutocompleteType.address` (addresses only, no businesses/POIs). The version that shipped does not apply this restriction — the trade-off between cleaner address-only suggestions and discoverability of business-named charging sites was not resolved before merge. This ADR previously stated the restriction was active; it is not, as of the current implementation. Whether to (re)introduce a type restriction is an open product decision, not yet made.
 
 ---
 

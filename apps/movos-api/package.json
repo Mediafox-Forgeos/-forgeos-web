@@ -4,6 +4,7 @@
   "private": true,
   "packageManager": "pnpm@11.5.3",
   "scripts": {
+    "postinstall": "prisma generate",
     "dev": "nest start --watch",
     "build": "prisma generate && nest build",
     "start": "node dist/main",
