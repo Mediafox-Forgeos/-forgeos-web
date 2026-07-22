@@ -1,5 +1,13 @@
 # ForgeOS — Project Inventory
 
+> **⚠️ OBSOLETE — preserved as historical record only.** This snapshot predates
+> the MOVOS product entirely (no `movos-api`, `movos-web`, `naming-engine`, or
+> `forge-labs` are described below) and no longer reflects repository state.
+> For current state, see:
+> [`docs/audits/MOVOS_CURRENT_STATE_AUDIT.md`](docs/audits/MOVOS_CURRENT_STATE_AUDIT.md),
+> [`docs/audits/REPOSITORY_HEALTH_REPORT.md`](docs/audits/REPOSITORY_HEALTH_REPORT.md), and
+> [`docs/audits/TECH-001_REPOSITORY_INTEGRITY_REPORT.md`](docs/audits/TECH-001_REPOSITORY_INTEGRITY_REPORT.md).
+
 > Technical snapshot created on 2026-07-13 from commit `583ba8aaccc311d6a124cde047f1e11d0e91f969` (`feat(forgeos): create operational workspace for EV Platform`).
 >
 > Scope: repository inspection only. This document records observed state; it introduces no application, configuration, or behavior changes.
