@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "packageManager": "pnpm@11.5.3",
+  "engines": {
+    "node": ">=20 <21",
+    "pnpm": "11.5.3"
+  },
   "scripts": {
     "dev": "pnpm --filter @mediafox/forgeos-web dev",
     "build": "pnpm -r --if-present build",
