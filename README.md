@@ -29,8 +29,12 @@ docs/
 
 ## Prerequisites
 
-- Node.js 20 LTS — pinned in [`.nvmrc`](.nvmrc); run `nvm use` (or equivalent)
-  before installing
+- Node.js 22 (LTS) or newer — pinned in [`.nvmrc`](.nvmrc); run `nvm use` (or
+  equivalent) before installing. This is a hard requirement, not a
+  preference: pnpm 11.5.3 (below) uses the `node:sqlite` built-in module,
+  which does not exist before Node 22.5, and needs 22.13+ to run at all —
+  older docs in this repo said "Node 20," which was already inaccurate for
+  this pnpm version and is corrected here
 - pnpm 11.5.3 (the repository declares its required version)
 - Docker (for the MOVOS PostgreSQL database)
 
