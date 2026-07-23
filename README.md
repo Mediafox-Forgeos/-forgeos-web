@@ -1,5 +1,7 @@
 # MediaFOX Forge
 
+[![CI](https://github.com/Mediafox-Forgeos/-forgeos-web/actions/workflows/ci.yml/badge.svg)](https://github.com/Mediafox-Forgeos/-forgeos-web/actions/workflows/ci.yml)
+
 ForgeOS is the AI operating workspace for MediaFOX Forge. It currently provides the ForgeOS web application and workspace scaffolding for future domain, UI, and configuration packages.
 
 ## Monorepo structure
@@ -27,16 +29,20 @@ docs/
 
 ## Prerequisites
 
-- Node.js 20 LTS (the repository declares Node 20; the MOVOS API and its jest
-  toolchain target Node 20)
+- Node.js 20 LTS — pinned in [`.nvmrc`](.nvmrc); run `nvm use` (or equivalent)
+  before installing
 - pnpm 11.5.3 (the repository declares its required version)
 - Docker (for the MOVOS PostgreSQL database)
+
+Alternatively, open this repository in the provided [Dev Container](.devcontainer/devcontainer.json) (VS Code: "Reopen in Container") for a preconfigured environment with the correct Node/pnpm versions and recommended extensions.
 
 ## Installation
 
 ```bash
 pnpm install
 ```
+
+This also installs the [Husky](https://typicode.github.io/husky/) git hooks (`pre-commit` formats staged files, `commit-msg` enforces [Conventional Commits](https://www.conventionalcommits.org/)) and generates the MOVOS API's Prisma client automatically.
 
 ## Local development
 
@@ -107,13 +113,13 @@ See [the monorepo architecture document](docs/architecture/MONOREPO.md) for pack
 
 MediaFOX Forge institutional documentation — organizational structure, founding principles, engineering standards, product strategy, and agent protocols.
 
-| Section | Description |
-| --- | --- |
-| [Company](docs/company/README.md) | Founding documents, organizational structure, and operating principles |
-| [Architecture](docs/architecture/README.md) | Long-form system design documents |
-| [ADR](docs/adr/README.md) | Architecture Decision Records |
-| [Engineering](docs/engineering/README.md) | Engineering standards, testing strategy, CI/CD |
-| [Product](docs/product/README.md) | Product vision, roadmaps, and requirements |
-| [Agents](docs/agents/README.md) | AI agent protocols, context contracts, and behavioral boundaries |
+| Section                                     | Description                                                            |
+| ------------------------------------------- | ---------------------------------------------------------------------- |
+| [Company](docs/company/README.md)           | Founding documents, organizational structure, and operating principles |
+| [Architecture](docs/architecture/README.md) | Long-form system design documents                                      |
+| [ADR](docs/adr/README.md)                   | Architecture Decision Records                                          |
+| [Engineering](docs/engineering/README.md)   | Engineering standards, testing strategy, CI/CD                         |
+| [Product](docs/product/README.md)           | Product vision, roadmaps, and requirements                             |
+| [Agents](docs/agents/README.md)             | AI agent protocols, context contracts, and behavioral boundaries       |
 
 The founding organizational structure, executive roles, engineering principles, and AI collaboration model are defined in the [Founder Team Constitution](docs/company/FOUNDER_TEAM_CONSTITUTION.md).
