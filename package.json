@@ -9,6 +9,7 @@
   },
   "scripts": {
     "prepare": "husky",
+    "forge": "pnpm --filter @mediafox/forge-cli dev",
     "dev": "pnpm --filter @mediafox/forgeos-web dev",
     "build": "pnpm -r --if-present build",
     "lint": "pnpm -r --if-present lint",
