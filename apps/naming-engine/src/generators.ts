@@ -154,7 +154,18 @@ export function generatePhonetic(input: EngineInput): string[] {
   const results: string[] = [];
 
   // Premium consonant clusters as openers
-  const CLUSTERS = ['TR', 'KR', 'VR', 'GR', 'PR', 'BR', 'DR', 'STR', 'SK', 'FL'];
+  const CLUSTERS = [
+    'TR',
+    'KR',
+    'VR',
+    'GR',
+    'PR',
+    'BR',
+    'DR',
+    'STR',
+    'SK',
+    'FL',
+  ];
   const BRIDGES = ['A', 'E', 'I', 'O', 'U', 'AX', 'EX', 'IX', 'ON', 'AN'];
   const CLOSERS = ['IX', 'EX', 'AX', 'ON', 'AR', 'OX', 'EN', 'IN'];
 
@@ -255,14 +266,16 @@ export function generateMinimal(input: EngineInput): string[] {
     for (const v of VOWEL_NUCLEI) {
       for (const c of CODAS_TERMINAL) {
         const raw = (pair + v + c).toLowerCase();
-        if (inRange(raw, effectiveMin, effectiveMax)) results.push(capitalize(raw));
+        if (inRange(raw, effectiveMin, effectiveMax))
+          results.push(capitalize(raw));
 
         // With inserted vowel between pair chars
         const p0 = pair[0];
         const p1 = pair.slice(1);
         for (const vi of VOWEL_NUCLEI) {
           const raw2 = (p0 + vi + p1 + v + c).toLowerCase();
-          if (inRange(raw2, effectiveMin, effectiveMax)) results.push(capitalize(raw2));
+          if (inRange(raw2, effectiveMin, effectiveMax))
+            results.push(capitalize(raw2));
         }
       }
     }
@@ -301,7 +314,9 @@ export function generateOneWord(input: EngineInput): string[] {
   }
 
   // Cross-language mashups from keywords
-  const kwFragments = input.keywords.slice(0, 8).map((k) => k.toLowerCase().slice(0, 5));
+  const kwFragments = input.keywords
+    .slice(0, 8)
+    .map((k) => k.toLowerCase().slice(0, 5));
   for (const f of kwFragments) {
     results.push(capitalize(f + 'ex'));
     results.push(capitalize(f + 'ix'));
@@ -314,7 +329,10 @@ export function generateOneWord(input: EngineInput): string[] {
 
 // ─── Orchestrator ─────────────────────────────────────────────────────────────
 
-export type GeneratedSet = { candidates: string[]; byStrategy: Record<Strategy, string[]> };
+export type GeneratedSet = {
+  candidates: string[];
+  byStrategy: Record<Strategy, string[]>;
+};
 
 export function generateAll(input: EngineInput): GeneratedSet {
   const byStrategy: Record<Strategy, string[]> = {
@@ -328,8 +346,9 @@ export function generateAll(input: EngineInput): GeneratedSet {
     oneword: generateOneWord(input),
   };
 
-  const allWithStrategy = Object.entries(byStrategy).flatMap(([strategy, names]) =>
-    names.map((name) => ({ name, strategy: strategy as Strategy })),
+  const allWithStrategy = Object.entries(byStrategy).flatMap(
+    ([strategy, names]) =>
+      names.map((name) => ({ name, strategy: strategy as Strategy })),
   );
 
   // Global dedup: if a name appears in multiple strategies, keep first occurrence

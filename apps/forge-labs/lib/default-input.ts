@@ -13,10 +13,31 @@ export const defaultInput: EngineInput = {
 };
 
 export const PERSONALITY_OPTIONS = [
-  'Modern', 'Premium', 'Engineering', 'Trustworthy',
-  'Innovative', 'Minimal', 'Global', 'Bold', 'Human',
+  'Modern',
+  'Premium',
+  'Engineering',
+  'Trustworthy',
+  'Innovative',
+  'Minimal',
+  'Global',
+  'Bold',
+  'Human',
 ] as const;
 
-export const LANGUAGE_OPTIONS = ['English', 'Spanish', 'French', 'German', 'Portuguese'] as const;
+export const LANGUAGE_OPTIONS = [
+  'English',
+  'Spanish',
+  'French',
+  'German',
+  'Portuguese',
+] as const;
 
-export const DOMAIN_OPTIONS = ['com', 'io', 'ai', 'app', 'co', 'dev', 'net'] as const;
+export const DOMAIN_OPTIONS = [
+  'com',
+  'io',
+  'ai',
+  'app',
+  'co',
+  'dev',
+  'net',
+] as const;

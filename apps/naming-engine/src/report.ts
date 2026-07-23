@@ -1,4 +1,9 @@
-import type { BrandingReport, CandidateName, BrandIdentity, Strategy } from '@mediafox/naming-engine';
+import type {
+  BrandingReport,
+  CandidateName,
+  BrandIdentity,
+  Strategy,
+} from '@mediafox/naming-engine';
 
 function strategyLabel(s: Strategy): string {
   const map: Record<Strategy, string> = {
@@ -46,8 +51,11 @@ export function formatHeader(report: BrandingReport): string {
 ### By Strategy
 
 ${Object.entries(report.stats.byStrategy)
-    .map(([strategy, count]) => `| ${strategyLabel(strategy as Strategy)} | ${count.toLocaleString()} |`)
-    .join('\n')}
+  .map(
+    ([strategy, count]) =>
+      `| ${strategyLabel(strategy as Strategy)} | ${count.toLocaleString()} |`,
+  )
+  .join('\n')}
 
 ---`;
 }
@@ -72,7 +80,8 @@ ${rows}
 export function formatTop25(report: BrandingReport): string {
   const rows = report.top25
     .map(
-      (c, i) => `| ${String(i + 1).padStart(2)} | **${c.name}** | ${c.score.toFixed(1)} | ${strategyLabel(c.strategy)} | ${c.oneLine} |`,
+      (c, i) =>
+        `| ${String(i + 1).padStart(2)} | **${c.name}** | ${c.score.toFixed(1)} | ${strategyLabel(c.strategy)} | ${c.oneLine} |`,
     )
     .join('\n');
 
@@ -164,7 +173,10 @@ ${identity.trademarkNotes}
 export function generateMarkdownReport(
   report: BrandingReport,
   top3Identities: BrandIdentity[],
-  winner: BrandIdentity & { winnersRationale: string; whyOtherFinalistsLost: string },
+  winner: BrandIdentity & {
+    winnersRationale: string;
+    whyOtherFinalistsLost: string;
+  },
 ): string {
   const sections: string[] = [
     formatHeader(report),
@@ -178,7 +190,10 @@ export function generateMarkdownReport(
 }
 
 export function formatWinner(
-  winner: BrandIdentity & { winnersRationale: string; whyOtherFinalistsLost: string },
+  winner: BrandIdentity & {
+    winnersRationale: string;
+    whyOtherFinalistsLost: string;
+  },
 ): string {
   return `## THE WINNER
 

@@ -134,7 +134,8 @@ export default function SiteDetailPage() {
                   ) : (
                     <div className="bg-muted flex h-[200px] items-center justify-center rounded-xl border">
                       <p className="text-muted-foreground text-sm">
-                        Sin coordenadas — edita el sitio para agregar una ubicación
+                        Sin coordenadas — edita el sitio para agregar una
+                        ubicación
                       </p>
                     </div>
                   )}
@@ -148,19 +149,31 @@ export default function SiteDetailPage() {
                       />
                     )}
                     {site.addressLine1 && (
-                      <LocationField label="Línea 1" value={site.addressLine1} />
+                      <LocationField
+                        label="Línea 1"
+                        value={site.addressLine1}
+                      />
                     )}
                     {site.addressLine2 && (
-                      <LocationField label="Línea 2" value={site.addressLine2} />
+                      <LocationField
+                        label="Línea 2"
+                        value={site.addressLine2}
+                      />
                     )}
                     {site.city && (
                       <LocationField label="Ciudad" value={site.city} />
                     )}
                     {site.state && (
-                      <LocationField label="Departamento / Estado" value={site.state} />
+                      <LocationField
+                        label="Departamento / Estado"
+                        value={site.state}
+                      />
                     )}
                     {site.postalCode && (
-                      <LocationField label="Código postal" value={site.postalCode} />
+                      <LocationField
+                        label="Código postal"
+                        value={site.postalCode}
+                      />
                     )}
                     {site.countryCode && (
                       <LocationField label="País" value={site.countryCode} />
@@ -174,7 +187,10 @@ export default function SiteDetailPage() {
                     {site.locationSource && (
                       <LocationField
                         label="Fuente"
-                        value={SOURCE_LABELS[site.locationSource] ?? site.locationSource}
+                        value={
+                          SOURCE_LABELS[site.locationSource] ??
+                          site.locationSource
+                        }
                       />
                     )}
                     {site.locationValidationStatus && (

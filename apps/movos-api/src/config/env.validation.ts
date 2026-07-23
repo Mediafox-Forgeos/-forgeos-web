@@ -17,7 +17,10 @@ export const envValidationSchema = Joi.object({
   CORS_ORIGINS: Joi.string().default('http://localhost:3002'),
   SEED_ADMIN_EMAIL: Joi.string().email().required(),
   SEED_ADMIN_PASSWORD: Joi.string().min(8).required(),
-  MOVOS_GOOGLE_MAPS_SERVER_API_KEY: Joi.string().optional().allow('').default(''),
+  MOVOS_GOOGLE_MAPS_SERVER_API_KEY: Joi.string()
+    .optional()
+    .allow('')
+    .default(''),
   GOOGLE_MAPS_REGION: Joi.string().default('CO'),
   GOOGLE_MAPS_LANGUAGE: Joi.string().default('es'),
 });

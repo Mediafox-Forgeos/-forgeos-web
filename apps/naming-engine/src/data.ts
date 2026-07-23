@@ -2,16 +2,62 @@
 
 /** Onsets ordered by brand desirability (strong tech consonants first) */
 export const ONSETS_PREMIUM = [
-  'K', 'V', 'Z', 'TR', 'KR', 'VR', 'GR', 'PR', 'FL', 'BR', 'DR',
-  'N', 'T', 'R', 'L', 'M', 'D', 'F', 'S', 'B', 'G', 'P',
-  'STR', 'SK', 'SL', 'SM', 'SN', 'SP', 'ST',
+  'K',
+  'V',
+  'Z',
+  'TR',
+  'KR',
+  'VR',
+  'GR',
+  'PR',
+  'FL',
+  'BR',
+  'DR',
+  'N',
+  'T',
+  'R',
+  'L',
+  'M',
+  'D',
+  'F',
+  'S',
+  'B',
+  'G',
+  'P',
+  'STR',
+  'SK',
+  'SL',
+  'SM',
+  'SN',
+  'SP',
+  'ST',
 ] as const;
 
 export const VOWEL_NUCLEI = ['A', 'E', 'I', 'O', 'U'] as const;
 
-export const VOWEL_EXTENDED = ['A', 'E', 'I', 'O', 'U', 'AE', 'EI', 'AI', 'AU'] as const;
+export const VOWEL_EXTENDED = [
+  'A',
+  'E',
+  'I',
+  'O',
+  'U',
+  'AE',
+  'EI',
+  'AI',
+  'AU',
+] as const;
 
-export const CODAS_STRONG = ['X', 'K', 'N', 'R', 'T', 'S', 'L', 'V', 'Z'] as const;
+export const CODAS_STRONG = [
+  'X',
+  'K',
+  'N',
+  'R',
+  'T',
+  'S',
+  'L',
+  'V',
+  'Z',
+] as const;
 
 export const CODAS_TERMINAL = ['X', 'K', 'N', 'R', 'T', 'S'] as const;
 
@@ -40,8 +86,26 @@ export const LATIN_ROOTS: Array<{ root: string; meaning: string }> = [
   { root: 'cohor', meaning: 'cohort, unit, assembly' },
 ] as const;
 
-export const LATIN_SUFFIXES = ['ex', 'ar', 'on', 'ix', 'ax', 'en', 'ox', 'er', 'el'] as const;
-export const LATIN_PREFIXES = ['ve', 'ne', 'a', 'co', 'in', 're', 'pro'] as const;
+export const LATIN_SUFFIXES = [
+  'ex',
+  'ar',
+  'on',
+  'ix',
+  'ax',
+  'en',
+  'ox',
+  'er',
+  'el',
+] as const;
+export const LATIN_PREFIXES = [
+  've',
+  'ne',
+  'a',
+  'co',
+  'in',
+  're',
+  'pro',
+] as const;
 
 // ─── Greek roots ─────────────────────────────────────────────────────────────
 
@@ -68,29 +132,86 @@ export const GREEK_ROOTS: Array<{ root: string; meaning: string }> = [
   { root: 'troph', meaning: 'nourishment, growth, sustaining' },
 ] as const;
 
-export const GREEK_SUFFIXES = ['ex', 'ax', 'ix', 'on', 'os', 'ar', 'en'] as const;
+export const GREEK_SUFFIXES = [
+  'ex',
+  'ax',
+  'ix',
+  'on',
+  'os',
+  'ar',
+  'en',
+] as const;
 
 // ─── Technology brand patterns ────────────────────────────────────────────────
 
 export const TECH_PREFIXES = [
-  'A', 'Z', 'K', 'V', 'X', 'N', 'S', 'D',
-  'Ar', 'Ve', 'Zi', 'Ka', 'No', 'Kr', 'Tr', 'Vr',
+  'A',
+  'Z',
+  'K',
+  'V',
+  'X',
+  'N',
+  'S',
+  'D',
+  'Ar',
+  'Ve',
+  'Zi',
+  'Ka',
+  'No',
+  'Kr',
+  'Tr',
+  'Vr',
 ] as const;
 
 export const TECH_MIDDLES = [
-  'ol', 'ar', 'el', 'on', 'iv', 'ax', 'ox', 'en',
-  'ov', 'an', 'in', 'ex', 'al', 'or',
+  'ol',
+  'ar',
+  'el',
+  'on',
+  'iv',
+  'ax',
+  'ox',
+  'en',
+  'ov',
+  'an',
+  'in',
+  'ex',
+  'al',
+  'or',
 ] as const;
 
 export const TECH_TERMINALS = [
-  'ex', 'ix', 'ax', 'on', 'ar', 'er', 'ox', 'en', 'al',
+  'ex',
+  'ix',
+  'ax',
+  'on',
+  'ar',
+  'er',
+  'ox',
+  'en',
+  'al',
 ] as const;
 
 // ─── Minimal brand seeds ──────────────────────────────────────────────────────
 
 export const MINIMAL_CONSONANT_PAIRS = [
-  'KV', 'VR', 'ZK', 'TR', 'KR', 'GR', 'PR', 'BR', 'DR',
-  'NK', 'VX', 'ZN', 'KN', 'TN', 'RV', 'LK', 'MV',
+  'KV',
+  'VR',
+  'ZK',
+  'TR',
+  'KR',
+  'GR',
+  'PR',
+  'BR',
+  'DR',
+  'NK',
+  'VX',
+  'ZN',
+  'KN',
+  'TN',
+  'RV',
+  'LK',
+  'MV',
 ] as const;
 
 // ─── Curated one-word seeds (cross-language evocative words) ──────────────────
@@ -116,42 +237,109 @@ export const ONEWORD_SEEDS = [
 // ─── Known companies to flag (trademark risk list — partial) ─────────────────
 
 export const KNOWN_COMPANY_NAMES = new Set([
-  'nexon', 'dynex', 'devex', 'navex', 'orbex', 'kronos', 'cortex',
-  'vortex', 'vertex', 'apex', 'axiom', 'navis', 'novus', 'codex',
-  'zenix', 'logix', 'rinex', 'centrex', 'andrex', 'mirex', 'pyrex',
-  'xerox', 'rolex', 'zolux', 'airex', 'matrex', 'clorox',
+  'nexon',
+  'dynex',
+  'devex',
+  'navex',
+  'orbex',
+  'kronos',
+  'cortex',
+  'vortex',
+  'vertex',
+  'apex',
+  'axiom',
+  'navis',
+  'novus',
+  'codex',
+  'zenix',
+  'logix',
+  'rinex',
+  'centrex',
+  'andrex',
+  'mirex',
+  'pyrex',
+  'xerox',
+  'rolex',
+  'zolux',
+  'airex',
+  'matrex',
+  'clorox',
 ]);
 
 // ─── English dictionary words to reject ──────────────────────────────────────
 
 export const COMMON_ENGLISH_WORDS = new Set([
-  'taxes', 'relax', 'index', 'annex', 'latex', 'reflex', 'complex',
-  'duplex', 'reflex', 'convex', 'matrix', 'helix', 'radix', 'varix',
-  'calyx', 'gravel', 'travel', 'drivel', 'level', 'seven', 'raven',
-  'liven', 'given', 'driven', 'striven', 'frozen', 'brazen', 'fasten',
+  'taxes',
+  'relax',
+  'index',
+  'annex',
+  'latex',
+  'reflex',
+  'complex',
+  'duplex',
+  'reflex',
+  'convex',
+  'matrix',
+  'helix',
+  'radix',
+  'varix',
+  'calyx',
+  'gravel',
+  'travel',
+  'drivel',
+  'level',
+  'seven',
+  'raven',
+  'liven',
+  'given',
+  'driven',
+  'striven',
+  'frozen',
+  'brazen',
+  'fasten',
 ]);
 
 // ─── Spanish words to reject ─────────────────────────────────────────────────
 
 export const COMMON_SPANISH_WORDS = new Set([
-  'traes', 'taxis', 'nexos', 'naves', 'vinos', 'redes',
+  'traes',
+  'taxis',
+  'nexos',
+  'naves',
+  'vinos',
+  'redes',
 ]);
 
 // ─── Phonetically problematic patterns ───────────────────────────────────────
 
 export const PROBLEMATIC_PATTERNS = [
-  /(.)\1{2,}/i,    // triple+ repeated character
-  /[aeiou]{4,}/i,  // 4+ consecutive vowels
+  /(.)\1{2,}/i, // triple+ repeated character
+  /[aeiou]{4,}/i, // 4+ consecutive vowels
   /[^aeiou]{5,}/i, // 5+ consecutive consonants
-  /^[aeiou]/i,     // starts with vowel (weaker brand opening for tech)
-  /gh/i,           // ambiguous English digraph
-  /wr/i,           // silent W
-  /kn/i,           // silent K
+  /^[aeiou]/i, // starts with vowel (weaker brand opening for tech)
+  /gh/i, // ambiguous English digraph
+  /wr/i, // silent W
+  /kn/i, // silent K
 ] as const;
 
 // ─── Negative meaning fragments to reject ────────────────────────────────────
 
 export const NEGATIVE_FRAGMENTS = [
-  'kill', 'die', 'dead', 'fail', 'bad', 'evil', 'sick', 'ugly', 'rot',
-  'war', 'hate', 'foul', 'crud', 'dump', 'junk', 'ruin', 'doom',
+  'kill',
+  'die',
+  'dead',
+  'fail',
+  'bad',
+  'evil',
+  'sick',
+  'ugly',
+  'rot',
+  'war',
+  'hate',
+  'foul',
+  'crud',
+  'dump',
+  'junk',
+  'ruin',
+  'doom',
 ] as const;

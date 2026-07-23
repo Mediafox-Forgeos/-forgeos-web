@@ -1,5 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { LocationSource, LocationValidationStatus, SiteStatus } from '@prisma/client';
+import {
+  LocationSource,
+  LocationValidationStatus,
+  SiteStatus,
+} from '@prisma/client';
 import {
   IsEnum,
   IsNotEmpty,
@@ -52,7 +56,9 @@ export class CreateSiteDto {
 
   // Rich location fields — populated by the LocationPicker/Google Places flow
 
-  @ApiPropertyOptional({ example: 'Cra 7 # 32-16, Bogotá, Cundinamarca, Colombia' })
+  @ApiPropertyOptional({
+    example: 'Cra 7 # 32-16, Bogotá, Cundinamarca, Colombia',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(500)

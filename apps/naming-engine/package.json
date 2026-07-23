@@ -11,7 +11,9 @@
     "build": "tsc --outDir dist",
     "start": "node dist/cli.js",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\""
   },
   "dependencies": {
     "@mediafox/naming-engine": "workspace:*"
@@ -21,6 +23,7 @@
     "@mediafox/typescript-config": "workspace:*",
     "@types/node": "^22.10.1",
     "eslint": "^9.17.0",
+    "prettier": "^3.4.2",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   }

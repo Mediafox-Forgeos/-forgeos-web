@@ -1,5 +1,8 @@
 import { Test } from '@nestjs/testing';
-import type { LocationSuggestion, ResolvedLocation } from '@mediafox/shared-types';
+import type {
+  LocationSuggestion,
+  ResolvedLocation,
+} from '@mediafox/shared-types';
 import { GoogleMapsAdapter } from './google-maps.adapter';
 import { LocationService } from './location.service';
 
@@ -69,7 +72,12 @@ describe('LocationService', () => {
       });
       const result = await service.autocomplete('  Cra 7  ', 'tok', 'co', 'es');
       expect(result).toEqual([SUGGESTION]);
-      expect(adapter.autocomplete).toHaveBeenCalledWith('Cra 7', 'tok', 'co', 'es');
+      expect(adapter.autocomplete).toHaveBeenCalledWith(
+        'Cra 7',
+        'tok',
+        'co',
+        'es',
+      );
     });
 
     it('defaults region to co and language to es', async () => {
@@ -77,7 +85,12 @@ describe('LocationService', () => {
         autocomplete: jest.fn().mockResolvedValue([]),
       });
       await service.autocomplete('Cra 7', 'tok');
-      expect(adapter.autocomplete).toHaveBeenCalledWith('Cra 7', 'tok', 'co', 'es');
+      expect(adapter.autocomplete).toHaveBeenCalledWith(
+        'Cra 7',
+        'tok',
+        'co',
+        'es',
+      );
     });
 
     it('returns empty array when Google is not configured', async () => {
@@ -100,7 +113,9 @@ describe('LocationService', () => {
 
   describe('resolvePlace', () => {
     it('returns null when adapter returns null', async () => {
-      const { service } = await build({ getPlace: jest.fn().mockResolvedValue(null) });
+      const { service } = await build({
+        getPlace: jest.fn().mockResolvedValue(null),
+      });
       await expect(service.resolvePlace('p1', 'tok')).resolves.toBeNull();
     });
 

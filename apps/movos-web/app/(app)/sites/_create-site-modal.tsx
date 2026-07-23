@@ -75,7 +75,9 @@ export function CreateSiteModal({
       countryCode: location.countryCode,
       googlePlaceId: location.googlePlaceId,
       locationSource: location.locationSource,
-      locationValidationStatus: location.googlePlaceId ? 'CONFIRMED' : 'UNVALIDATED',
+      locationValidationStatus: location.googlePlaceId
+        ? 'CONFIRMED'
+        : 'UNVALIDATED',
     };
     if (location.latitude != null) payload.latitude = location.latitude;
     if (location.longitude != null) payload.longitude = location.longitude;

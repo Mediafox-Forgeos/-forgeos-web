@@ -2,7 +2,10 @@
 
 import { useState, useTransition, useEffect } from 'react';
 import type { EngineInput } from '@mediafox/naming-engine';
-import type { WebNamingResult, WebCandidateFull } from '@mediafox/naming-engine';
+import type {
+  WebNamingResult,
+  WebCandidateFull,
+} from '@mediafox/naming-engine';
 import { generateNames } from '@/actions/naming';
 import { InputPanel } from '@/components/naming/input-panel';
 import { RunPanel } from '@/components/naming/run-panel';
@@ -33,7 +36,9 @@ export function NamingClient() {
   const [selectedName, setSelectedName] = useState<string | null>(null);
   const [compareNames, setCompareNames] = useState<string[]>([]);
   const [centerView, setCenterView] = useState<CenterView>('run');
-  const [founderReviews, setFounderReviews] = useState<Record<string, FounderReviewData>>({});
+  const [founderReviews, setFounderReviews] = useState<
+    Record<string, FounderReviewData>
+  >({});
 
   // Animate progress while generating
   useEffect(() => {
@@ -61,7 +66,12 @@ export function NamingClient() {
   // Keyboard shortcut: ⌘↵ to generate
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && !isPending && input.industry.trim()) {
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        e.key === 'Enter' &&
+        !isPending &&
+        input.industry.trim()
+      ) {
         handleGenerate();
       }
       if (e.key === 'Escape' && centerView !== 'run') {
@@ -103,7 +113,9 @@ export function NamingClient() {
   }
 
   const selectedData: WebCandidateFull | null =
-    (selectedName ? results?.top10.find((c) => c.name === selectedName) : null) ?? null;
+    (selectedName
+      ? results?.top10.find((c) => c.name === selectedName)
+      : null) ?? null;
 
   const compareData: WebCandidateFull[] =
     results?.top10.filter((c) => compareNames.includes(c.name)) ?? [];
