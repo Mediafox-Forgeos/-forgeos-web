@@ -47,15 +47,42 @@ None of these decisions are approved by this document. Per this mission's own ru
 - **Decision owner:** ARGOS
 - **Status:** **Non-blocking**, but relevant before CAP-002's Prisma modeling begins — recommend resolving before, not during, that work.
 
-### M001-A-DEC-005 — Charger / Station / EVSE / Connector hierarchy
+### M001-A-DEC-005 — Charger / Station / EVSE / Connector hierarchy — ✅ APPROVED (2026-07-24, WO-ARGOS-003)
+
+> **This decision is resolved. The original question, evidence, and options below are preserved unedited as the historical record of the analysis; the resolution is appended, not merged into the original text.**
 
 - **Question:** Does the domain need a fourth tier (EVSE) between Station/Charger and Connector, matching the OCPP standard's own vocabulary, or does the existing three-tier shape (Station → Charger → Connector) already cover it?
 - **Existing evidence:** The frontend already implements and consistently uses a three-tier hierarchy: Station (grouping) → Charger (physical unit, has `ocppVersion` field) → Connector (individual plug). "EVSE" does not appear anywhere in the repository. In OCPP terminology, EVSE typically sits between a Charge Point (≈ this codebase's "Charger") and a Connector — meaning the existing "Charger" may already be doing the job an EVSE tier would do.
-- **Available options:** (a) keep the existing three-tier shape, treating "Charger" as encompassing what OCPP calls the Charge Point/EVSE boundary; (b) introduce a fourth tier explicitly named EVSE between Charger and Connector, closer to strict OCPP terminology.
+- **Available options (as originally framed):** (a) keep the existing three-tier shape, treating "Charger" as encompassing what OCPP calls the Charge Point/EVSE boundary; (b) introduce a fourth tier explicitly named EVSE between Charger and Connector, closer to strict OCPP terminology.
 - **Impact:** (b) changes the schema shape for every entity in this hierarchy and the API surface built on top of it — higher cost the later it's decided.
-- **Recommended option:** (a) — evidence-backed: the existing three-tier design is already fully consistent (type definitions, mock data, and three separate live UI screens all agree with each other), and renaming/re-tiering it now would be exactly the kind of change-for-cleanliness this mission is told to avoid without evidence that (a) is actually insufficient.
+- **Original recommended option:** (a) — evidence-backed at the time: the existing three-tier design was already fully consistent, and re-tiering it looked like change-for-cleanliness without evidence (a) was insufficient. **ARGOS's ruling below does not adopt this recommendation as originally framed — see Resolution.**
 - **Decision owner:** ARGOS
-- **Status:** **Blocking** for CAP-002 — this is the actual shape of the first Prisma models to be written; recommend resolving before that work starts, not during it.
+- **Status (historical, pre-decision):** ~~Blocking for CAP-002~~
+
+#### Resolution
+
+**Approved hierarchy:**
+
+```
+Site
+└── ChargingStation
+    └── EVSE
+        └── Connector
+```
+
+This is neither of the two options as originally framed. It is not (a) — a fourth tier (EVSE) is introduced. It is explicitly **not** the naive version of (b) either — ARGOS's ruling explicitly rejects `ChargingStation → Charger → EVSE → Connector` as "an unnecessary and ambiguous layer." Instead: **"Charger" is retired as a persisted domain entity entirely** and replaced by `ChargingStation` as the canonical top-of-hierarchy entity; EVSE becomes the real operational tier beneath it.
+
+**Definitions (as approved):**
+
+- **ChargingStation** — the complete physical charging device installed at a Site. May contain one or multiple independently controllable EVSEs.
+- **EVSE** — an independently operable electric vehicle supply unit. Owns operational state, availability, electrical limits, and charging-session relationships.
+- **Connector** — the physical interface through which a vehicle connects to an EVSE.
+
+**"Charger" is not deprecated from the product's vocabulary — it is reclassified.** It remains valid as commercial terminology, user-facing copy, a UI label, a search synonym, and a compatibility alias where existing frontend types require a transition path. What it must never become is a second persisted entity alongside `ChargingStation` — that would recreate exactly the "unnecessary and ambiguous layer" this ruling rejects.
+
+- **Recommended option (superseded by):** ARGOS's explicit ruling, not (a) or (b) as originally framed.
+- **Decision owner:** ARGOS
+- **Status:** **RESOLVED — no longer blocking.** CAP-002 (WO-ARGOS-003) implements this exact hierarchy. See [CAP-002 Charging Terminology Mapping](./CAP-002_CHARGING_TERMINOLOGY_MAPPING.md) for the full frontend-to-backend term migration this resolution drives.
 
 ### M001-A-DEC-006 — Digital Twin scope
 
@@ -111,17 +138,17 @@ None of these decisions are approved by this document. Per this mission's own ru
 
 ## Summary
 
-| ID      | Decision                                 | Status                                 | Evidence-backed recommendation?                |
-| ------- | ---------------------------------------- | -------------------------------------- | ---------------------------------------------- |
-| DEC-001 | Mission vs Capability                    | Non-blocking                           | Yes (inference, flagged as such)               |
-| DEC-002 | Organization vs Workspace vs Tenant      | Non-blocking                           | Yes                                            |
-| DEC-003 | Site ownership model                     | Non-blocking (conditional)             | No                                             |
-| DEC-004 | Asset as generic abstraction             | Non-blocking (relevant before CAP-002) | Yes                                            |
-| DEC-005 | Charger/Station/EVSE/Connector hierarchy | **Blocking for CAP-002**               | Yes                                            |
-| DEC-006 | Digital Twin scope                       | Non-blocking                           | No                                             |
-| DEC-007 | Vehicle/Driver/Fleet scope               | **Blocking** (for that scope only)     | Evidence lean stated, no formal recommendation |
-| DEC-008 | ChargingSession vs RefreshSession naming | Non-blocking                           | Yes                                            |
-| DEC-009 | Billing vs Payment                       | Non-blocking                           | No                                             |
-| DEC-010 | SUPPORT/ANALYST/VIEWER scope             | Non-blocking                           | No                                             |
+| ID      | Decision                                 | Status                                                                                                          | Evidence-backed recommendation?                |
+| ------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| DEC-001 | Mission vs Capability                    | Non-blocking                                                                                                    | Yes (inference, flagged as such)               |
+| DEC-002 | Organization vs Workspace vs Tenant      | Non-blocking                                                                                                    | Yes                                            |
+| DEC-003 | Site ownership model                     | Non-blocking (conditional)                                                                                      | No                                             |
+| DEC-004 | Asset as generic abstraction             | Non-blocking (relevant before CAP-002)                                                                          | Yes                                            |
+| DEC-005 | Charger/Station/EVSE/Connector hierarchy | ✅ **APPROVED (2026-07-24)** — Site → ChargingStation → EVSE → Connector; Charger retired as a persisted entity | Resolved by ARGOS ruling                       |
+| DEC-006 | Digital Twin scope                       | Non-blocking                                                                                                    | No                                             |
+| DEC-007 | Vehicle/Driver/Fleet scope               | **Blocking** (for that scope only)                                                                              | Evidence lean stated, no formal recommendation |
+| DEC-008 | ChargingSession vs RefreshSession naming | Non-blocking                                                                                                    | Yes                                            |
+| DEC-009 | Billing vs Payment                       | Non-blocking                                                                                                    | No                                             |
+| DEC-010 | SUPPORT/ANALYST/VIEWER scope             | Non-blocking                                                                                                    | No                                             |
 
-**The one decision that actually blocks CAP-002 from starting cleanly is DEC-005.** Everything else can proceed in parallel with, or after, CAP-002's first implementation work.
+**DEC-005 was the one decision blocking CAP-002 from starting cleanly — it is now resolved (2026-07-24, WO-ARGOS-003).** Zero decisions in this register currently block CAP-002. Everything else remains as originally scoped: non-blocking, or blocking only for the specific out-of-scope capability it concerns (DEC-007).

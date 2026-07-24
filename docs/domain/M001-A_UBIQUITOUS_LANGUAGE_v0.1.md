@@ -142,34 +142,46 @@ Recommendation values: **preserve** (keep using the term as-is), **formalize** (
 
 ## Charging-infrastructure terms
 
-### Charger
+### Charger — ⚠️ superseded as a persisted-entity name (2026-07-24, DEC-005)
+
+> Original recovery analysis below is preserved unedited. Resolution appended, not merged in.
 
 - **Definition (evidence-based):** a physical charging unit. Full TypeScript shape exists (`apps/movos-web/src/types/charger.ts`: vendor, model, serialNumber, firmwareVersion, ocppVersion, status) with hardcoded demo data (6 units, one `FAULTED`, vendors Kempower/ABB/Alpitronic).
 - **Where it appears:** `apps/movos-web/src/types/charger.ts`, `src/data/chargers.ts`, `app/(app)/chargers/`.
-- **Classification:** FIXTURE-ONLY.
+- **Classification:** FIXTURE-ONLY (at time of original recovery).
 - **Relationships (as designed in the frontend type, not yet in a schema):** N–1 Station, N–1 Site; 1–N Connector.
 - **Conflicts / ambiguity:** none in current usage — "Charger" is the only term this codebase actually uses for the physical unit; "Charging Station" and "EVSE" (below) are absent, so there's no competing term to reconcile yet.
-- **Recommendation:** **formalize** — this is priority #1 in the [MVP Gap Analysis](../product/MOVOS_MVP_GAP_ANALYSIS_v1.0.md); the frontend type is a ready-made starting point for the Prisma model.
+- **Original recommendation:** **formalize** — this is priority #1 in the [MVP Gap Analysis](../product/MOVOS_MVP_GAP_ANALYSIS_v1.0.md); the frontend type is a ready-made starting point for the Prisma model.
 
-### Charging Station
+**Resolution (DEC-005):** "Charger" is **not** formalized as a persisted entity. ARGOS's ruling establishes `ChargingStation` as the canonical top-of-hierarchy entity instead, with a new `EVSE` tier owning operational state beneath it. "Charger" is preserved as commercial terminology, user-facing copy, a UI label, a search synonym, and a compatibility alias during the frontend migration — see [CAP-002 Charging Terminology Mapping](./CAP-002_CHARGING_TERMINOLOGY_MAPPING.md). Classification updated: **DOCUMENTED (alias only), not IMPLEMENTED as its own entity, ever.**
 
-- **Classification:** ABSENT as an exact phrase. However, **"Station"** (without "Charging") is a distinct, already-used term: `apps/movos-web/src/types/station.ts`, `src/data/stations.ts`, `/stations` route — a grouping of Chargers at a Site, with its own status (`ONLINE/PARTIAL/MAINTENANCE/OFFLINE`) and computed `chargerCount`/`connectorCount`.
-- **Classification (for "Station"):** FIXTURE-ONLY.
+### Charging Station — ✅ formalized as the canonical entity (2026-07-24, DEC-005)
+
+> Original recovery analysis below is preserved unedited. Resolution appended, not merged in.
+
+- **Classification (at time of original recovery):** ABSENT as an exact phrase. However, **"Station"** (without "Charging") is a distinct, already-used term: `apps/movos-web/src/types/station.ts`, `src/data/stations.ts`, `/stations` route — a grouping of Chargers at a Site, with its own status (`ONLINE/PARTIAL/MAINTENANCE/OFFLINE`) and computed `chargerCount`/`connectorCount`.
+- **Classification (for "Station"):** FIXTURE-ONLY (at time of original recovery).
 - **Relationships:** N–1 Site; 1–N Charger (as designed in the frontend type).
-- **Conflicts / ambiguity:** the industry term "Charging Station" and this codebase's "Station" likely refer to the same concept, but the codebase has already made its choice (the shorter form) consistently across type, mock data, route, and UI copy. No internal conflict — only a note that external/OCPP-standard vocabulary uses the longer phrase.
-- **Recommendation:** **preserve** the existing "Station" naming — it's already consistent everywhere it's used; renaming to "Charging Station" now would be change for its own sake, which this mission is explicitly told to avoid.
+- **Conflicts / ambiguity:** the industry term "Charging Station" and this codebase's "Station" likely refer to the same concept, but the codebase had already made its choice (the shorter form) consistently across type, mock data, route, and UI copy.
+- **Original recommendation:** **preserve** the existing "Station" naming — renaming looked like change for its own sake at the time. **Superseded — see Resolution.**
 
-### EVSE
+**Resolution (DEC-005):** `ChargingStation` (the full phrase, not "Station") is the approved canonical Prisma entity name — "the complete physical charging device installed at a Site. It may contain one or multiple independently controllable EVSEs." **Classification updated: IMPLEMENTED as of CAP-002** (`apps/movos-api/prisma/schema.prisma`, `apps/movos-api/src/charging-stations/`). This does supersede the original recommendation to preserve "Station" — evidence available at the time of the original recovery did not include ARGOS's ruling, which explicitly named the full `ChargingStation` form as canonical.
 
-- **Classification:** ABSENT. Not found anywhere, including in OCPP-adjacent copy (Settings page says "OCPP 1.6J" but never "EVSE").
-- **Recommendation:** **preserve absence** — the OCPP standard uses "EVSE" as a sub-unit of a Charging Station distinct from "Connector"; this codebase's existing three-tier shape (Station → Charger → Connector) does not currently have an EVSE tier. Introducing it is a real modeling question, not a naming formality — see [M001-A-DEC-005](./M001-A_OPEN_DECISIONS_v0.1.md#m001-a-dec-005).
+### EVSE — ✅ formalized as a real tier (2026-07-24, DEC-005)
+
+> Original recovery analysis below is preserved unedited. Resolution appended, not merged in.
+
+- **Classification (at time of original recovery):** ABSENT. Not found anywhere, including in OCPP-adjacent copy (Settings page says "OCPP 1.6J" but never "EVSE").
+- **Original recommendation:** **preserve absence** — introducing an EVSE tier was flagged as a real modeling question, not a naming formality — see [M001-A-DEC-005](./M001-A_OPEN_DECISIONS_v0.1.md#m001-a-dec-005).
+
+**Resolution (DEC-005):** EVSE is formalized as the real operational tier between ChargingStation and Connector — "an independently operable electric vehicle supply unit. It owns operational state, availability, electrical limits and charging-session relationships." **Classification updated: IMPLEMENTED as of CAP-002** (`apps/movos-api/prisma/schema.prisma`, `apps/movos-api/src/evses/`).
 
 ### Connector
 
-- **Definition (evidence-based):** an individual physical connection point on a Charger. TypeScript type exists (`apps/movos-web/src/types/connector.ts`): label, type (`CCS2/Type2/CHAdeMO` observed in mock data), maxPowerKw, status, activeSessionId.
+- **Definition (evidence-based):** an individual physical connection point on an EVSE (originally recovered as "on a Charger" — updated per DEC-005's resolution, since EVSE is now the direct parent tier, not Charger/ChargingStation). TypeScript type exists (`apps/movos-web/src/types/connector.ts`): label, type (`CCS2/Type2/CHAdeMO` observed in mock data), maxPowerKw, status, activeSessionId.
 - **Where it appears:** `apps/movos-web/src/types/connector.ts`, `src/data/connectors.ts`, `app/(app)/connectors/`.
-- **Classification:** FIXTURE-ONLY.
-- **Relationships (as designed):** N–1 Charger; 0–1 active ChargingSession.
+- **Classification:** IMPLEMENTED as of CAP-002 (`apps/movos-api/prisma/schema.prisma`, `apps/movos-api/src/connectors/`); was FIXTURE-ONLY at time of original recovery.
+- **Relationships (approved, DEC-005):** N–1 EVSE (not Charger); 0–1 active ChargingSession (still fixture-only — ChargingSession itself is unaffected by DEC-005 and remains out of CAP-002's scope).
 - **Conflicts / ambiguity:** none.
 - **Recommendation:** **formalize** alongside Charger — see MVP Gap Analysis priority #1.
 

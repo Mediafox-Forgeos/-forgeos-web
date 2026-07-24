@@ -5,6 +5,8 @@
 
 Current-state domain map, based only on evidence recovered in the [Ubiquitous Language](./M001-A_UBIQUITOUS_LANGUAGE_v0.1.md) document. No candidate elements are introduced in this v0.1 — this baseline recovers what exists; it does not yet propose.
 
+> **⚠️ 2026-07-24 update (WO-ARGOS-003):** M001-A-DEC-005 is now **approved** — see [Open Decisions](./M001-A_OPEN_DECISIONS_v0.1.md#m001-a-dec-005-approved-2026-07-24-wo-argos-003). The two diagrams immediately below (`Station → Charger → Connector`) are preserved exactly as originally recovered — they document the pre-decision, evidence-only state and are not edited. The **[approved current-state hierarchy](#approved-hierarchy-post-dec-005-2026-07-24)** is added further down this document, reflecting what CAP-002 actually implements.
+
 ## Core entity relationships
 
 ```mermaid
@@ -132,3 +134,48 @@ flowchart TD
 ## What this map deliberately omits
 
 ForgeOS's own domain (Workspace, ARGOS, Missions-as-tracked-in-commits) is not pictured — recovered evidence shows zero dependency edges between it and MOVOS's domain (see [Ubiquitous Language — ARGOS](./M001-A_UBIQUITOUS_LANGUAGE_v0.1.md#argos)). Drawing them on the same diagram would imply a relationship that doesn't exist in code.
+
+---
+
+## Approved hierarchy (post-DEC-005, 2026-07-24)
+
+This section is new, added by WO-ARGOS-003 — it does not edit the pre-decision diagrams above. It reflects the domain as CAP-002 implements it.
+
+```mermaid
+erDiagram
+    ORGANIZATION ||--o{ SITE : owns
+    SITE ||--o{ CHARGINGSTATION : contains
+    CHARGINGSTATION ||--o{ EVSE : contains
+    EVSE ||--o{ CONNECTOR : contains
+
+    CHARGINGSTATION {
+        string id "MOVOS internal cuid — primary key"
+        string siteId
+        string name
+        string code "human-readable, org-unique"
+        string manufacturer
+        string model
+        string serialNumber "protocol/hardware identifier — not the PK"
+        enum status
+    }
+    EVSE {
+        string id "MOVOS internal cuid — primary key"
+        string chargingStationId
+        string evseId "local/protocol identifier — not the PK"
+        enum status
+        float maxPowerKw
+        enum currentType
+    }
+    CONNECTOR {
+        string id "MOVOS internal cuid — primary key"
+        string evseId
+        string connectorId "local/protocol identifier — not the PK"
+        enum type
+        enum status
+        float maxPowerKw
+    }
+```
+
+**Ownership is enforced through `Site`, not a redundant `organizationId` on EVSE or Connector** — every access check walks the full parent chain (`Connector → EVSE → ChargingStation → Site → Organization`), matching the "do not trust IDs supplied by the client without checking the complete ownership chain" instruction this hierarchy was built under. See [CAP-002 Charging Terminology Mapping](./CAP-002_CHARGING_TERMINOLOGY_MAPPING.md) for how this reconciles with the frontend's existing `Station`/`Charger`/`Connector` types, and [`docs/product/MOVOS_DATABASE_INVENTORY_v1.0.md`](../product/MOVOS_DATABASE_INVENTORY_v1.0.md) for the authoritative, currently-accurate schema reference.
+
+**Explicitly out of CAP-002's scope, not pictured here:** OCPP transport/messages, `ChargingSession`, `Tariff`, `Alert`, `Billing`, `Notifications` — all remain exactly as classified in the pre-decision diagrams above.
