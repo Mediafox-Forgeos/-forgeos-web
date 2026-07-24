@@ -1,6 +1,7 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 
 import { envValidationSchema } from './config/env.validation';
 import { PrismaModule } from './prisma/prisma.module';
@@ -28,6 +29,14 @@ import { RequestLoggerMiddleware } from './common/middleware/request-logger.midd
     LocationModule,
   ],
   controllers: [HealthController],
+  providers: [
+    // ThrottlerModule.forRoot() only registers configuration/storage — it
+    // does not enforce anything by itself. Without ThrottlerGuard bound
+    // globally here, neither the default limit above nor the @Throttle()
+    // overrides already declared on LocationController were ever actually
+    // checked on any request.
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+  ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {

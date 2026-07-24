@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
+import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 
 import { AuthService, type IssuedRefresh } from './auth.service';
@@ -39,6 +40,11 @@ export class AuthController {
   @Post('login')
   @UseGuards(LocalAuthGuard)
   @HttpCode(HttpStatus.OK)
+  // Global default (120 req/min) is for normal API traffic, not a
+  // credential-guessing surface. 5/min per IP still allows a real user a
+  // couple of mistyped-password retries without meaningfully slowing them
+  // down, while cutting brute-force throughput by >95%.
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @ApiOperation({ summary: 'Authenticate with email and password' })
   async login(
     @Body() _dto: LoginDto,

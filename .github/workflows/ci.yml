@@ -53,3 +53,17 @@ jobs:
           # movos-api's build runs `prisma generate`, which only reads
           # schema.prisma — no live database connection is required.
           DATABASE_URL: 'postgresql://ci:ci@localhost:5432/ci'
+
+      - name: Verify build artifacts exist
+        # `nest build` (via tsc --incremental) can exit 0 while silently
+        # emitting nothing if a stale .tsbuildinfo cache convinces it
+        # everything is already up to date — this happened locally in this
+        # repo (a leftover cache from before a workspace migration) and went
+        # unnoticed for multiple sessions because nothing checked dist/
+        # actually existed, only that the command exited successfully.
+        # CI itself was never exposed to that specific cause (.tsbuildinfo
+        # is gitignored, so a fresh checkout never has one), but this
+        # assertion guards against any future cause of the same failure
+        # mode, not just this one.
+        run: |
+          test -f apps/movos-api/dist/main.js || { echo "::error::apps/movos-api/dist/main.js was not produced by the build"; exit 1; }
