@@ -27,19 +27,31 @@ function parseArgs(args: string[]): { input: string; output: string } | null {
   let output = 'reports/output.md';
 
   for (let i = 0; i < args.length; i++) {
-    if (args[i] === '--help') { usage(); process.exit(0); }
-    if (args[i] === '--input' && args[i + 1]) { input = args[++i]; }
-    if (args[i] === '--output' && args[i + 1]) { output = args[++i]; }
+    if (args[i] === '--help') {
+      usage();
+      process.exit(0);
+    }
+    if (args[i] === '--input' && args[i + 1]) {
+      input = args[++i];
+    }
+    if (args[i] === '--output' && args[i + 1]) {
+      output = args[++i];
+    }
   }
 
-  if (!input) { usage(); return null; }
+  if (!input) {
+    usage();
+    return null;
+  }
   return { input, output };
 }
 
 function main(): void {
   const args = process.argv.slice(2);
   const parsed = parseArgs(args);
-  if (!parsed) { process.exit(1); }
+  if (!parsed) {
+    process.exit(1);
+  }
 
   const inputPath = resolve(process.cwd(), parsed.input);
   const outputPath = resolve(process.cwd(), parsed.output);
@@ -60,9 +72,15 @@ function main(): void {
   const engine = new NamingEngine(engineInput);
   const report = engine.run();
 
-  console.log(`Generated:            ${report.stats.totalGenerated.toLocaleString()} candidates`);
-  console.log(`After filters:        ${report.stats.afterLengthFilter.toLocaleString()}`);
-  console.log(`After scoring:        ${report.stats.afterScoreThreshold.toLocaleString()} above threshold`);
+  console.log(
+    `Generated:            ${report.stats.totalGenerated.toLocaleString()} candidates`,
+  );
+  console.log(
+    `After filters:        ${report.stats.afterLengthFilter.toLocaleString()}`,
+  );
+  console.log(
+    `After scoring:        ${report.stats.afterScoreThreshold.toLocaleString()} above threshold`,
+  );
   console.log(`Top 10:`);
 
   for (const c of report.top10.slice(0, 10)) {
@@ -100,7 +118,9 @@ function main(): void {
 
   if (process.env['LIVE_VALIDATION'] !== 'true') {
     console.log('\nNote: domain and trademark results are simulated.');
-    console.log('Set LIVE_VALIDATION=true and configure API keys for live checks.');
+    console.log(
+      'Set LIVE_VALIDATION=true and configure API keys for live checks.',
+    );
   }
 }
 

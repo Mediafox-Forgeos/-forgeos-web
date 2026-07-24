@@ -2,13 +2,13 @@ import type { EngineInput } from '@mediafox/naming-engine';
 import type { WebNamingResult } from '@mediafox/naming-engine';
 
 export type FounderReviewData = {
-  wouldInvest: number;    // 1–5
-  wouldRemember: number;  // 1–5
-  imagineNasdaq: number;  // 1–5
-  wouldAnnounce: number;  // 1–5
-  billionDollar: number;  // 1–5
+  wouldInvest: number; // 1–5
+  wouldRemember: number; // 1–5
+  imagineNasdaq: number; // 1–5
+  wouldAnnounce: number; // 1–5
+  billionDollar: number; // 1–5
   notes: string;
-  founderScore: number;   // computed average × 20
+  founderScore: number; // computed average × 20
 };
 
 export type LabSession = {
@@ -45,7 +45,10 @@ export function loadSession(): LabSession {
 export function saveSession(session: LabSession): void {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(SESSION_KEY, JSON.stringify({ ...session, updatedAt: now() }));
+    localStorage.setItem(
+      SESSION_KEY,
+      JSON.stringify({ ...session, updatedAt: now() }),
+    );
   } catch {
     // ignore storage errors
   }
@@ -69,6 +72,12 @@ function emptySession(): LabSession {
 }
 
 export function computeFounderScore(r: FounderReviewData): number {
-  const avg = (r.wouldInvest + r.wouldRemember + r.imagineNasdaq + r.wouldAnnounce + r.billionDollar) / 5;
+  const avg =
+    (r.wouldInvest +
+      r.wouldRemember +
+      r.imagineNasdaq +
+      r.wouldAnnounce +
+      r.billionDollar) /
+    5;
   return Math.round(avg * 20);
 }

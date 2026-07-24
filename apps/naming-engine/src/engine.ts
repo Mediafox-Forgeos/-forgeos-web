@@ -15,7 +15,10 @@ import {
   COMMON_SPANISH_WORDS,
 } from './data.js';
 
-const COMMON_WORDS = new Set([...COMMON_ENGLISH_WORDS, ...COMMON_SPANISH_WORDS]);
+const COMMON_WORDS = new Set([
+  ...COMMON_ENGLISH_WORDS,
+  ...COMMON_SPANISH_WORDS,
+]);
 const SCORE_THRESHOLD = 65;
 
 export class NamingEngine {
@@ -47,7 +50,9 @@ export class NamingEngine {
     });
 
     // 4. Apply score threshold
-    const aboveThreshold = scored.filter((c) => c.scores.final >= SCORE_THRESHOLD);
+    const aboveThreshold = scored.filter(
+      (c) => c.scores.final >= SCORE_THRESHOLD,
+    );
 
     // 5. Sort by final score descending
     aboveThreshold.sort((a, b) => b.scores.final - a.scores.final);
@@ -55,7 +60,10 @@ export class NamingEngine {
     // 6. Validate top-N (expensive — only run on top candidates)
     const TOP_FOR_VALIDATION = 50;
     for (const candidate of aboveThreshold.slice(0, TOP_FOR_VALIDATION)) {
-      candidate.validation = validateName(candidate.name, this.input.targetDomains);
+      candidate.validation = validateName(
+        candidate.name,
+        this.input.targetDomains,
+      );
     }
 
     // 7. Extract tiers
@@ -94,12 +102,15 @@ export class NamingEngine {
         oneLine: this.oneLineDescriptor(c.name),
       })),
       top10,
-      top3: [],   // populated by report generator with full brand identity
+      top3: [], // populated by report generator with full brand identity
       winner: undefined as never, // populated by report generator
     };
   }
 
-  private resolveStrategy(name: string, byStrategy: Record<Strategy, string[]>): Strategy {
+  private resolveStrategy(
+    name: string,
+    byStrategy: Record<Strategy, string[]>,
+  ): Strategy {
     const lower = name.toLowerCase();
     for (const [strategy, names] of Object.entries(byStrategy)) {
       if (names.some((n) => n.toLowerCase() === lower)) {

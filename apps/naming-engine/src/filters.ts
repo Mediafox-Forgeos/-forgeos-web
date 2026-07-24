@@ -12,9 +12,15 @@ import {
 function filterLength(name: string, input: EngineInput): FilterResult {
   const len = name.length;
   if (len < input.lengthConstraints.min)
-    return { status: 'fail', reason: `too short (${len} < ${input.lengthConstraints.min})` };
+    return {
+      status: 'fail',
+      reason: `too short (${len} < ${input.lengthConstraints.min})`,
+    };
   if (len > input.lengthConstraints.max)
-    return { status: 'fail', reason: `too long (${len} > ${input.lengthConstraints.max})` };
+    return {
+      status: 'fail',
+      reason: `too long (${len} > ${input.lengthConstraints.max})`,
+    };
   return { status: 'pass' };
 }
 
@@ -28,11 +34,17 @@ function filterForbiddenWords(name: string, input: EngineInput): FilterResult {
   return { status: 'pass' };
 }
 
-function filterForbiddenSuffixes(name: string, input: EngineInput): FilterResult {
+function filterForbiddenSuffixes(
+  name: string,
+  input: EngineInput,
+): FilterResult {
   const lower = name.toLowerCase();
   for (const suffix of input.forbidden.suffixes) {
     if (lower.endsWith(suffix.toLowerCase())) {
-      return { status: 'fail', reason: `ends with forbidden suffix: ${suffix}` };
+      return {
+        status: 'fail',
+        reason: `ends with forbidden suffix: ${suffix}`,
+      };
     }
   }
   return { status: 'pass' };
@@ -41,7 +53,10 @@ function filterForbiddenSuffixes(name: string, input: EngineInput): FilterResult
 function filterPhonetics(name: string): FilterResult {
   for (const pattern of PROBLEMATIC_PATTERNS) {
     if (pattern.test(name)) {
-      return { status: 'fail', reason: `phonetic pattern violation: ${pattern}` };
+      return {
+        status: 'fail',
+        reason: `phonetic pattern violation: ${pattern}`,
+      };
     }
   }
   return { status: 'pass' };
@@ -51,7 +66,10 @@ function filterNegativeMeanings(name: string): FilterResult {
   const lower = name.toLowerCase();
   for (const fragment of NEGATIVE_FRAGMENTS) {
     if (lower.includes(fragment)) {
-      return { status: 'fail', reason: `contains negative fragment: ${fragment}` };
+      return {
+        status: 'fail',
+        reason: `contains negative fragment: ${fragment}`,
+      };
     }
   }
   return { status: 'pass' };

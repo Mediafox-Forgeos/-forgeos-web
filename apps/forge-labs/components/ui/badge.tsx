@@ -1,7 +1,8 @@
 import * as React from 'react';
 import { cn } from '@/lib/utils';
 
-type BadgeVariant = 'default' | 'outline' | 'success' | 'warning' | 'danger' | 'blue' | 'violet';
+type BadgeVariant =
+  'default' | 'outline' | 'success' | 'warning' | 'danger' | 'blue' | 'violet';
 
 const variants: Record<BadgeVariant, string> = {
   default: 'bg-muted text-muted-foreground',
@@ -17,7 +18,11 @@ interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
   variant?: BadgeVariant;
 }
 
-export function Badge({ className, variant = 'default', ...props }: BadgeProps) {
+export function Badge({
+  className,
+  variant = 'default',
+  ...props
+}: BadgeProps) {
   return (
     <span
       className={cn(

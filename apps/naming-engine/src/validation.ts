@@ -35,7 +35,8 @@ function simulateDomainAvailability(
   // Heuristic: very short names and common patterns are likely taken for .com
   if (tld === 'com') {
     if (len <= 4) return { available: false, confidence: 'simulated' };
-    if (len <= 5 && /^[aeiou]/i.test(name)) return { available: false, confidence: 'simulated' };
+    if (len <= 5 && /^[aeiou]/i.test(name))
+      return { available: false, confidence: 'simulated' };
     return {
       available: len >= 6 || /[ZXKVY]/i.test(lower[0]),
       confidence: 'simulated',
@@ -52,9 +53,10 @@ function simulateDomainAvailability(
 
 // ─── Simulated trademark heuristic ───────────────────────────────────────────
 
-function simulateTrademark(
-  name: string,
-): { risk: 'low' | 'medium' | 'high' | 'unknown'; confidence: 'simulated' } {
+function simulateTrademark(name: string): {
+  risk: 'low' | 'medium' | 'high' | 'unknown';
+  confidence: 'simulated';
+} {
   if (LIVE_VALIDATION) {
     // Real implementation:
     // USPTO TESS: https://tmsearch.uspto.gov/
@@ -66,7 +68,15 @@ function simulateTrademark(
   const lower = name.toLowerCase();
 
   // Well-known collision patterns
-  const HIGH_RISK_FRAGMENTS = ['nexon', 'dynex', 'cortex', 'vortex', 'xerox', 'kronos', 'orbex'];
+  const HIGH_RISK_FRAGMENTS = [
+    'nexon',
+    'dynex',
+    'cortex',
+    'vortex',
+    'xerox',
+    'kronos',
+    'orbex',
+  ];
   if (HIGH_RISK_FRAGMENTS.some((f) => lower.includes(f) || f.includes(lower))) {
     return { risk: 'high', confidence: 'simulated' };
   }
@@ -89,7 +99,12 @@ function simulateSearchPresence(name: string): {
 } {
   if (LIVE_VALIDATION) {
     // Real implementation: call Crunchbase API, GitHub search, etc.
-    return { crunchbase: null, github: null, productHunt: null, appStore: null };
+    return {
+      crunchbase: null,
+      github: null,
+      productHunt: null,
+      appStore: null,
+    };
   }
 
   // Heuristic: fully invented names with unusual combinations are likely clear
@@ -107,7 +122,10 @@ function simulateSearchPresence(name: string): {
 
 // ─── Main validation function ─────────────────────────────────────────────────
 
-export function validateName(name: string, targetDomains: string[]): ValidationResult {
+export function validateName(
+  name: string,
+  targetDomains: string[],
+): ValidationResult {
   const domain = Object.fromEntries(
     targetDomains.map((tld) => [tld, simulateDomainAvailability(name, tld)]),
   );

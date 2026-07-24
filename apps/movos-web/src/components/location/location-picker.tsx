@@ -13,8 +13,7 @@ import { apiClient } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
-const BROWSER_KEY =
-  process.env.NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_API_KEY ?? '';
+const BROWSER_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_API_KEY ?? '';
 const COLOMBIA_CENTER = { lat: 4.5709, lng: -74.2973 };
 const DEFAULT_ZOOM = 5;
 const SELECTED_ZOOM = 15;
@@ -51,9 +50,14 @@ export function LocationPicker({
   disabled,
   error,
 }: LocationPickerProps) {
-  const [query, setQuery] = React.useState(value?.formattedAddress ?? value?.address ?? '');
-  const [suggestions, setSuggestions] = React.useState<LocationSuggestion[]>([]);
-  const [isFetchingSuggestions, setIsFetchingSuggestions] = React.useState(false);
+  const [query, setQuery] = React.useState(
+    value?.formattedAddress ?? value?.address ?? '',
+  );
+  const [suggestions, setSuggestions] = React.useState<LocationSuggestion[]>(
+    [],
+  );
+  const [isFetchingSuggestions, setIsFetchingSuggestions] =
+    React.useState(false);
   const [isResolvingPlace, setIsResolvingPlace] = React.useState(false);
   const [sessionToken, setSessionToken] = React.useState(generateSessionToken);
   const [showSuggestions, setShowSuggestions] = React.useState(false);
@@ -70,10 +74,11 @@ export function LocationPicker({
     value?.latitude != null ? SELECTED_ZOOM : DEFAULT_ZOOM,
   );
   const [showManual, setShowManual] = React.useState(false);
-  const debounceRef = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const debounceRef = React.useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
 
-  const hasLocation =
-    value?.latitude != null && value?.longitude != null;
+  const hasLocation = value?.latitude != null && value?.longitude != null;
   const hasBrowserKey = BROWSER_KEY.length > 0;
 
   React.useEffect(() => {
@@ -150,7 +155,10 @@ export function LocationPicker({
 
   function handleMarkerDrag(lat: number, lng: number) {
     setMarkerPos({ lat, lng });
-    const base: LocationValue = value ?? { address: query, locationSource: 'MANUAL' };
+    const base: LocationValue = value ?? {
+      address: query,
+      locationSource: 'MANUAL',
+    };
     onChange({
       ...base,
       latitude: lat,
@@ -173,7 +181,10 @@ export function LocationPicker({
   function handleManualCoord(field: 'latitude' | 'longitude', raw: string) {
     const num = parseFloat(raw);
     if (Number.isNaN(num)) return;
-    const base: LocationValue = value ?? { address: query, locationSource: 'MANUAL' };
+    const base: LocationValue = value ?? {
+      address: query,
+      locationSource: 'MANUAL',
+    };
     const next: LocationValue = {
       ...base,
       [field]: num,
@@ -247,7 +258,9 @@ export function LocationPicker({
                 </li>
               ))}
               <li className="border-border border-t px-3 py-1.5">
-                <p className="text-muted-foreground text-xs">con tecnología de Google</p>
+                <p className="text-muted-foreground text-xs">
+                  con tecnología de Google
+                </p>
               </li>
             </ul>
           )}
@@ -257,7 +270,9 @@ export function LocationPicker({
             !isFetchingSuggestions &&
             query.length >= 3 && (
               <div className="border-border bg-popover absolute z-50 mt-1 w-full rounded-lg border p-3 text-sm shadow-lg">
-                <p className="text-muted-foreground">No encontramos coincidencias</p>
+                <p className="text-muted-foreground">
+                  No encontramos coincidencias
+                </p>
               </div>
             )}
         </div>
@@ -288,7 +303,10 @@ export function LocationPicker({
 
         {/* Map */}
         {hasBrowserKey ? (
-          <div className="overflow-hidden rounded-xl border" style={{ height: 260 }}>
+          <div
+            className="overflow-hidden rounded-xl border"
+            style={{ height: 260 }}
+          >
             <APIProvider
               apiKey={BROWSER_KEY}
               onError={() =>
@@ -341,10 +359,12 @@ export function LocationPicker({
           <Button
             type="button"
             variant="ghost"
-            className="h-auto p-0 text-xs text-muted-foreground underline-offset-2 hover:underline"
+            className="text-muted-foreground h-auto p-0 text-xs underline-offset-2 hover:underline"
             onClick={() => setShowManual((s) => !s)}
           >
-            {showManual ? 'Ocultar coordenadas' : 'Ingresar coordenadas manualmente'}
+            {showManual
+              ? 'Ocultar coordenadas'
+              : 'Ingresar coordenadas manualmente'}
           </Button>
         </div>
 

@@ -1,9 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import {
-  Client,
-  Language,
-} from '@googlemaps/google-maps-services-js';
+import { Client, Language } from '@googlemaps/google-maps-services-js';
 // Language enum is used for the placeDetails language param
 import type {
   AddressComponent,
@@ -101,9 +98,7 @@ export class GoogleMapsAdapter {
     }
   }
 
-  private parseComponents(
-    components: AddressComponent[],
-  ): AddressComponents {
+  private parseComponents(components: AddressComponent[]): AddressComponents {
     const get = (type: string): string | undefined =>
       components.find((c) =>
         c.types.includes(type as AddressType | GeocodingAddressComponentType),
@@ -115,12 +110,11 @@ export class GoogleMapsAdapter {
 
     const streetNumber = get('street_number');
     const route = get('route');
-    const addressLine1 =
-      route
-        ? streetNumber
-          ? `${route} ${streetNumber}`
-          : route
-        : undefined;
+    const addressLine1 = route
+      ? streetNumber
+        ? `${route} ${streetNumber}`
+        : route
+      : undefined;
 
     return {
       addressLine1,

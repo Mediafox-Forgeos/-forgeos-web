@@ -1,0 +1,35 @@
+{
+  "name": "MediaFOX Forge",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-22-bullseye",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  "postCreateCommand": "corepack enable && corepack prepare pnpm@11.5.3 --activate && pnpm install",
+  "forwardPorts": [3000, 3001, 3002, 4000, 5432],
+  "portsAttributes": {
+    "3000": { "label": "forgeos-web" },
+    "3001": { "label": "forge-labs" },
+    "3002": { "label": "movos-web" },
+    "4000": { "label": "movos-api" },
+    "5432": { "label": "postgres (docker compose up -d)" }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "prisma.prisma",
+        "bradlc.vscode-tailwindcss",
+        "editorconfig.editorconfig"
+      ],
+      "settings": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+          "source.fixAll.eslint": "explicit"
+        }
+      }
+    }
+  },
+  "remoteUser": "node"
+}

@@ -24,25 +24,40 @@ type LabModule = {
 const modules: LabModule[] = [
   { label: 'Naming Engine', href: '/naming', icon: Sparkles, available: true },
   { label: 'PRD Generator', href: '/prd', icon: FileText, available: false },
-  { label: 'Architecture Review', href: '/architecture', icon: Network, available: false },
+  {
+    label: 'Architecture Review',
+    href: '/architecture',
+    icon: Network,
+    available: false,
+  },
   { label: 'ADR Builder', href: '/adr', icon: BookOpenCheck, available: false },
-  { label: 'Risk Analyzer', href: '/risk', icon: ShieldAlert, available: false },
-  { label: 'Prompt Studio', href: '/prompts', icon: Terminal, available: false },
+  {
+    label: 'Risk Analyzer',
+    href: '/risk',
+    icon: ShieldAlert,
+    available: false,
+  },
+  {
+    label: 'Prompt Studio',
+    href: '/prompts',
+    icon: Terminal,
+    available: false,
+  },
 ];
 
 export function LabsSidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="flex w-52 shrink-0 flex-col border-r border-border bg-[#0d0d10]">
+    <aside className="border-border flex w-52 shrink-0 flex-col border-r bg-[#0d0d10]">
       {/* Brand */}
-      <div className="flex h-14 items-center gap-2.5 border-b border-border px-4">
-        <div className="grid size-7 place-items-center rounded-md bg-foreground/10 text-foreground">
+      <div className="border-border flex h-14 items-center gap-2.5 border-b px-4">
+        <div className="bg-foreground/10 text-foreground grid size-7 place-items-center rounded-md">
           <FlaskConical className="size-4" aria-hidden="true" />
         </div>
         <div>
           <p className="text-xs font-semibold tracking-tight">Forge Labs</p>
-          <p className="text-[10px] text-muted-foreground">by MediaFOX</p>
+          <p className="text-muted-foreground text-[10px]">by MediaFOX</p>
         </div>
       </div>
 
@@ -58,9 +73,14 @@ export function LabsSidebar() {
                 key={mod.label}
                 className="flex h-9 cursor-default items-center gap-2.5 rounded-md px-3 opacity-40"
               >
-                <Icon className="size-4 text-muted-foreground" aria-hidden="true" />
-                <span className="flex-1 text-sm text-muted-foreground">{mod.label}</span>
-                <span className="rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
+                <Icon
+                  className="text-muted-foreground size-4"
+                  aria-hidden="true"
+                />
+                <span className="text-muted-foreground flex-1 text-sm">
+                  {mod.label}
+                </span>
+                <span className="bg-muted text-muted-foreground rounded-full px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide">
                   Soon
                 </span>
               </div>
@@ -87,10 +107,10 @@ export function LabsSidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="border-t border-border p-4">
+      <div className="border-border border-t p-4">
         <Link
           href={process.env.NEXT_PUBLIC_FORGEOS_URL ?? 'http://localhost:3000'}
-          className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          className="text-muted-foreground hover:text-foreground flex items-center gap-2 text-xs transition-colors"
         >
           <span>← Back to ForgeOS</span>
         </Link>

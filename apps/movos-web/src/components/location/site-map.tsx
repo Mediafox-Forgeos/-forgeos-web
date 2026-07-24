@@ -2,8 +2,7 @@
 
 import { APIProvider, AdvancedMarker, Map } from '@vis.gl/react-google-maps';
 
-const BROWSER_KEY =
-  process.env.NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_API_KEY ?? '';
+const BROWSER_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_API_KEY ?? '';
 
 interface SiteMapProps {
   lat: number;

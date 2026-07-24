@@ -64,11 +64,23 @@ export type FilterResult = {
 };
 
 export type ValidationResult = {
-  domain: Record<string, { available: boolean | null; confidence: 'confirmed' | 'simulated' }>;
+  domain: Record<
+    string,
+    { available: boolean | null; confidence: 'confirmed' | 'simulated' }
+  >;
   trademark: {
-    uspto: { risk: 'low' | 'medium' | 'high' | 'unknown'; confidence: 'simulated' };
-    euipo: { risk: 'low' | 'medium' | 'high' | 'unknown'; confidence: 'simulated' };
-    wipo: { risk: 'low' | 'medium' | 'high' | 'unknown'; confidence: 'simulated' };
+    uspto: {
+      risk: 'low' | 'medium' | 'high' | 'unknown';
+      confidence: 'simulated';
+    };
+    euipo: {
+      risk: 'low' | 'medium' | 'high' | 'unknown';
+      confidence: 'simulated';
+    };
+    wipo: {
+      risk: 'low' | 'medium' | 'high' | 'unknown';
+      confidence: 'simulated';
+    };
   };
   searchConflicts: {
     crunchbase: boolean | null;
@@ -132,20 +144,34 @@ export type BrandingReport = {
   generatedAt: string;
   input: EngineInput;
   stats: GenerationStats;
-  top100: Array<{ name: string; score: number; strategy: Strategy; descriptor: string }>;
-  top25: Array<{ name: string; score: number; strategy: Strategy; etymology: string; oneLine: string }>;
+  top100: Array<{
+    name: string;
+    score: number;
+    strategy: Strategy;
+    descriptor: string;
+  }>;
+  top25: Array<{
+    name: string;
+    score: number;
+    strategy: Strategy;
+    etymology: string;
+    oneLine: string;
+  }>;
   top10: CandidateName[];
   top3: BrandIdentity[];
-  winner: BrandIdentity & { winnersRationale: string; whyOtherFinalistsLost: string };
+  winner: BrandIdentity & {
+    winnersRationale: string;
+    whyOtherFinalistsLost: string;
+  };
 };
 
 // ─── Scoring weights (must sum to 1.0) ───────────────────────────────────────
 
 export const SCORE_WEIGHTS = {
-  originality: 0.30,
-  brandStrength: 0.20,
+  originality: 0.3,
+  brandStrength: 0.2,
   memorability: 0.15,
   pronunciation: 0.15,
-  domainAvailability: 0.10,
-  trademarkSafety: 0.10,
+  domainAvailability: 0.1,
+  trademarkSafety: 0.1,
 } as const;

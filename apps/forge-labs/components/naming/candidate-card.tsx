@@ -15,7 +15,10 @@ const strategyLabel: Record<string, string> = {
   oneword: 'One-Word',
 };
 
-const strategyVariant: Record<string, 'blue' | 'violet' | 'outline' | 'default'> = {
+const strategyVariant: Record<
+  string,
+  'blue' | 'violet' | 'outline' | 'default'
+> = {
   invented: 'default',
   latin: 'outline',
   greek: 'violet',
@@ -62,7 +65,7 @@ export function CandidateCard({
     >
       {/* Rank + Name */}
       <div className="flex items-center gap-2">
-        <span className="w-6 text-right text-xs text-muted-foreground tabular-nums">
+        <span className="text-muted-foreground w-6 text-right text-xs tabular-nums">
           {rank}
         </span>
         <span
@@ -73,12 +76,20 @@ export function CandidateCard({
         >
           {candidate.name.toUpperCase()}
         </span>
-        {isWinner && <Star className="size-3.5 fill-labs-blue text-labs-blue" aria-hidden="true" />}
+        {isWinner && (
+          <Star
+            className="fill-labs-blue text-labs-blue size-3.5"
+            aria-hidden="true"
+          />
+        )}
       </div>
 
       {/* Strategy + Score */}
       <div className="flex items-center gap-2 pl-8">
-        <Badge variant={strategyVariant[candidate.strategy] ?? 'default'} className="text-[10px]">
+        <Badge
+          variant={strategyVariant[candidate.strategy] ?? 'default'}
+          className="text-[10px]"
+        >
           {strategyLabel[candidate.strategy] ?? candidate.strategy}
         </Badge>
         <div className="flex-1" />
@@ -90,12 +101,17 @@ export function CandidateCard({
         className={cn(
           'absolute right-2 top-2 rounded p-1 opacity-0 transition-all group-hover:opacity-100',
           isInCompare
-            ? 'opacity-100 text-labs-blue'
+            ? 'text-labs-blue opacity-100'
             : 'text-muted-foreground hover:text-foreground',
         )}
-        onClick={(e) => { e.stopPropagation(); onToggleCompare(); }}
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggleCompare();
+        }}
         title={isInCompare ? 'Remove from comparison' : 'Add to comparison'}
-        aria-label={isInCompare ? 'Remove from comparison' : 'Add to comparison'}
+        aria-label={
+          isInCompare ? 'Remove from comparison' : 'Add to comparison'
+        }
       >
         <GitCompare className="size-3.5" />
       </button>

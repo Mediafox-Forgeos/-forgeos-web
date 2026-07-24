@@ -1,0 +1,7 @@
+# Normalize line endings to LF regardless of the contributor's OS/git config,
+# matching .editorconfig. Prevents CRLF diffs from Windows checkouts.
+* text=auto eol=lf
+
+# Lockfiles are generated — collapse them in PR diffs on GitHub. On a real
+# merge conflict, regenerate with `pnpm install` rather than resolving by hand.
+pnpm-lock.yaml linguist-generated=true

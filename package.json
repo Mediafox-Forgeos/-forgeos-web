@@ -3,7 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "packageManager": "pnpm@11.5.3",
+  "engines": {
+    "node": ">=22.13",
+    "pnpm": "11.5.3"
+  },
   "scripts": {
+    "prepare": "husky",
     "dev": "pnpm --filter @mediafox/forgeos-web dev",
     "build": "pnpm -r --if-present build",
     "lint": "pnpm -r --if-present lint",
@@ -11,5 +16,13 @@
     "format": "pnpm -r --if-present format",
     "format:check": "pnpm -r --if-present format:check",
     "test": "pnpm -r --if-present test"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^21.2.1",
+    "@commitlint/config-conventional": "^21.2.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.1.0",
+    "prettier": "^3.9.5",
+    "prettier-plugin-tailwindcss": "^0.6.14"
   }
 }

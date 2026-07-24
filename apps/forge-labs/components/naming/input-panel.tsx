@@ -7,7 +7,11 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { Sparkles, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
-import { PERSONALITY_OPTIONS, DOMAIN_OPTIONS, LANGUAGE_OPTIONS } from '@/lib/default-input';
+import {
+  PERSONALITY_OPTIONS,
+  DOMAIN_OPTIONS,
+  LANGUAGE_OPTIONS,
+} from '@/lib/default-input';
 
 interface InputPanelProps {
   input: EngineInput;
@@ -16,19 +20,32 @@ interface InputPanelProps {
   isPending: boolean;
 }
 
-function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
+function Field({
+  label,
+  children,
+  hint,
+}: {
+  label: string;
+  children: React.ReactNode;
+  hint?: string;
+}) {
   return (
     <div className="space-y-1.5">
-      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+      <label className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
         {label}
       </label>
       {children}
-      {hint && <p className="text-[11px] text-muted-foreground/70">{hint}</p>}
+      {hint && <p className="text-muted-foreground/70 text-[11px]">{hint}</p>}
     </div>
   );
 }
 
-export function InputPanel({ input, onChange, onGenerate, isPending }: InputPanelProps) {
+export function InputPanel({
+  input,
+  onChange,
+  onGenerate,
+  isPending,
+}: InputPanelProps) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
   function update<K extends keyof EngineInput>(key: K, value: EngineInput[K]) {
@@ -37,31 +54,43 @@ export function InputPanel({ input, onChange, onGenerate, isPending }: InputPane
 
   function togglePersonality(p: string) {
     const list = input.brandPersonality;
-    update('brandPersonality', list.includes(p) ? list.filter((x) => x !== p) : [...list, p]);
+    update(
+      'brandPersonality',
+      list.includes(p) ? list.filter((x) => x !== p) : [...list, p],
+    );
   }
 
   function toggleLanguage(l: string) {
     const list = input.languages;
-    update('languages', list.includes(l) ? list.filter((x) => x !== l) : [...list, l]);
+    update(
+      'languages',
+      list.includes(l) ? list.filter((x) => x !== l) : [...list, l],
+    );
   }
 
   function toggleDomain(d: string) {
     const list = input.targetDomains;
-    update('targetDomains', list.includes(d) ? list.filter((x) => x !== d) : [...list, d]);
+    update(
+      'targetDomains',
+      list.includes(d) ? list.filter((x) => x !== d) : [...list, d],
+    );
   }
 
   const canGenerate = input.industry.trim().length > 0 && !isPending;
 
   return (
-    <div className="flex w-72 shrink-0 flex-col border-r border-border">
+    <div className="border-border flex w-72 shrink-0 flex-col border-r">
       {/* Header */}
-      <div className="flex h-14 items-center border-b border-border px-5">
+      <div className="border-border flex h-14 items-center border-b px-5">
         <h2 className="text-sm font-semibold">Project Parameters</h2>
       </div>
 
       {/* Form */}
       <div className="flex-1 space-y-5 overflow-y-auto p-5">
-        <Field label="Industry *" hint="What market or category is this brand for?">
+        <Field
+          label="Industry *"
+          hint="What market or category is this brand for?"
+        >
           <Input
             placeholder="e.g. AI SaaS for EV Infrastructure"
             value={input.industry}
@@ -70,14 +99,20 @@ export function InputPanel({ input, onChange, onGenerate, isPending }: InputPane
           />
         </Field>
 
-        <Field label="Keywords" hint="Comma-separated concepts the name should evoke">
+        <Field
+          label="Keywords"
+          hint="Comma-separated concepts the name should evoke"
+        >
           <Textarea
             placeholder="Mobility, Intelligence, Scale, Speed..."
             value={input.keywords.join(', ')}
             onChange={(e) =>
               update(
                 'keywords',
-                e.target.value.split(',').map((k) => k.trim()).filter(Boolean),
+                e.target.value
+                  .split(',')
+                  .map((k) => k.trim())
+                  .filter(Boolean),
               )
             }
             disabled={isPending}
@@ -127,15 +162,19 @@ export function InputPanel({ input, onChange, onGenerate, isPending }: InputPane
 
         {/* Advanced toggle */}
         <button
-          className="flex w-full items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          className="text-muted-foreground hover:text-foreground flex w-full items-center gap-1 text-xs transition-colors"
           onClick={() => setAdvancedOpen((v) => !v)}
         >
-          {advancedOpen ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
+          {advancedOpen ? (
+            <ChevronUp className="size-3" />
+          ) : (
+            <ChevronDown className="size-3" />
+          )}
           Advanced settings
         </button>
 
         {advancedOpen && (
-          <div className="space-y-5 animate-fade-in">
+          <div className="animate-fade-in space-y-5">
             <div className="grid grid-cols-2 gap-3">
               <Field label="Min length">
                 <Input
@@ -169,7 +208,10 @@ export function InputPanel({ input, onChange, onGenerate, isPending }: InputPane
               </Field>
             </div>
 
-            <Field label="Forbidden words" hint="Space-separated words to exclude">
+            <Field
+              label="Forbidden words"
+              hint="Space-separated words to exclude"
+            >
               <Input
                 placeholder="EV Charge Volt Grid..."
                 value={input.forbidden.words.join(' ')}
@@ -221,7 +263,7 @@ export function InputPanel({ input, onChange, onGenerate, isPending }: InputPane
       </div>
 
       {/* Generate button */}
-      <div className="border-t border-border p-4">
+      <div className="border-border border-t p-4">
         <Button
           className="w-full gap-2"
           size="lg"
@@ -240,7 +282,7 @@ export function InputPanel({ input, onChange, onGenerate, isPending }: InputPane
             </>
           )}
         </Button>
-        <p className="mt-2 text-center text-[11px] text-muted-foreground">
+        <p className="text-muted-foreground mt-2 text-center text-[11px]">
           {isPending ? 'Processing 50,000+ candidates...' : '⌘↵ to generate'}
         </p>
       </div>

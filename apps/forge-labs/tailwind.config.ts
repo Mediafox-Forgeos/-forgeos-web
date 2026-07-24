@@ -2,10 +2,7 @@ import type { Config } from 'tailwindcss';
 
 const config: Config = {
   darkMode: ['class'],
-  content: [
-    './app/**/*.{ts,tsx}',
-    './components/**/*.{ts,tsx}',
-  ],
+  content: ['./app/**/*.{ts,tsx}', './components/**/*.{ts,tsx}'],
   theme: {
     extend: {
       colors: {
@@ -54,7 +51,8 @@ const config: Config = {
       animation: {
         'fade-in': 'fade-in 0.2s ease-out',
         'slide-in-right': 'slide-in-right 0.25s ease-out',
-        'progress-indeterminate': 'progress-indeterminate 1.4s ease-in-out infinite',
+        'progress-indeterminate':
+          'progress-indeterminate 1.4s ease-in-out infinite',
       },
     },
   },

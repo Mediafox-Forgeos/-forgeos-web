@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Lint, typecheck, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+        env:
+          # forgeos-web, forge-labs and movos-web only need NEXT_PUBLIC_* values
+          # at build time for client bundling; empty values keep the build
+          # deterministic without requiring real secrets in CI.
+          NEXT_PUBLIC_MOVOS_API_URL: http://localhost:4000
+          NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_API_KEY: ''
+          # movos-api's build runs `prisma generate`, which only reads
+          # schema.prisma — no live database connection is required.
+          DATABASE_URL: 'postgresql://ci:ci@localhost:5432/ci'
+
+      - name: Verify build artifacts exist
+        # `nest build` (via tsc --incremental) can exit 0 while silently
+        # emitting nothing if a stale .tsbuildinfo cache convinces it
+        # everything is already up to date — this happened locally in this
+        # repo (a leftover cache from before a workspace migration) and went
+        # unnoticed for multiple sessions because nothing checked dist/
+        # actually existed, only that the command exited successfully.
+        # CI itself was never exposed to that specific cause (.tsbuildinfo
+        # is gitignored, so a fresh checkout never has one), but this
+        # assertion guards against any future cause of the same failure
+        # mode, not just this one.
+        run: |
+          test -f apps/movos-api/dist/main.js || { echo "::error::apps/movos-api/dist/main.js was not produced by the build"; exit 1; }

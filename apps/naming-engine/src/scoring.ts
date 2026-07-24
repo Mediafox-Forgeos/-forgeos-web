@@ -4,8 +4,38 @@ import { SCORE_WEIGHTS } from './types.js';
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const VOWELS = new Set(['A', 'E', 'I', 'O', 'U']);
-const UNIVERSAL_CONSONANTS = new Set(['B', 'D', 'F', 'G', 'K', 'L', 'M', 'N', 'P', 'R', 'S', 'T', 'V', 'Z']);
-const PREMIUM_OPENERS = new Set(['K', 'V', 'Z', 'T', 'R', 'N', 'D', 'F', 'S', 'B', 'G', 'P', 'L', 'M']);
+const UNIVERSAL_CONSONANTS = new Set([
+  'B',
+  'D',
+  'F',
+  'G',
+  'K',
+  'L',
+  'M',
+  'N',
+  'P',
+  'R',
+  'S',
+  'T',
+  'V',
+  'Z',
+]);
+const PREMIUM_OPENERS = new Set([
+  'K',
+  'V',
+  'Z',
+  'T',
+  'R',
+  'N',
+  'D',
+  'F',
+  'S',
+  'B',
+  'G',
+  'P',
+  'L',
+  'M',
+]);
 
 function isVowel(c: string): boolean {
   return VOWELS.has(c.toUpperCase());
@@ -255,8 +285,7 @@ export function scoreEngineeringPerception(name: string): number {
   if (/[XKS]$/.test(u)) score += 10;
 
   // Strong consonant presence
-  const consonantRatio =
-    [...u].filter((c) => !isVowel(c)).length / u.length;
+  const consonantRatio = [...u].filter((c) => !isVowel(c)).length / u.length;
   if (consonantRatio >= 0.5 && consonantRatio <= 0.7) score += 8;
 
   // Technical clusters
@@ -305,12 +334,16 @@ export function scoreOriginality(
   // Unique consonant combination = bonus
   const u = name.toUpperCase();
   const uniqueConsCombo = u.replace(/[AEIOU]/g, '').slice(0, 3);
-  if (['KYN', 'VRX', 'ZNX', 'KRX', 'TRX'].includes(uniqueConsCombo)) score += 12;
+  if (['KYN', 'VRX', 'ZNX', 'KRX', 'TRX'].includes(uniqueConsCombo))
+    score += 12;
 
   // Long established words = slight penalty
   const WELL_KNOWN_ROOTS = ['veloc', 'apex', 'nexu', 'flux', 'kron'];
   for (const root of WELL_KNOWN_ROOTS) {
-    if (lower.startsWith(root)) { score -= 8; break; }
+    if (lower.startsWith(root)) {
+      score -= 8;
+      break;
+    }
   }
 
   return clamp(score);
@@ -336,7 +369,10 @@ export function scoreDomainAvailability(name: string): number {
   return clamp(base);
 }
 
-export function scoreTrademarkSafety(name: string, knownCompanies: Set<string>): number {
+export function scoreTrademarkSafety(
+  name: string,
+  knownCompanies: Set<string>,
+): number {
   const lower = name.toLowerCase();
   let score = 82;
 
@@ -344,7 +380,10 @@ export function scoreTrademarkSafety(name: string, knownCompanies: Set<string>):
 
   // Names very similar to known companies
   for (const known of knownCompanies) {
-    if (Math.abs(known.length - lower.length) <= 1 && levenshtein(known, lower) <= 1) {
+    if (
+      Math.abs(known.length - lower.length) <= 1 &&
+      levenshtein(known, lower) <= 1
+    ) {
       score -= 30;
       break;
     }
