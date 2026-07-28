@@ -75,8 +75,9 @@ async function main(): Promise<void> {
       },
     ];
 
+    let bogotaCentroSiteId: string | undefined;
     for (const site of demoSites) {
-      await prisma.site.upsert({
+      const createdSite = await prisma.site.upsert({
         where: {
           organizationId_slug: {
             organizationId: organization.id,
@@ -94,6 +95,65 @@ async function main(): Promise<void> {
           latitude: site.latitude,
           longitude: site.longitude,
           status: 'ACTIVE',
+        },
+      });
+      if (site.slug === 'bogota-centro') {
+        bogotaCentroSiteId = createdSite.id;
+      }
+    }
+
+    // CAP-002 — one realistic ChargingStation -> EVSE -> Connector chain at
+    // the Bogotá Centro site, deterministic and safe to rerun (upsert on the
+    // [siteId, code] / [chargingStationId, externalId] / [evseId, externalId]
+    // unique constraints, matching the Site seeding pattern above).
+    if (bogotaCentroSiteId) {
+      const station = await prisma.chargingStation.upsert({
+        where: {
+          siteId_code: { siteId: bogotaCentroSiteId, code: 'BOG-CTR-01' },
+        },
+        update: {},
+        create: {
+          siteId: bogotaCentroSiteId,
+          name: 'Estación Bogotá Centro 01',
+          code: 'BOG-CTR-01',
+          manufacturer: 'Kempower',
+          model: 'Satellite 400',
+          serialNumber: 'KMP-400-0001',
+          protocol: 'OCPP 1.6J',
+          status: 'ACTIVE',
+          commissionedAt: new Date('2026-06-01T00:00:00.000Z'),
+        },
+      });
+
+      const evse = await prisma.evse.upsert({
+        where: {
+          chargingStationId_externalId: {
+            chargingStationId: station.id,
+            externalId: '1',
+          },
+        },
+        update: {},
+        create: {
+          chargingStationId: station.id,
+          externalId: '1',
+          name: 'EVSE 1',
+          status: 'AVAILABLE',
+          maxPowerKw: 180,
+          currentType: 'DC',
+        },
+      });
+
+      await prisma.connector.upsert({
+        where: {
+          evseId_externalId: { evseId: evse.id, externalId: '1' },
+        },
+        update: {},
+        create: {
+          evseId: evse.id,
+          externalId: '1',
+          type: 'CCS2',
+          status: 'AVAILABLE',
+          maxPowerKw: 180,
         },
       });
     }
