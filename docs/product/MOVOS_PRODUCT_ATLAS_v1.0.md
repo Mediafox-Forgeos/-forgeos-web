@@ -2,7 +2,8 @@
 
 **Atlas version:** v1.0
 **Generated:** 2026-07-24
-**Updated:** 2026-07-27 — CAP-002 (WO-ARGOS-003) delivered CRUD-only backend for the charging core (`ChargingStation`/`Evse`/`Connector`); see inline notes below. Frontend is not yet migrated to consume it.
+**Updated:** 2026-07-27 — CAP-002 (WO-ARGOS-003) delivered CRUD-only backend for the charging core (`ChargingStation`/`Evse`/`Connector`).
+**Updated:** 2026-07-28 — WO-ARGOS-004 connected that backend to a real, Site-scoped `apps/movos-web` UI; see inline notes below. Still no OCPP, sessions, tariffs, reservations, or payments.
 **Repository HEAD:** `main` @ `bfea8db`
 **Author:** VULCAN
 **Source method:** Direct repository inspection (WO-ARGOS-001, persisted under WO-ARGOS-002) — no speculation, no redesign, no renamed concepts
@@ -30,7 +31,7 @@ Authentication (full lifecycle, tested), multi-tenancy (org-scoped, DB-revalidat
 
 ### What is partially built?
 
-Organizations (read-only API, no management), Roles/Permissions (the enforcement mechanism is real and tested, but only exercised on one resource — Sites — and only 3 of 6 defined roles are ever checked), the white-label pattern (architecturally sound, proven with exactly one tenant, Kylum), and — as of CAP-002 — the charging core: `ChargingStation`/`Evse`/`Connector` exist as real, tenant-isolated, audited database models with CRUD APIs, but with no OCPP communication, no charging sessions, and no connected frontend yet.
+Organizations (read-only API, no management), Roles/Permissions (the enforcement mechanism is real and tested, but only exercised on one resource — Sites — and only 3 of 6 defined roles are ever checked), the white-label pattern (architecturally sound, proven with exactly one tenant, Kylum), and the charging core: `ChargingStation`/`Evse`/`Connector` exist as real, tenant-isolated, audited database models with CRUD APIs, now connected to a real Site-scoped management UI (WO-ARGOS-004) — but with no OCPP communication and no charging sessions.
 
 ### What is missing?
 
@@ -46,7 +47,7 @@ The white-label principle and the "Kylum is a pilot, not the owner" boundary (AD
 
 ### What is the fastest path to a production MVP?
 
-The Sites pattern (guards, DTOs, audit, presenters) has now been reused twice — first for Sites, then for CAP-002's `ChargingStation` → `Evse` → `Connector`. Next: expose the User/Membership models that already exist in the database, then ChargingSession + Tariff. OCPP is deliberately sequenced as its own step, not folded into charging-core CRUD, because it is the one piece with no existing architectural precedent to reuse. Full detail: [MVP Gap Analysis](./MOVOS_MVP_GAP_ANALYSIS_v1.0.md), [Implementation Roadmap](./MOVOS_IMPLEMENTATION_ROADMAP_v1.0.md).
+The Sites pattern (guards, DTOs, audit, presenters) has now been reused twice — first for Sites, then for CAP-002's `ChargingStation` → `Evse` → `Connector`; WO-ARGOS-004 reused the Sites frontend pattern (client-fetched pages, `apiClient`, status badges, create modals) the same way to connect it to the UI. Next: expose the User/Membership models that already exist in the database, then ChargingSession + Tariff. OCPP is deliberately sequenced as its own step, not folded into charging-core CRUD, because it is the one piece with no existing architectural precedent to reuse. Full detail: [MVP Gap Analysis](./MOVOS_MVP_GAP_ANALYSIS_v1.0.md), [Implementation Roadmap](./MOVOS_IMPLEMENTATION_ROADMAP_v1.0.md).
 
 ---
 
@@ -70,7 +71,7 @@ Real backend mechanism exists and is tested, but coverage or scope is incomplete
 - **Roles** — `MemberRole` enum in `schema.prisma` (3 of 6 values ever enforced in `@Roles()` decorators)
 - **Permissions** — `OrgContextGuard` + `RolesGuard` (proven pattern, exercised on Sites only)
 - **White Label** — `apps/movos-web/src/config/tenant.ts` (sound architecture, one tenant ever tested)
-- **Charging Core (CAP-002)** — `apps/movos-api/src/{charging-stations,evses,connectors}/` (real, tenant-isolated, audited CRUD; no OCPP, no sessions, no connected frontend yet)
+- **Charging Core (CAP-002 + WO-ARGOS-004)** — `apps/movos-api/src/{charging-stations,evses,connectors}/` (real, tenant-isolated, audited CRUD) and `apps/movos-web/app/(app)/sites/[siteId]/charging-stations/` (real, Site-scoped management UI); no OCPP, no sessions
 
 ### Group C — Started, Then Skipped (2 missions)
 
@@ -85,7 +86,7 @@ Named in roadmap docs and/or represented as TypeScript types with hardcoded demo
 
 OCPP · Sessions · Tariffs · Alerts · Reporting · Users (team management — the underlying `User`/`Membership` models exist, but no API exposes them for this purpose) · Notifications · `packages/ui` (scaffolded, zero consumers) · Billing (no artifact at all) · Vehicles / Fleet (no artifact at all — these terms never entered this codebase's vocabulary; see Domain Inventory)
 
-Chargers (as `Station`/`Charger`/`Connector` frontend types) graduated to Group B as of CAP-002 — see above. The frontend types themselves remain unconnected demo fixtures; only the backend moved.
+Chargers (as `Station`/`Charger`/`Connector` frontend types) graduated to Group B as of CAP-002 — see above. As of WO-ARGOS-004, the _real_ entities (`ApiChargingStation`/`ApiEvse`/`ApiConnector`) have their own connected UI under `/sites/[id]/charging-stations/...`. The original demo types/pages (`src/types/{station,charger,connector}.ts`, `/stations`, `/chargers`, `/connectors`) remain untouched, unconnected fixtures — they were not converted because no org-wide list endpoint exists for them to call.
 
 ---
 

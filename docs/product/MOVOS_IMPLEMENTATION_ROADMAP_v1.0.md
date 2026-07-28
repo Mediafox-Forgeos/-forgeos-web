@@ -2,16 +2,17 @@
 
 **Atlas version:** v1.0 · **Generated:** 2026-07-24 · **Repository HEAD:** `main` @ `bfea8db`
 **Updated:** 2026-07-27 — CAP-002 delivered the Station/Charger/Connector CRUD item below (backend + database + API only; frontend not yet migrated).
+**Updated:** 2026-07-28 — WO-ARGOS-004 delivered the frontend migration for that same item (Site-scoped management UI in `apps/movos-web`). OCPP and ChargingSession/Tariff remain the next real work.
 **Part of:** [MOVOS Product Atlas](./MOVOS_PRODUCT_ATLAS_v1.0.md)
 
 Recommended implementation order. Complexity is relative sizing (S / M / L / XL), not day-counts — precise duration estimates aren't honest before M001-A produces an approved domain model; sizing will sharpen once entity boundaries are formally decided (see [Open Decisions](../domain/M001-A_OPEN_DECISIONS_v0.1.md)).
 
 ## Now — unblocks everything else
 
-| Capability                    | Complexity | Dependencies           | Business value                                                                                                                                                |
-| ----------------------------- | ---------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Station / Charger / Connector | L          | Site (done)            | **CRUD done (CAP-002)** as `ChargingStation`/`Evse`/`Connector` — unblocked the EV domain schema; OCPP, sessions, and frontend migration remain separate work |
-| Users API                     | S          | User/Membership (done) | Closes a visible product gap cheaply                                                                                                                          |
+| Capability                    | Complexity | Dependencies           | Business value                                                                                                                                                               |
+| ----------------------------- | ---------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Station / Charger / Connector | L          | Site (done)            | **CRUD + frontend done (CAP-002, WO-ARGOS-004)** as `ChargingStation`/`Evse`/`Connector` — unblocked the EV domain schema end-to-end; OCPP and sessions remain separate work |
+| Users API                     | S          | User/Membership (done) | Closes a visible product gap cheaply                                                                                                                                         |
 
 ## Next — first real business metric
 
@@ -42,7 +43,7 @@ Recommended implementation order. Complexity is relative sizing (S / M / L / XL)
 
 ## Recommended order, restated as a single sequence
 
-1. Station / Charger / Connector — **CRUD done (CAP-002)**, as `ChargingStation`/`Evse`/`Connector`
+1. Station / Charger / Connector — **CRUD + frontend done (CAP-002, WO-ARGOS-004)**, as `ChargingStation`/`Evse`/`Connector`
 2. Users API _(parallelizable with #1 — no shared dependency)_
 3. ChargingSession (read) + Tariff
 4. OCPP transport + core messages

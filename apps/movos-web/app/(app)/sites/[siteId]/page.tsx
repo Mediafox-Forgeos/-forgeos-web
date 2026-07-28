@@ -12,6 +12,8 @@ import { ApiSiteStatusBadge } from '@/components/movos/api-site-status-badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { apiClient, ApiError } from '@/lib/api-client';
 import { SiteMap } from '@/components/location/site-map';
+import { ChargingStationList } from '@/components/charging/charging-station-list';
+import { useAuth } from '@/context/auth-context';
 
 type LoadState = 'loading' | 'ready' | 'notfound' | 'error';
 
@@ -33,6 +35,9 @@ const VALIDATION_LABELS: Record<string, string> = {
 export default function SiteDetailPage() {
   const params = useParams<{ siteId: string }>();
   const siteId = params.siteId;
+  const { membership } = useAuth();
+  const canManage =
+    membership?.role === 'OWNER' || membership?.role === 'ADMIN';
   const [site, setSite] = React.useState<ApiSite | null>(null);
   const [state, setState] = React.useState<LoadState>('loading');
 
@@ -216,7 +221,7 @@ export default function SiteDetailPage() {
               id: 'infra',
               label: 'Infraestructura',
               content: (
-                <EmptyState title="No hay estaciones registradas en este sitio." />
+                <ChargingStationList siteId={site.id} canManage={canManage} />
               ),
             },
           ]}
