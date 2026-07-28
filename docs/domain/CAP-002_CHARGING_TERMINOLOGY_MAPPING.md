@@ -98,3 +98,26 @@ No such rename is performed in this PR. CAP-002 is backend-only.
 - Does not rename any frontend type, route, or user-facing copy.
 - Does not remove or deprecate the word "Charger" from product/UI language — DEC-005 explicitly preserves it as commercial terminology.
 - Does not implement `chargerCount`/`connectorCount`/`availabilityPercent` aggregates, OCPP fields (`firmwareVersion`, `lastHeartbeat`), or session linkage (`activeSessionId`) — all deferred to later capabilities.
+
+---
+
+## Frontend integration addendum (WO-ARGOS-004, 2026-07-28)
+
+This section records the compatibility decisions made when `apps/movos-web` was connected to the real API, per the mapping above. It supersedes nothing written above — the mapping itself did not change; this is what the frontend actually did with it.
+
+**Canonical types used directly, no adapter layer.** `ApiChargingStation`/`ApiEvse`/`ApiConnector` are imported straight from `@mediafox/shared-types` into the new UI (`src/lib/charging-api.ts`, `src/components/charging/*`), matching the precedent Sites already established with `ApiSite`. No parallel `src/types/api-charging-station.ts` was created.
+
+**The demo types were annotated, not deleted or converted.** `src/types/{station,charger,connector}.ts` still back the pre-existing `/stations`, `/chargers`, `/connectors` demo pages — those pages were **not** converted to real data in this mission, because the API exposes no org-wide "list all charging stations/EVSEs/connectors across an organization" endpoint, only per-parent listing (`GET /sites/:siteId/charging-stations`, `GET /charging-stations/:id/evses`, `GET /evses/:id/connectors`). Converting those flat pages would require a new backend endpoint, which is out of this frontend-only mission's scope. Each demo type file now carries a doc comment pointing to this file and to `ApiChargingStation`/`ApiEvse`/`ApiConnector` as the canonical model, so nobody mistakes the demo type for the real one going forward.
+
+**New routing structure, nested under Sites.** Since there is no global list endpoint, the connected UI is necessarily Site-scoped: `/sites/[siteId]/charging-stations/[stationId]` and `/sites/[siteId]/charging-stations/[stationId]/evses/[evseId]`, mirroring the backend's own nesting. The Site detail page's pre-existing "Infraestructura" tab (previously a static empty state) now renders the real `ChargingStation` list for that site.
+
+**Derived metrics — what's shown, what's omitted, and why:**
+
+- `chargerCount` (frontend demo field) has no equivalent field stored on `ApiChargingStation`. The real UI never displays a station-level EVSE count on the Site-level station _list_ (would require one extra fetch per station — an N+1 query pattern with no existing precedent in this codebase). It **is** shown on the station _detail_ page, where the EVSE collection is already loaded for the EVSE list itself, so the count costs nothing extra.
+- `connectorCount`: same reasoning — shown on the EVSE detail page (where the Connector collection is already loaded), not on any list view.
+- `availabilityPercent`: computed live as `round(100 * countWhere(status === 'AVAILABLE') / total)` from the EVSE collection already loaded on the station detail page. With zero EVSEs there is nothing honest to compute, so the UI shows an explicit "Disponibilidad no disponible aún" label instead of a fabricated 0% or 100% — this is enforced by a dedicated test (`evse-list.test.tsx`, "never fabricates an availability percentage when there are no EVSEs").
+- None of these three values are ever persisted or requested from the API as fields — they are arithmetic over real records the UI already holds, recomputed on every render.
+
+**Tenancy.** The frontend adds no new tenant-scoping logic — `src/lib/charging-api.ts` is a thin wrapper over the existing `apiClient`, which already attaches `Authorization` and `X-Organization-Id` to every request and already has the 401 → refresh → retry flow. A cross-tenant charging-station/EVSE/connector ID (typed directly into the URL) hits the same backend ownership-chain check CAP-002 already enforces, receives a 404, and the frontend renders a "not found"/"not available" state — never a data leak, and never a client-side filter standing in for the real check.
+
+**Testing scope.** Frontend tests target the list/form components directly (`ChargingStationList`, `EvseList`, `ConnectorList`, `ChargingStationFormModal`) with `siteId`/`chargingStationId`/`evseId` passed as props, rather than the Next.js page components that read them from `useParams()`. This was a deliberate scoping choice to keep the new `vitest`/`testing-library` setup narrow (no Next.js router-context mocking required) while still exercising the real logic — loading/empty/error/not-found states, tenant-failure handling (404 → safe UI state), derived-metric computation, and form validation/submission all run against the actual component code, not a page-level shim.

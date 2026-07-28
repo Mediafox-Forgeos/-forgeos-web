@@ -39,6 +39,10 @@ All 25 real endpoints in `apps/movos-api`, prefix `/api/v1` (set in `src/main.ts
 
 The 12 charging-core endpoints above implement CRUD only — no create/read/update on any resource triggers OCPP communication, a charging session, a tariff calculation, a reservation, or a payment. `ChargingStation`/`Evse`/`Connector` support no hard delete; deactivation is status-based (`ChargingStationStatus.ARCHIVED`, etc.), matching the existing `Site` convention. See [CAP-002 Charging Terminology Mapping](../domain/CAP-002_CHARGING_TERMINOLOGY_MAPPING.md) for how these entities relate to the pre-existing `apps/movos-web` frontend types.
 
+## Frontend consumption (WO-ARGOS-004, 2026-07-28)
+
+All 12 endpoints are now called from `apps/movos-web` via `src/lib/charging-api.ts`, a thin typed wrapper over the same `apiClient` used by Sites (auth header, `X-Organization-Id`, 401-refresh-retry all inherited automatically). No new endpoint was added or changed to support this — the frontend consumes exactly the 12 endpoints as specified above. One consequence worth noting: there is still no endpoint to list `ChargingStation`s (or EVSEs, or Connectors) across an entire organization — only per-parent (`GET /sites/:siteId/charging-stations`, etc.) — so the frontend's connected UI is necessarily Site-scoped (`/sites/[id]/charging-stations/...`), not a flat global list. The pre-existing flat mock pages (`/stations`, `/chargers`, `/connectors`) were left untouched for this reason; see [Screen Inventory](./MOVOS_SCREEN_INVENTORY_v1.0.md).
+
 ## Confirmed absent
 
 No endpoints exist anywhere for: sessions, tariffs, alerts, reports, or team/user management. Charging stations, EVSEs, and connectors are now live (CAP-002) as CRUD-only resources — OCPP, sessions, tariffs, reservations, and payments remain absent for all three. `AuditService` exists (`src/audit/`) but has no controller — it's a cross-cutting service invoked internally from each resource service (`SitesService`, `ChargingStationsService`, `EvsesService`, `ConnectorsService`, `AuthService`), not an API surface of its own.
