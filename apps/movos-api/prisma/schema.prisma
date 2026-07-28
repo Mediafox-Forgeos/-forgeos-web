@@ -57,6 +57,71 @@ enum LocationValidationStatus {
   INVALID
 }
 
+// CAP-002 — charging core domain (M001-A-DEC-005: Site -> ChargingStation ->
+// EVSE -> Connector). "Charger" is deliberately not a model here — it is
+// retired as a persisted entity per the approved decision and survives only
+// as commercial/UI terminology. See docs/domain/M001-A_OPEN_DECISIONS_v0.1.md
+// and docs/domain/CAP-002_CHARGING_TERMINOLOGY_MAPPING.md.
+
+// Administrative lifecycle only (mirrors SiteStatus) — NOT live operational
+// state, which OCPP will own once that capability exists. A station can be
+// ACTIVE administratively while individual EVSEs are OFFLINE operationally.
+enum ChargingStationStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+// Operational availability. Reused value set from the frontend's existing
+// ChargerStatus (apps/movos-web/src/types/charger.ts) — the values already
+// described EVSE-level operational state, just attached to the wrong tier
+// before this decision. CAP-002 only ever writes AVAILABLE/UNAVAILABLE/
+// OFFLINE via CRUD; CHARGING/OCCUPIED/RESERVED/FAULTED are reserved for the
+// future OCPP capability and are not set by any code in this migration.
+enum EvseStatus {
+  AVAILABLE
+  CHARGING
+  OCCUPIED
+  RESERVED
+  UNAVAILABLE
+  FAULTED
+  OFFLINE
+}
+
+// Same value set as EvseStatus, kept as a distinct enum rather than shared —
+// matches this schema's existing convention of one enum per entity even
+// where values coincide (see UserStatus/OrgStatus/MemberStatus). Mirrors the
+// frontend's existing ConnectorStatus (apps/movos-web/src/types/connector.ts)
+// exactly.
+enum ConnectorStatus {
+  AVAILABLE
+  CHARGING
+  OCCUPIED
+  RESERVED
+  UNAVAILABLE
+  FAULTED
+  OFFLINE
+}
+
+// Reused as-is from the frontend's existing ConnectorType
+// (apps/movos-web/src/types/connector.ts) — no divergence.
+enum ConnectorType {
+  CCS2
+  TYPE2
+  CHADEMO
+}
+
+enum CurrentType {
+  AC
+  DC
+}
+
+enum PhaseType {
+  SINGLE_PHASE
+  THREE_PHASE
+}
+
 model User {
   id           String     @id @default(cuid())
   email        String     @unique
@@ -126,10 +191,88 @@ model Site {
   locationValidationStatus LocationValidationStatus @default(UNVALIDATED)
   locationValidatedAt      DateTime?
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  createdBy    User         @relation(fields: [createdByUserId], references: [id])
+  organization     Organization      @relation(fields: [organizationId], references: [id])
+  createdBy        User              @relation(fields: [createdByUserId], references: [id])
+  chargingStations ChargingStation[]
 
   @@unique([organizationId, slug])
+}
+
+// The complete physical charging device installed at a Site. May contain one
+// or multiple independently controllable EVSEs. Organization scoping is
+// derived through siteId -> Site.organizationId, not stored redundantly here
+// — no query in CAP-002's API surface needs "all stations across an
+// organization" directly; every list is already scoped by Site.
+model ChargingStation {
+  id             String                @id @default(cuid())
+  siteId         String
+  name           String
+  code           String?
+  manufacturer   String?
+  model          String?
+  serialNumber   String?
+  // Free-form version string (e.g. "OCPP 1.6J"), matching the frontend's
+  // existing Charger.ocppVersion precedent — deliberately not an enum; the
+  // set of protocol versions is not this migration's to model prematurely.
+  protocol       String?
+  status         ChargingStationStatus @default(DRAFT)
+  commissionedAt DateTime?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  site  Site   @relation(fields: [siteId], references: [id])
+  evses Evse[]
+
+  // Nullable-safe: Postgres treats multiple NULLs as distinct, so stations
+  // without a business code never collide with each other.
+  @@unique([siteId, code])
+}
+
+// An independently operable electric vehicle supply unit. Owns operational
+// state, availability, electrical limits, and (in a future capability)
+// charging-session relationships. No organizationId or siteId stored here —
+// ownership is derived through chargingStationId -> Site -> Organization;
+// every access check in CAP-002 walks that full chain.
+model Evse {
+  id                String @id @default(cuid())
+  chargingStationId String
+
+  // Protocol/hardware identifier (e.g. an OCPP 2.x evseId) — explicitly NOT
+  // the primary key, and mutable, per the instruction not to use a hardware
+  // or protocol identifier as the database key. Named externalId rather than
+  // "evseId" to avoid a confusing stutter with the model's own name.
+  externalId  String?
+  name        String?
+  status      EvseStatus   @default(UNAVAILABLE)
+  maxPowerKw  Float?
+  currentType CurrentType?
+  phaseType   PhaseType?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  chargingStation ChargingStation @relation(fields: [chargingStationId], references: [id])
+  connectors      Connector[]
+
+  @@unique([chargingStationId, externalId])
+}
+
+// The physical interface through which a vehicle connects to an EVSE.
+model Connector {
+  id     String @id @default(cuid())
+  evseId String
+
+  // Protocol/hardware identifier (e.g. an OCPP connectorId) — not the
+  // primary key, mutable. Same externalId naming rationale as Evse.
+  externalId String?
+  type       ConnectorType
+  status     ConnectorStatus @default(UNAVAILABLE)
+  maxPowerKw Float?
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  evse Evse @relation(fields: [evseId], references: [id])
+
+  @@unique([evseId, externalId])
 }
 
 model RefreshSession {
