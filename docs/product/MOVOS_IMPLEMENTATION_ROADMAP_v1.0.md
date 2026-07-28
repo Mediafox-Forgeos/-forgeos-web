@@ -3,6 +3,7 @@
 **Atlas version:** v1.0 · **Generated:** 2026-07-24 · **Repository HEAD:** `main` @ `bfea8db`
 **Updated:** 2026-07-27 — CAP-002 delivered the Station/Charger/Connector CRUD item below (backend + database + API only; frontend not yet migrated).
 **Updated:** 2026-07-28 — WO-ARGOS-004 delivered the frontend migration for that same item (Site-scoped management UI in `apps/movos-web`). OCPP and ChargingSession/Tariff remain the next real work.
+**Updated:** 2026-07-28 — WO-ARGOS-005 retired the mock `/stations`/`/chargers`/`/connectors` routes (no product code left rendering fake infrastructure as real) and added an OCPP readiness note ([`docs/domain/CAP-003_OCPP_READINESS_NOTE.md`](../domain/CAP-003_OCPP_READINESS_NOTE.md)) ahead of the "OCPP transport" item below. OCPP itself is still not implemented.
 **Part of:** [MOVOS Product Atlas](./MOVOS_PRODUCT_ATLAS_v1.0.md)
 
 Recommended implementation order. Complexity is relative sizing (S / M / L / XL), not day-counts — precise duration estimates aren't honest before M001-A produces an approved domain model; sizing will sharpen once entity boundaries are formally decided (see [Open Decisions](../domain/M001-A_OPEN_DECISIONS_v0.1.md)).
@@ -25,6 +26,8 @@ Recommended implementation order. Complexity is relative sizing (S / M / L / XL)
 | Capability                     | Complexity | Dependencies                                        | Business value                                       |
 | ------------------------------ | ---------- | --------------------------------------------------- | ---------------------------------------------------- |
 | OCPP transport + core messages | XL         | Stable ChargingStation/Evse/Connector schema (done) | Turns Sessions from manual records into live reality |
+
+Readiness for this item (model gaps, transport/device-auth/command-routing questions still open) is tracked in [`docs/domain/CAP-003_OCPP_READINESS_NOTE.md`](../domain/CAP-003_OCPP_READINESS_NOTE.md) — not an implementation, a pre-implementation decision checklist.
 
 ## Later — depends on the above being real first
 
