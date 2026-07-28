@@ -1,55 +1,15 @@
-import Link from 'next/link';
+import { redirect } from 'next/navigation';
 
-import { PageContainer } from '@/components/layout/page-container';
-import { PageHeader } from '@/components/layout/page-header';
-import { DataTable, type Column } from '@/components/movos/data-table';
-import { StationStatusBadge } from '@/components/movos/status-badge';
-import { stations } from '@/data/stations';
-import { getSiteById } from '@/data/sites';
-import { formatRelative } from '@/lib/format';
-import type { Station } from '@/types';
-
-const columns: Column<Station>[] = [
-  { key: 'name', header: 'Estación', render: (s) => s.name },
-  {
-    key: 'site',
-    header: 'Sitio',
-    render: (s) => (
-      <Link href={`/sites/${s.siteId}`} className="hover:text-movos-blue">
-        {getSiteById(s.siteId)?.name ?? s.siteId}
-      </Link>
-    ),
-  },
-  {
-    key: 'status',
-    header: 'Estado',
-    render: (s) => <StationStatusBadge status={s.status} />,
-  },
-  { key: 'chargers', header: 'Cargadores', render: (s) => s.chargerCount },
-  { key: 'connectors', header: 'Conectores', render: (s) => s.connectorCount },
-  {
-    key: 'availability',
-    header: 'Disponibilidad',
-    render: (s) => `${s.availabilityPercent}%`,
-  },
-  {
-    key: 'comm',
-    header: 'Última comunicación',
-    render: (s) => formatRelative(s.lastCommunication),
-  },
-];
-
-export default function StationsPage() {
-  return (
-    <PageContainer>
-      <PageHeader
-        eyebrow="Infraestructura"
-        title="Estaciones"
-        description="Agrupaciones de cargadores por bahía y su disponibilidad."
-      />
-      <div className="mt-8">
-        <DataTable columns={columns} rows={stations} getRowKey={(s) => s.id} />
-      </div>
-    </PageContainer>
-  );
+/**
+ * /stations used to render mock Station records as if they were live
+ * operational data. Per ARGOS's WO-ARGOS-005 ruling, MOVOS does not get an
+ * org-wide "list all stations" endpoint — Site is the real, production-ready
+ * inventory (see /sites), and ChargingStation is reached by drilling into a
+ * Site's Infraestructura tab. Rather than duplicate that screen, this route
+ * redirects to it. Kept as a real Next.js redirect (not a client-side
+ * useEffect push) so it also resolves correctly for direct navigation and
+ * bookmarks, not just in-app link clicks.
+ */
+export default function StationsPage(): never {
+  redirect('/sites');
 }
