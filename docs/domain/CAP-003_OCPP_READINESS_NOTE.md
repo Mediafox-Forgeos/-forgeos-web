@@ -77,3 +77,7 @@ MOVOS currently authenticates **humans** (JWT access tokens + httpOnly refresh c
 7. **`ChargingSession` does not exist.** OCPP's `StartTransaction`/`StopTransaction` need somewhere to land; this is likely its own prerequisite mission rather than something CAP-003 should absorb silently.
 
 None of these are resolved by this note. They are the explicit set of decisions ARGOS (or whoever scopes CAP-003) needs to make before implementation begins — deliberately left open rather than defaulted.
+
+---
+
+**2026-07-29 update (WO-ARGOS-006):** all seven blockers above now have a recommendation (not yet an approved decision) in [CAP-003 OCPP Architecture Decisions v0.1](./CAP-003_OCPP_ARCHITECTURE_DECISIONS_v0.1.md), which also drafted five PROPOSED ADR outlines (ADR-0008 through ADR-0012) and a [Kylum hardware information request](../product/KYLUM_OCPP_HARDWARE_INFORMATION_REQUEST.md) that several of those recommendations (version scope, authentication) are explicitly contingent on. This note is preserved unedited above as the original evidence-gathering pass; the architecture decisions document is the resolution layer, not a replacement.

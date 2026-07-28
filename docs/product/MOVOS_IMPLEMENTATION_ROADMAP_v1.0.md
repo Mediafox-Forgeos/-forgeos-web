@@ -4,6 +4,7 @@
 **Updated:** 2026-07-27 — CAP-002 delivered the Station/Charger/Connector CRUD item below (backend + database + API only; frontend not yet migrated).
 **Updated:** 2026-07-28 — WO-ARGOS-004 delivered the frontend migration for that same item (Site-scoped management UI in `apps/movos-web`). OCPP and ChargingSession/Tariff remain the next real work.
 **Updated:** 2026-07-28 — WO-ARGOS-005 retired the mock `/stations`/`/chargers`/`/connectors` routes (no product code left rendering fake infrastructure as real) and added an OCPP readiness note ([`docs/domain/CAP-003_OCPP_READINESS_NOTE.md`](../domain/CAP-003_OCPP_READINESS_NOTE.md)) ahead of the "OCPP transport" item below. OCPP itself is still not implemented.
+**Updated:** 2026-07-29 — WO-ARGOS-006 resolved (as recommendations, not approved decisions) the readiness note's seven blockers in [`docs/domain/CAP-003_OCPP_ARCHITECTURE_DECISIONS_v0.1.md`](../domain/CAP-003_OCPP_ARCHITECTURE_DECISIONS_v0.1.md), with five PROPOSED ADR outlines (ADR-0008–ADR-0012) and a Kylum hardware information request. Still no OCPP implementation, and several recommendations are explicitly contingent on Kylum hardware answers not yet received.
 **Part of:** [MOVOS Product Atlas](./MOVOS_PRODUCT_ATLAS_v1.0.md)
 
 Recommended implementation order. Complexity is relative sizing (S / M / L / XL), not day-counts — precise duration estimates aren't honest before M001-A produces an approved domain model; sizing will sharpen once entity boundaries are formally decided (see [Open Decisions](../domain/M001-A_OPEN_DECISIONS_v0.1.md)).
@@ -27,7 +28,7 @@ Recommended implementation order. Complexity is relative sizing (S / M / L / XL)
 | ------------------------------ | ---------- | --------------------------------------------------- | ---------------------------------------------------- |
 | OCPP transport + core messages | XL         | Stable ChargingStation/Evse/Connector schema (done) | Turns Sessions from manual records into live reality |
 
-Readiness for this item (model gaps, transport/device-auth/command-routing questions still open) is tracked in [`docs/domain/CAP-003_OCPP_READINESS_NOTE.md`](../domain/CAP-003_OCPP_READINESS_NOTE.md) — not an implementation, a pre-implementation decision checklist.
+Readiness for this item (model gaps, transport/device-auth/command-routing questions still open) is tracked in [`docs/domain/CAP-003_OCPP_READINESS_NOTE.md`](../domain/CAP-003_OCPP_READINESS_NOTE.md) — not an implementation, a pre-implementation decision checklist. As of WO-ARGOS-006, each of those questions has a documented recommendation awaiting ARGOS approval in [`docs/domain/CAP-003_OCPP_ARCHITECTURE_DECISIONS_v0.1.md`](../domain/CAP-003_OCPP_ARCHITECTURE_DECISIONS_v0.1.md) — still not an implementation, and not yet approved.
 
 ## Later — depends on the above being real first
 
