@@ -2,6 +2,7 @@
 
 **Atlas version:** v1.0
 **Generated:** 2026-07-24
+**Updated:** 2026-07-27 — CAP-002 (WO-ARGOS-003) delivered CRUD-only backend for the charging core (`ChargingStation`/`Evse`/`Connector`); see inline notes below. Frontend is not yet migrated to consume it.
 **Repository HEAD:** `main` @ `bfea8db`
 **Author:** VULCAN
 **Source method:** Direct repository inspection (WO-ARGOS-001, persisted under WO-ARGOS-002) — no speculation, no redesign, no renamed concepts
@@ -29,11 +30,11 @@ Authentication (full lifecycle, tested), multi-tenancy (org-scoped, DB-revalidat
 
 ### What is partially built?
 
-Organizations (read-only API, no management), Roles/Permissions (the enforcement mechanism is real and tested, but only exercised on one resource — Sites — and only 3 of 6 defined roles are ever checked), and the white-label pattern (architecturally sound, proven with exactly one tenant, Kylum).
+Organizations (read-only API, no management), Roles/Permissions (the enforcement mechanism is real and tested, but only exercised on one resource — Sites — and only 3 of 6 defined roles are ever checked), the white-label pattern (architecturally sound, proven with exactly one tenant, Kylum), and — as of CAP-002 — the charging core: `ChargingStation`/`Evse`/`Connector` exist as real, tenant-isolated, audited database models with CRUD APIs, but with no OCPP communication, no charging sessions, and no connected frontend yet.
 
 ### What is missing?
 
-The entire EV charging domain: Station, Charger, Connector, ChargingSession, Tariff, Alert — none exist as database models. Also missing entirely: OCPP protocol handling, Billing, real Notifications, Vehicles, Fleet, and any AI/ARGOS integration into MOVOS itself. Detail: [Database Inventory](./MOVOS_DATABASE_INVENTORY_v1.0.md).
+`ChargingSession`, `Tariff`, and `Alert` still don't exist as database models. `ChargingStation`/`Evse`/`Connector` do exist as of CAP-002, but only as CRUD — no OCPP protocol handling, no live device communication, no session/tariff/billing logic. Also missing entirely: Billing, real Notifications, Vehicles, Fleet, and any AI/ARGOS integration into MOVOS itself. Detail: [Database Inventory](./MOVOS_DATABASE_INVENTORY_v1.0.md).
 
 ### What was abandoned?
 
@@ -45,7 +46,7 @@ The white-label principle and the "Kylum is a pilot, not the owner" boundary (AD
 
 ### What is the fastest path to a production MVP?
 
-Reuse the Sites pattern (guards, DTOs, audit, presenters — already proven) to build Station → Charger → Connector, expose the User/Membership models that already exist in the database, then ChargingSession + Tariff. OCPP is deliberately sequenced as its own step, not folded into "Chargers," because it is the one piece with no existing architectural precedent to reuse. Full detail: [MVP Gap Analysis](./MOVOS_MVP_GAP_ANALYSIS_v1.0.md), [Implementation Roadmap](./MOVOS_IMPLEMENTATION_ROADMAP_v1.0.md).
+The Sites pattern (guards, DTOs, audit, presenters) has now been reused twice — first for Sites, then for CAP-002's `ChargingStation` → `Evse` → `Connector`. Next: expose the User/Membership models that already exist in the database, then ChargingSession + Tariff. OCPP is deliberately sequenced as its own step, not folded into charging-core CRUD, because it is the one piece with no existing architectural precedent to reuse. Full detail: [MVP Gap Analysis](./MOVOS_MVP_GAP_ANALYSIS_v1.0.md), [Implementation Roadmap](./MOVOS_IMPLEMENTATION_ROADMAP_v1.0.md).
 
 ---
 
@@ -61,7 +62,7 @@ Production-grade: real database models, tested services, guarded APIs, and a con
 - **Sites** — `apps/movos-api/src/sites/`, `apps/movos-web/app/(app)/sites/`
 - **Location** — `apps/movos-api/src/location/`, `apps/movos-web/src/components/location/`
 
-### Group B — Partially Implemented (4)
+### Group B — Partially Implemented (5)
 
 Real backend mechanism exists and is tested, but coverage or scope is incomplete.
 
@@ -69,6 +70,7 @@ Real backend mechanism exists and is tested, but coverage or scope is incomplete
 - **Roles** — `MemberRole` enum in `schema.prisma` (3 of 6 values ever enforced in `@Roles()` decorators)
 - **Permissions** — `OrgContextGuard` + `RolesGuard` (proven pattern, exercised on Sites only)
 - **White Label** — `apps/movos-web/src/config/tenant.ts` (sound architecture, one tenant ever tested)
+- **Charging Core (CAP-002)** — `apps/movos-api/src/{charging-stations,evses,connectors}/` (real, tenant-isolated, audited CRUD; no OCPP, no sessions, no connected frontend yet)
 
 ### Group C — Started, Then Skipped (2 missions)
 
@@ -77,14 +79,16 @@ Explicitly scheduled and scaffolded, then bypassed indefinitely while later miss
 - **Mission 003 — real domain model** — `packages/core-domain/` still contains only a one-line placeholder (`export const coreDomainStatus = 'Reserved for Mission 003 domain implementation'`), unimported anywhere in the workspace, unchanged since Mission 002.
 - **Mission 004 — real ARGOS AI integration** — the ARGOS command-center UI has existed since day one (`apps/forgeos-web/app/(workspace)/argos/`) and is explicitly documented as "UI simulation; real integration is Mission 004" (`docs/agents/README.md`). It has never been wired to any model, tool, or service.
 
-### Group D — Only Documented / Not Started (11 capabilities)
+### Group D — Only Documented / Not Started (10 capabilities)
 
 Named in roadmap docs and/or represented as TypeScript types with hardcoded demo data in the frontend, but zero backend: no database model, no API, no real logic. A minority (Billing, Vehicles, Fleet) don't even have that — no code artifact of any kind exists for them anywhere in this repository.
 
-Chargers · OCPP · Sessions · Tariffs · Alerts · Reporting · Users (team management — the underlying `User`/`Membership` models exist, but no API exposes them for this purpose) · Notifications · `packages/ui` (scaffolded, zero consumers) · Billing (no artifact at all) · Vehicles / Fleet (no artifact at all — these terms never entered this codebase's vocabulary; see Domain Inventory)
+OCPP · Sessions · Tariffs · Alerts · Reporting · Users (team management — the underlying `User`/`Membership` models exist, but no API exposes them for this purpose) · Notifications · `packages/ui` (scaffolded, zero consumers) · Billing (no artifact at all) · Vehicles / Fleet (no artifact at all — these terms never entered this codebase's vocabulary; see Domain Inventory)
+
+Chargers (as `Station`/`Charger`/`Connector` frontend types) graduated to Group B as of CAP-002 — see above. The frontend types themselves remain unconnected demo fixtures; only the backend moved.
 
 ---
 
-## Weighted MVP completion: ~32%
+## Weighted MVP completion: ~32% (pre-CAP-002 figure — not yet recomputed)
 
-Capability-weighted, not line-of-code-weighted. Full calculation and methodology: [MVP Gap Analysis](./MOVOS_MVP_GAP_ANALYSIS_v1.0.md). The number is low specifically because the three largest-weight capabilities in an EV charging MVP — Chargers, OCPP, Sessions — sit in Group D, while the ~32% that does exist is concentrated in platform foundation (Group A + B), not product surface.
+Capability-weighted, not line-of-code-weighted. Full calculation and methodology: [MVP Gap Analysis](./MOVOS_MVP_GAP_ANALYSIS_v1.0.md), which this update does not recompute — that document is out of CAP-002's scope. The figure above predates CAP-002; Charging Core has moved from Group D to Group B (CRUD backend only, no frontend, no OCPP, no sessions), so the true weighted figure is now somewhat higher, but not by the full weight originally assigned to "Chargers" — OCPP and Sessions, the other two largest-weight items, remain entirely in Group D.

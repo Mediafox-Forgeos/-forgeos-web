@@ -10,6 +10,9 @@ import { AuthModule } from './auth/auth.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { SitesModule } from './sites/sites.module';
 import { LocationModule } from './location/location.module';
+import { ChargingStationsModule } from './charging-stations/charging-stations.module';
+import { EvsesModule } from './evses/evses.module';
+import { ConnectorsModule } from './connectors/connectors.module';
 import { HealthController } from './health.controller';
 import { RequestLoggerMiddleware } from './common/middleware/request-logger.middleware';
 
@@ -27,6 +30,9 @@ import { RequestLoggerMiddleware } from './common/middleware/request-logger.midd
     OrganizationsModule,
     SitesModule,
     LocationModule,
+    ChargingStationsModule,
+    EvsesModule,
+    ConnectorsModule,
   ],
   controllers: [HealthController],
   providers: [
