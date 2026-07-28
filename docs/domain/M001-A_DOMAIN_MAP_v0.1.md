@@ -161,7 +161,7 @@ erDiagram
     EVSE {
         string id "MOVOS internal cuid — primary key"
         string chargingStationId
-        string evseId "local/protocol identifier — not the PK"
+        string externalId "local/protocol identifier — not the PK"
         enum status
         float maxPowerKw
         enum currentType
@@ -169,7 +169,7 @@ erDiagram
     CONNECTOR {
         string id "MOVOS internal cuid — primary key"
         string evseId
-        string connectorId "local/protocol identifier — not the PK"
+        string externalId "local/protocol identifier — not the PK"
         enum type
         enum status
         float maxPowerKw
