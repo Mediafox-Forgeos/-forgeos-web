@@ -1,7 +1,8 @@
 # MOVOS Feature Matrix v1.0
 
 **Atlas version:** v1.0 · **Generated:** 2026-07-24 · **Repository HEAD:** `main` @ `bfea8db`
-**Updated:** 2026-07-28 — WO-ARGOS-004 connected Charging Core CRUD to real `apps/movos-web` UI (Site-scoped, not the pre-existing flat mock pages); see note below.
+**Updated:** 2026-07-28 — WO-ARGOS-004 connected Charging Core CRUD to real `apps/movos-web` UI (Site-scoped, not the pre-existing flat mock pages).
+**Updated:** 2026-07-28 — WO-ARGOS-005 retired those flat mock pages (`/stations`, `/chargers`, `/connectors`) per ARGOS's ruling against org-wide list-all endpoints; see note below.
 **Part of:** [MOVOS Product Atlas](./MOVOS_PRODUCT_ATLAS_v1.0.md)
 
 Every discovered capability, verified against the live schema (`apps/movos-api/prisma/schema.prisma`), controllers (`apps/movos-api/src/`), and frontend pages (`apps/movos-web/app/`). Completion % reflects the capability in isolation: Production Ready = 100%, Functional = 75%, Partial = 40%, Mock = 5%, Planned = 0%.
@@ -32,7 +33,7 @@ Every discovered capability, verified against the live schema (`apps/movos-api/p
 
 Sessions, Tariffs, Alerts, Reporting, Billing, and Notifications all ultimately depend on the Charging Core (Station/EVSE/Connector) existing, which now has both a CRUD backend (CAP-002) and a connected, Site-scoped management UI (WO-ARGOS-004). None of those dependents are unblocked yet — they need OCPP communication and/or session/tariff models that neither mission implemented. See the [Dependency Map](./MOVOS_DEPENDENCY_MAP_v1.0.md) for the full graph.
 
-**Note on "Frontend: Yes":** this means the real `ChargingStation`/`Evse`/`Connector` records are viewable and editable through `apps/movos-web`, scoped per-Site (`/sites/[id]/charging-stations/...`). It does not mean the pre-existing flat `/stations`, `/chargers`, `/connectors` demo pages were converted — those remain mock, since no org-wide list endpoint exists for them to call. See [Screen Inventory](./MOVOS_SCREEN_INVENTORY_v1.0.md).
+**Note on "Frontend: Yes":** this means the real `ChargingStation`/`Evse`/`Connector` records are viewable and editable through `apps/movos-web`, scoped per-Site (`/sites/[id]/charging-stations/...`). As of WO-ARGOS-005, the formerly-mock `/stations`, `/chargers`, `/connectors` pages were also retired: `/stations` redirects to `/sites`, and `/chargers`/`/connectors` are real Site-selection gateways into the same Site-scoped flow — none of the three renders mock infrastructure data anymore. No org-wide list-all endpoint was built to give them a flat list of their own; that remains a deliberate, ARGOS-confirmed scope decision, not a gap. See [Screen Inventory](./MOVOS_SCREEN_INVENTORY_v1.0.md).
 
 ## Technical risk concentration
 

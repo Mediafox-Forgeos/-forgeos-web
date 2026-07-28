@@ -121,3 +121,30 @@ This section records the compatibility decisions made when `apps/movos-web` was 
 **Tenancy.** The frontend adds no new tenant-scoping logic — `src/lib/charging-api.ts` is a thin wrapper over the existing `apiClient`, which already attaches `Authorization` and `X-Organization-Id` to every request and already has the 401 → refresh → retry flow. A cross-tenant charging-station/EVSE/connector ID (typed directly into the URL) hits the same backend ownership-chain check CAP-002 already enforces, receives a 404, and the frontend renders a "not found"/"not available" state — never a data leak, and never a client-side filter standing in for the real check.
 
 **Testing scope.** Frontend tests target the list/form components directly (`ChargingStationList`, `EvseList`, `ConnectorList`, `ChargingStationFormModal`) with `siteId`/`chargingStationId`/`evseId` passed as props, rather than the Next.js page components that read them from `useParams()`. This was a deliberate scoping choice to keep the new `vitest`/`testing-library` setup narrow (no Next.js router-context mocking required) while still exercising the real logic — loading/empty/error/not-found states, tenant-failure handling (404 → safe UI state), derived-metric computation, and form validation/submission all run against the actual component code, not a page-level shim.
+
+---
+
+## Mock route retirement addendum (WO-ARGOS-005, 2026-07-28)
+
+The previous addendum (above) said the flat `/stations`, `/chargers`, `/connectors` demo pages were "not converted... out of scope" for WO-ARGOS-004. ARGOS has since reviewed that outcome and made a permanent product decision, not a temporary deferral: **no org-wide "list all ChargingStation/EVSE/Connector" endpoint will be built.** The canonical navigation stays strictly Site-scoped:
+
+```
+Organization → Site → ChargingStation → EVSE → Connector
+```
+
+Since those flat routes could no longer be honestly justified as "pending conversion," they were retired in this same mission rather than left rendering mock data indefinitely:
+
+| Route                   | Before                                                                       | After                                                                                                                                                                                      |
+| ----------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `/stations`             | Rendered `src/data/stations.ts` mock `Station[]` in a `DataTable`            | Server-side redirect to `/sites` — the real, production-ready Site inventory. No duplicate screen was built (`/sites` already covers this).                                                |
+| `/chargers`             | Rendered `src/data/chargers.ts` mock `Charger[]`                             | Real Site-selection gateway (`SiteSelectionList`, fetches the live `/sites` endpoint) — explains that charging stations belong to a Site, links into each Site's real Infraestructura tab. |
+| `/chargers/[chargerId]` | Rendered a single mock `Charger` record with fake status/connectors/sessions | Server-side redirect to `/chargers` — a mock charger id has no corresponding real EVSE, so there's nothing honest to redirect a specific id _to_.                                          |
+| `/connectors`           | Rendered `src/data/connectors.ts` mock `Connector[]`                         | Same `SiteSelectionList` gateway as `/chargers`, with copy explaining the full Site → ChargingStation → EVSE → Connector path.                                                             |
+
+**Why a gateway instead of a redirect for `/chargers` and `/connectors`:** a bare redirect to `/sites` would land the operator on the Site list with no explanation of why "Cargadores" in the sidebar took them somewhere else. The gateway keeps the sidebar entry's destination self-explanatory (short copy naming the reason) while still reusing the same `/sites` fetch and card-link pattern rather than building a second full Sites screen.
+
+**Why no N+1 fan-out:** an earlier option considered was fetching every Site's charging stations (and every station's EVSEs, and every EVSE's connectors) client-side to fake a flat list. Explicitly rejected — this would scale as O(sites × stations × EVSEs) requests per page load with no caching layer to absorb it, for a feature ARGOS had already ruled should not exist as a flat list in the first place.
+
+**What was _not_ touched:** `src/data/{stations,chargers,connectors}.ts` and `src/types/{station,charger,connector}.ts` still exist, unchanged — per this mission's own instruction not to delete fixtures that might still be needed for demos, visual testing, or Storybook. They are simply unreachable as live-looking screens now; nothing in the running product imports them to render as operational data.
+
+**Canonical infrastructure entry point, for anyone looking for it:** `/sites` → a Site → its Infraestructura tab → a `ChargingStation` → its EVSEs → their Connectors. This is now the _only_ path into charging infrastructure in the product.

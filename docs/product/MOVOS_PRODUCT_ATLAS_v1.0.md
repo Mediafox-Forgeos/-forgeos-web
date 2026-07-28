@@ -3,7 +3,8 @@
 **Atlas version:** v1.0
 **Generated:** 2026-07-24
 **Updated:** 2026-07-27 — CAP-002 (WO-ARGOS-003) delivered CRUD-only backend for the charging core (`ChargingStation`/`Evse`/`Connector`).
-**Updated:** 2026-07-28 — WO-ARGOS-004 connected that backend to a real, Site-scoped `apps/movos-web` UI; see inline notes below. Still no OCPP, sessions, tariffs, reservations, or payments.
+**Updated:** 2026-07-28 — WO-ARGOS-004 connected that backend to a real, Site-scoped `apps/movos-web` UI. Still no OCPP, sessions, tariffs, reservations, or payments.
+**Updated:** 2026-07-28 — WO-ARGOS-005: ARGOS ruled against org-wide list-all endpoints for ChargingStation/EVSE/Connector; `/stations`, `/chargers`, `/connectors` were retired (redirect or Site-selection gateway) so mock infrastructure no longer appears as live data anywhere; see inline notes below.
 **Repository HEAD:** `main` @ `bfea8db`
 **Author:** VULCAN
 **Source method:** Direct repository inspection (WO-ARGOS-001, persisted under WO-ARGOS-002) — no speculation, no redesign, no renamed concepts
@@ -86,7 +87,7 @@ Named in roadmap docs and/or represented as TypeScript types with hardcoded demo
 
 OCPP · Sessions · Tariffs · Alerts · Reporting · Users (team management — the underlying `User`/`Membership` models exist, but no API exposes them for this purpose) · Notifications · `packages/ui` (scaffolded, zero consumers) · Billing (no artifact at all) · Vehicles / Fleet (no artifact at all — these terms never entered this codebase's vocabulary; see Domain Inventory)
 
-Chargers (as `Station`/`Charger`/`Connector` frontend types) graduated to Group B as of CAP-002 — see above. As of WO-ARGOS-004, the _real_ entities (`ApiChargingStation`/`ApiEvse`/`ApiConnector`) have their own connected UI under `/sites/[id]/charging-stations/...`. The original demo types/pages (`src/types/{station,charger,connector}.ts`, `/stations`, `/chargers`, `/connectors`) remain untouched, unconnected fixtures — they were not converted because no org-wide list endpoint exists for them to call.
+Chargers (as `Station`/`Charger`/`Connector` frontend types) graduated to Group B as of CAP-002 — see above. As of WO-ARGOS-004, the _real_ entities (`ApiChargingStation`/`ApiEvse`/`ApiConnector`) have their own connected UI under `/sites/[id]/charging-stations/...`. The original demo type files (`src/types/{station,charger,connector}.ts`) and their mock data fixtures (`src/data/{stations,chargers,connectors}.ts`) remain unchanged — but as of WO-ARGOS-005, the routes that used to render them (`/stations`, `/chargers`, `/chargers/[id]`, `/connectors`) no longer do: `/stations` redirects to `/sites`, `/chargers` and `/connectors` are real Site-selection gateways, and `/chargers/[id]` redirects to `/chargers`. No org-wide list endpoint was built — ARGOS confirmed this is a deliberate, permanent scope decision, not a temporary gap.
 
 ---
 

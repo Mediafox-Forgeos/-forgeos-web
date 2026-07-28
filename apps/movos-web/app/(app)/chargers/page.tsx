@@ -1,66 +1,25 @@
-import Link from 'next/link';
+'use client';
 
 import { PageContainer } from '@/components/layout/page-container';
 import { PageHeader } from '@/components/layout/page-header';
-import { DataTable, type Column } from '@/components/movos/data-table';
-import { ChargerStatusBadge } from '@/components/movos/status-badge';
-import { chargers } from '@/data/chargers';
-import { getSiteById } from '@/data/sites';
-import { formatRelative } from '@/lib/format';
-import type { Charger } from '@/types';
+import { SiteSelectionList } from '@/components/charging/site-selection-list';
 
-const columns: Column<Charger>[] = [
-  {
-    key: 'name',
-    header: 'Cargador',
-    render: (c) => (
-      <Link
-        href={`/chargers/${c.id}`}
-        className="hover:text-movos-blue font-medium"
-      >
-        {c.name}
-      </Link>
-    ),
-  },
-  {
-    key: 'model',
-    header: 'Fabricante / Modelo',
-    render: (c) => `${c.vendor} ${c.model}`,
-  },
-  {
-    key: 'site',
-    header: 'Sitio',
-    render: (c) => getSiteById(c.siteId)?.name ?? c.siteId,
-  },
-  {
-    key: 'status',
-    header: 'Estado',
-    render: (c) => <ChargerStatusBadge status={c.status} />,
-  },
-  { key: 'power', header: 'Potencia', render: (c) => `${c.maxPowerKw} kW` },
-  {
-    key: 'connectors',
-    header: 'Conectores',
-    render: (c) => c.connectors.length,
-  },
-  { key: 'ocpp', header: 'OCPP', render: (c) => c.ocppVersion },
-  {
-    key: 'heartbeat',
-    header: 'Último latido',
-    render: (c) => formatRelative(c.lastHeartbeat),
-  },
-];
-
+/**
+ * No org-wide "list all charging stations" endpoint exists (ARGOS ruling,
+ * WO-ARGOS-005) — a Charging Station only ever belongs to one Site, so this
+ * route asks the operator to pick a Site first rather than faking a global
+ * list or performing an N+1 fan-out across every Site to build one.
+ */
 export default function ChargersPage() {
   return (
     <PageContainer>
       <PageHeader
         eyebrow="Infraestructura"
-        title="Cargadores"
-        description="Inventario completo de puntos de carga y su estado en tiempo real."
+        title="Estaciones de carga"
+        description="Las estaciones de carga pertenecen a un Sitio. Selecciona un sitio para ver sus estaciones, EVSEs y conectores."
       />
       <div className="mt-8">
-        <DataTable columns={columns} rows={chargers} getRowKey={(c) => c.id} />
+        <SiteSelectionList />
       </div>
     </PageContainer>
   );
