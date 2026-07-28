@@ -1,9 +1,20 @@
-import type { Organization, Membership, Site, User } from '@prisma/client';
+import type {
+  Organization,
+  Membership,
+  Site,
+  User,
+  ChargingStation,
+  Evse,
+  Connector,
+} from '@prisma/client';
 import type {
   ApiOrganization,
   ApiMembership,
   ApiSite,
   ApiUser,
+  ApiChargingStation,
+  ApiEvse,
+  ApiConnector,
 } from '@mediafox/shared-types';
 
 /**
@@ -62,5 +73,52 @@ export function toApiSite(site: Site): ApiSite {
     locationValidationStatus:
       site.locationValidationStatus as ApiSite['locationValidationStatus'],
     locationValidatedAt: site.locationValidatedAt?.toISOString() ?? null,
+  };
+}
+
+export function toApiChargingStation(
+  station: ChargingStation,
+): ApiChargingStation {
+  return {
+    id: station.id,
+    siteId: station.siteId,
+    name: station.name,
+    code: station.code,
+    manufacturer: station.manufacturer,
+    model: station.model,
+    serialNumber: station.serialNumber,
+    protocol: station.protocol,
+    status: station.status,
+    commissionedAt: station.commissionedAt?.toISOString() ?? null,
+    createdAt: station.createdAt.toISOString(),
+    updatedAt: station.updatedAt.toISOString(),
+  };
+}
+
+export function toApiEvse(evse: Evse): ApiEvse {
+  return {
+    id: evse.id,
+    chargingStationId: evse.chargingStationId,
+    externalId: evse.externalId,
+    name: evse.name,
+    status: evse.status,
+    maxPowerKw: evse.maxPowerKw,
+    currentType: evse.currentType,
+    phaseType: evse.phaseType,
+    createdAt: evse.createdAt.toISOString(),
+    updatedAt: evse.updatedAt.toISOString(),
+  };
+}
+
+export function toApiConnector(connector: Connector): ApiConnector {
+  return {
+    id: connector.id,
+    evseId: connector.evseId,
+    externalId: connector.externalId,
+    type: connector.type,
+    status: connector.status,
+    maxPowerKw: connector.maxPowerKw,
+    createdAt: connector.createdAt.toISOString(),
+    updatedAt: connector.updatedAt.toISOString(),
   };
 }

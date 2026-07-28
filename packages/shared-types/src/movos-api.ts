@@ -26,17 +26,10 @@ export interface ApiMembership {
 }
 
 export type LocationSource =
-  | 'GOOGLE_PLACES'
-  | 'GOOGLE_GEOCODING'
-  | 'MANUAL'
-  | 'MANUAL_ADJUSTMENT';
+  'GOOGLE_PLACES' | 'GOOGLE_GEOCODING' | 'MANUAL' | 'MANUAL_ADJUSTMENT';
 
 export type LocationValidationStatus =
-  | 'UNVALIDATED'
-  | 'SUGGESTED'
-  | 'CONFIRMED'
-  | 'PARTIAL'
-  | 'INVALID';
+  'UNVALIDATED' | 'SUGGESTED' | 'CONFIRMED' | 'PARTIAL' | 'INVALID';
 
 export interface LocationSuggestion {
   placeId: string;
@@ -86,6 +79,50 @@ export interface ApiSite {
   locationSource: LocationSource;
   locationValidationStatus: LocationValidationStatus;
   locationValidatedAt: string | null;
+}
+
+// CAP-002 — charging core domain (Site -> ChargingStation -> EVSE ->
+// Connector, M001-A-DEC-005). "Charger" is not a persisted entity; see
+// docs/domain/CAP-002_CHARGING_TERMINOLOGY_MAPPING.md for how these map to
+// the frontend's existing Station/Charger/Connector types.
+
+export interface ApiChargingStation {
+  id: string;
+  siteId: string;
+  name: string;
+  code: string | null;
+  manufacturer: string | null;
+  model: string | null;
+  serialNumber: string | null;
+  protocol: string | null;
+  status: string;
+  commissionedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ApiEvse {
+  id: string;
+  chargingStationId: string;
+  externalId: string | null;
+  name: string | null;
+  status: string;
+  maxPowerKw: number | null;
+  currentType: string | null;
+  phaseType: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ApiConnector {
+  id: string;
+  evseId: string;
+  externalId: string | null;
+  type: string;
+  status: string;
+  maxPowerKw: number | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface LoginResponse {
