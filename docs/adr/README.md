@@ -55,15 +55,15 @@ Links to other ADRs, product documents, or engineering documents.
 | ADR-0005 | [MOVOS is the commercial mobility platform](ADR-0005-movos-commercial-platform.md)             | Approved | 2026-07-14 |
 | ADR-0006 | [MOVOS API, authentication and multi-tenancy](ADR-0006-movos-api-and-tenancy.md)               | Approved | 2026-07-15 |
 | ADR-0007 | [Google Maps Location Capability for MOVOS Sites](ADR-0007-google-maps-location-capability.md) | Approved | 2026-07-16 |
-| ADR-0008 | [OCPP Protocol Scope](ADR-0008-ocpp-protocol-scope.md)                                         | Proposed | 2026-07-29 |
-| ADR-0009 | [OCPP Transport Boundary](ADR-0009-ocpp-transport-boundary.md)                                 | Proposed | 2026-07-29 |
-| ADR-0010 | [Device Identity and Authentication](ADR-0010-device-identity-and-authentication.md)           | Proposed | 2026-07-29 |
-| ADR-0011 | [Live State and Event Persistence](ADR-0011-live-state-and-event-persistence.md)               | Proposed | 2026-07-29 |
-| ADR-0012 | [ChargingSession Boundary](ADR-0012-chargingsession-boundary.md)                               | Proposed | 2026-07-29 |
+| ADR-0008 | [OCPP Protocol Scope](ADR-0008-ocpp-protocol-scope.md)                                         | Approved | 2026-07-30 |
+| ADR-0009 | [OCPP Transport Boundary](ADR-0009-ocpp-transport-boundary.md)                                 | Approved | 2026-07-30 |
+| ADR-0010 | [Device Identity and Authentication](ADR-0010-device-identity-and-authentication.md)           | Approved | 2026-07-30 |
+| ADR-0011 | [Live State and Event Persistence](ADR-0011-live-state-and-event-persistence.md)               | Approved | 2026-07-30 |
+| ADR-0012 | [ChargingSession Boundary](ADR-0012-chargingsession-boundary.md)                               | Approved | 2026-07-30 |
 
 > ADR-0001 through ADR-0004 are currently recorded as fixture data in the ForgeOS workspace (`apps/forgeos-web/data/decisions.ts`). Formal ADR documents will be migrated to this directory as part of Mission 003.
 >
-> ADR-0008 through ADR-0012 were drafted per WO-ARGOS-006 as outlines for the CAP-003 (OCPP) architecture decisions — see [CAP-003 OCPP Architecture Decisions](../domain/CAP-003_OCPP_ARCHITECTURE_DECISIONS_v0.1.md). WO-ARGOS-006 requested numbers 0006–0010, which collide with the already-`Approved` ADR-0006/0007 above; these five were filed as 0008–0012, the next free numbers, instead.
+> ADR-0008 through ADR-0012 were drafted per WO-ARGOS-006 as outlines for the CAP-003 (OCPP) architecture decisions — see [CAP-003 OCPP Architecture Decisions](../domain/CAP-003_OCPP_ARCHITECTURE_DECISIONS_v0.1.md). WO-ARGOS-006 requested numbers 0006–0010, which collide with the already-`Approved` ADR-0006/0007 above; these five were filed as 0008–0012, the next free numbers, instead. All five were approved by ARGOS under WO-ARGOS-007 (2026-07-30) and are now `Approved`, not `Proposed` — see each file's "ARGOS Decision" section for what, if anything, was refined from the original draft.
 
 ---
 

@@ -1,8 +1,8 @@
 # ADR-0011 — Live State and Event Persistence
 
-**Date:** 2026-07-29
-**Status:** PROPOSED — not accepted, drafted per WO-ARGOS-006 as an outline for ARGOS review
-**Deciders:** VULCAN (drafted) → ARGOS (approval required)
+**Date:** 2026-07-29 (drafted) · 2026-07-30 (accepted)
+**Status:** ACCEPTED — approved by ARGOS per WO-ARGOS-007, with a retention-policy requirement added
+**Deciders:** VULCAN (drafted) → ARGOS (approved, WO-ARGOS-007)
 
 > **Numbering note:** WO-ARGOS-006 requested this be filed as ADR-0009. Renumbered to ADR-0011 to stay clear of the real, already-`Approved` ADR-0005/0006/0007 and the ADR-0008/0009/0010 filed alongside this one for the same mission. See [ADR-0008](./ADR-0008-ocpp-protocol-scope.md)'s numbering note for the full explanation.
 
@@ -27,6 +27,10 @@ Keep `Evse.status`/`Connector.status` as the durable "current believed state" co
 **If approved:** device-reported and human-reported writes stay auditable-but-distinguishable without new infrastructure; a minimal debugging/audit trail exists for real device messages from day one.
 **If deferred:** device-reported and administrative writes become indistinguishable in the audit trail, and there is nowhere to durably record raw protocol messages during exactly the period (first real device connections) when that visibility matters most.
 
+## ARGOS Decision (2026-07-30, WO-ARGOS-007)
+
+Approved as drafted, with one added constraint: unlimited retention of the raw-event log is explicitly forbidden without a stated policy. The implemented event model must document its retention expectations rather than growing unbounded by default — see [OCPP Engine Guide](../engineering/OCPP_ENGINE_GUIDE.md) for the policy adopted in the first vertical slice.
+
 ## Related
 
-[CAP-003 OCPP Architecture Decisions — Decision 5](../domain/CAP-003_OCPP_ARCHITECTURE_DECISIONS_v0.1.md#decision-5--live-state-write-path) (includes the full field-classification table: administrative vs. device-reported vs. derived vs. historical, per entity)
+[CAP-003 OCPP Architecture Decisions — Decision 5](../domain/CAP-003_OCPP_ARCHITECTURE_DECISIONS_v0.1.md#decision-5--live-state-write-path) (includes the full field-classification table: administrative vs. device-reported vs. derived vs. historical, per entity) · [OCPP Engine Guide](../engineering/OCPP_ENGINE_GUIDE.md)
