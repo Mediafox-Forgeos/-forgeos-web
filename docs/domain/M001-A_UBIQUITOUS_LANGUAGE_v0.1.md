@@ -202,6 +202,8 @@ Recommendation values: **preserve** (keep using the term as-is), **formalize** (
 - **Classification:** ABSENT from this repository. Noted for context, not as repository evidence: the OCPP 1.6/2.x protocol standard itself (external to this codebase) names its session-boundary messages `StartTransaction`/`StopTransaction` — relevant only once real OCPP integration begins, and not evidence of any current internal usage.
 - **Recommendation:** **unresolved** — whether the eventual OCPP integration should surface "Transaction" as a protocol-level detail versus keeping "ChargingSession" as the sole product-facing term is a real design question for that later mission, not this one.
 
+**Partial resolution (2026-07-30, WO-ARGOS-007 / CAP-003):** ARGOS resolved the product-facing-term half of this question — see [MOVOS ChargingSession Architecture](./MOVOS_CHARGING_SESSION_ARCHITECTURE_v0.1.md). `ChargingSession` remains the sole product-facing term; `StartTransaction`/`StopTransaction` stay a protocol-level detail, normalized away before reaching the domain (see [OCPP Protocol Coexistence](./OCPP_PROTOCOL_COEXISTENCE_v0.1.md)). ARGOS also made a material refinement here: a `ChargingSession` **may survive a WebSocket reconnection** when the device continues the same underlying protocol transaction — session continuity is tied to _transaction_ continuity, not _connection_ continuity. `Authorize`/`StartTransaction`/`StopTransaction` themselves remain unimplemented — this WO shipped only `BootNotification`/`Heartbeat`/`StatusNotification`, and `ChargingSession` still has no Prisma model.
+
 ### Reservation
 
 - **Classification:** ABSENT. Not found anywhere.
@@ -229,6 +231,32 @@ Recommendation values: **preserve** (keep using the term as-is), **formalize** (
 
 - **Classification:** ABSENT. Not found anywhere, including inside the Billing stub.
 - **Recommendation:** **unresolved** — Billing and Payment may be the same eventual capability or two distinct ones (pricing/invoicing vs. actual payment processing/PSP integration); repository evidence doesn't distinguish them because neither exists yet.
+
+---
+
+## OCPP protocol terms — added 2026-07-30 (WO-ARGOS-007 / CAP-003)
+
+New vocabulary introduced by CAP-003's first OCPP vertical, not present at the time of the original M001-A recovery. Added here rather than folded into the sections above, per this document's append-only discipline.
+
+### Ocpp Identity (`ocppIdentity`)
+
+- **Definition:** the canonical, globally unique, non-secret network identity a `ChargingStation` presents over OCPP. Deliberately distinct from `ChargingStation.id` (internal PK), `code` (human-readable, org-unique), and `serialNumber` (hardware identifier) — see [CAP-003 Architecture Decisions — Decision 1](./CAP-003_OCPP_ARCHITECTURE_DECISIONS_v0.1.md#decision-1--charging-station-network-identity).
+- **Classification:** IMPLEMENTED (`ChargingStation.ocppIdentity`, `apps/movos-api/src/ocpp/authentication/`).
+
+### Ocpp Protocol Event
+
+- **Definition:** one raw, append-only log entry for an inbound or outbound OCPP-J frame, keyed to a `ChargingStation` (nullable, for pre-identity frames). Not a domain event and not a `ChargingSession` — purely a protocol-level audit/diagnostic record.
+- **Classification:** IMPLEMENTED (`OcppProtocolEvent` model, `apps/movos-api/src/ocpp/persistence/`).
+
+### Normalized Event / Protocol Adapter
+
+- **Definition:** the protocol-agnostic vocabulary the OCPP engine translates every OCPP 1.6J or 2.0.1 message into before it reaches domain handlers — see [OCPP Protocol Coexistence](./OCPP_PROTOCOL_COEXISTENCE_v0.1.md). Domain code never sees a raw OCPP DTO.
+- **Classification:** IMPLEMENTED for the 1.6J Boot/Heartbeat/Status vertical (`apps/movos-api/src/ocpp/protocol/`, `normalization/`); the 2.0.1 adapter is boundary-only (every message explicitly rejected, no functional translation).
+
+### Authorization Credential
+
+- **Definition:** the canonical concept an eventual RFID (or other) credential type would implement — see [MOVOS Authorization Architecture](./MOVOS_AUTHORIZATION_ARCHITECTURE_v0.1.md).
+- **Classification:** ARCHITECTURE-APPROVED, NOT IMPLEMENTED. No Prisma model, no API. Explicitly out of scope for CAP-003's first vertical.
 
 ---
 

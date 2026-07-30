@@ -5,6 +5,7 @@
 **Updated:** 2026-07-28 — WO-ARGOS-004 delivered the frontend migration for that same item (Site-scoped management UI in `apps/movos-web`). OCPP and ChargingSession/Tariff remain the next real work.
 **Updated:** 2026-07-28 — WO-ARGOS-005 retired the mock `/stations`/`/chargers`/`/connectors` routes (no product code left rendering fake infrastructure as real) and added an OCPP readiness note ([`docs/domain/CAP-003_OCPP_READINESS_NOTE.md`](../domain/CAP-003_OCPP_READINESS_NOTE.md)) ahead of the "OCPP transport" item below. OCPP itself is still not implemented.
 **Updated:** 2026-07-29 — WO-ARGOS-006 resolved (as recommendations, not approved decisions) the readiness note's seven blockers in [`docs/domain/CAP-003_OCPP_ARCHITECTURE_DECISIONS_v0.1.md`](../domain/CAP-003_OCPP_ARCHITECTURE_DECISIONS_v0.1.md), with five PROPOSED ADR outlines (ADR-0008–ADR-0012) and a Kylum hardware information request. Still no OCPP implementation, and several recommendations are explicitly contingent on Kylum hardware answers not yet received.
+**Updated:** 2026-07-30 — WO-ARGOS-007 (CAP-003): ARGOS approved all seven decisions, the full architecture (50-capability [Architecture Backlog](../architecture/MOVOS_ARCHITECTURE_BACKLOG_v1.0.md) + 5 domain/architecture documents) was written, and a first, narrow OCPP vertical shipped — device identity/authentication and OCPP 1.6J `BootNotification`/`Heartbeat`/`StatusNotification`, `SIMULATOR_VALIDATED`. This ran **ahead of** step 3 (ChargingSession + Tariff) in the "single sequence" below, not after it — see the note under step 4.
 **Part of:** [MOVOS Product Atlas](./MOVOS_PRODUCT_ATLAS_v1.0.md)
 
 Recommended implementation order. Complexity is relative sizing (S / M / L / XL), not day-counts — precise duration estimates aren't honest before M001-A produces an approved domain model; sizing will sharpen once entity boundaries are formally decided (see [Open Decisions](../domain/M001-A_OPEN_DECISIONS_v0.1.md)).
@@ -24,11 +25,11 @@ Recommended implementation order. Complexity is relative sizing (S / M / L / XL)
 
 ## Then — highest technical risk, sequenced deliberately
 
-| Capability                     | Complexity | Dependencies                                        | Business value                                       |
-| ------------------------------ | ---------- | --------------------------------------------------- | ---------------------------------------------------- |
-| OCPP transport + core messages | XL         | Stable ChargingStation/Evse/Connector schema (done) | Turns Sessions from manual records into live reality |
+| Capability                     | Complexity | Dependencies                                        | Business value                                                                                                                                                                                                                                               |
+| ------------------------------ | ---------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| OCPP transport + core messages | XL         | Stable ChargingStation/Evse/Connector schema (done) | Turns Sessions from manual records into live reality — **first vertical done (CAP-003, WO-ARGOS-007)**: identity/auth + 1.6J Boot/Heartbeat/Status only, `SIMULATOR_VALIDATED`; `Authorize`/`StartTransaction`/`StopTransaction` and functional 2.0.1 remain |
 
-Readiness for this item (model gaps, transport/device-auth/command-routing questions still open) is tracked in [`docs/domain/CAP-003_OCPP_READINESS_NOTE.md`](../domain/CAP-003_OCPP_READINESS_NOTE.md) — not an implementation, a pre-implementation decision checklist. As of WO-ARGOS-006, each of those questions has a documented recommendation awaiting ARGOS approval in [`docs/domain/CAP-003_OCPP_ARCHITECTURE_DECISIONS_v0.1.md`](../domain/CAP-003_OCPP_ARCHITECTURE_DECISIONS_v0.1.md) — still not an implementation, and not yet approved.
+Readiness for this item (model gaps, transport/device-auth/command-routing questions still open) is tracked in [`docs/domain/CAP-003_OCPP_READINESS_NOTE.md`](../domain/CAP-003_OCPP_READINESS_NOTE.md) — not an implementation, a pre-implementation decision checklist. As of WO-ARGOS-006, each of those questions had a documented recommendation awaiting ARGOS approval in [`docs/domain/CAP-003_OCPP_ARCHITECTURE_DECISIONS_v0.1.md`](../domain/CAP-003_OCPP_ARCHITECTURE_DECISIONS_v0.1.md). As of WO-ARGOS-007, ARGOS approved all seven decisions, the full architecture was documented, and a first OCPP vertical was implemented — full detail in [OCPP Engine Guide](../engineering/OCPP_ENGINE_GUIDE.md). The remainder of this XL item (`Authorize`/`StartTransaction`/`StopTransaction`, `ChargingSession` wiring, RFID, remote commands, functional 2.0.1) is not yet built.
 
 ## Later — depends on the above being real first
 
@@ -50,9 +51,11 @@ Readiness for this item (model gaps, transport/device-auth/command-routing quest
 1. Station / Charger / Connector — **CRUD + frontend done (CAP-002, WO-ARGOS-004)**, as `ChargingStation`/`Evse`/`Connector`
 2. Users API _(parallelizable with #1 — no shared dependency)_
 3. ChargingSession (read) + Tariff
-4. OCPP transport + core messages
+4. OCPP transport + core messages — **first vertical done out of order (CAP-003, WO-ARGOS-007)**, see note below
 5. Alert (real) + Notifications
 6. Billing
 7. Reporting (real)
 
 Steps 1–2 can run in parallel; everything from step 3 onward is strictly sequential per the [Dependency Map](./MOVOS_DEPENDENCY_MAP_v1.0.md).
+
+**Note on step 4 running ahead of step 3:** WO-ARGOS-007 built CAP-003's first OCPP vertical before step 3 (ChargingSession + Tariff) was implemented. This was not a silent reordering — CAP-003 was ARGOS's own explicitly assigned mission for this work order, and its first vertical (device identity/auth, Boot/Heartbeat/Status) has no dependency on ChargingSession or Tariff existing. `Authorize`/`StartTransaction`/`StopTransaction` — the part of OCPP that _does_ depend on `ChargingSession` — remains unbuilt specifically because step 3 hasn't happened yet; this dependency, not this document, is what should decide when it gets built.

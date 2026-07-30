@@ -181,3 +181,38 @@ erDiagram
 **Explicitly out of CAP-002's scope, not pictured here:** OCPP transport/messages, `ChargingSession`, `Tariff`, `Alert`, `Billing`, `Notifications` — all remain exactly as classified in the pre-decision diagrams above.
 
 **2026-07-28 update (WO-ARGOS-004):** this hierarchy now has a connected `apps/movos-web` UI (`/sites/[id]/charging-stations/[id]`, `.../evses/[id]`), reusing the Sites frontend pattern. This does not change the diagram above — the domain shape is unchanged, only its frontend consumer. See [CAP-002 Charging Terminology Mapping — frontend integration addendum](./CAP-002_CHARGING_TERMINOLOGY_MAPPING.md#frontend-integration-addendum-wo-argos-004-2026-07-28).
+
+---
+
+## 2026-07-30 update (WO-ARGOS-007 / CAP-003): OCPP protocol boundary now partially real
+
+This section is new, added by WO-ARGOS-007 — it does not edit any diagram above. The "Documented-only" classification of OCPP in the implementation-status flowchart (above) is now stale for the narrow slice described here; the flowchart itself is left unedited per this document's append-only discipline.
+
+`ChargingStation` gained five OCPP fields (`ocppIdentity`, `ocppSecretHash`, `ocppProvisionedAt`, `ocppSecretRotatedAt`, `ocppRevokedAt`) and a new one-to-many relation to `OcppProtocolEvent`, an append-only log of raw protocol frames:
+
+```mermaid
+erDiagram
+    CHARGINGSTATION ||--o{ OCPPPROTOCOLEVENT : logs
+
+    CHARGINGSTATION {
+        string ocppIdentity "unique, non-secret, not the PK, not derived from serialNumber"
+        string ocppSecretHash "bcrypt, never returned by any read endpoint"
+        datetime ocppProvisionedAt
+        datetime ocppSecretRotatedAt
+        datetime ocppRevokedAt
+    }
+    OCPPPROTOCOLEVENT {
+        string id "MOVOS internal cuid — primary key"
+        string chargingStationId "nullable — a frame can arrive before identity resolves"
+        enum protocolVersion "OCPP1_6J or OCPP2_0_1"
+        enum direction "INBOUND or OUTBOUND"
+        enum messageType "CALL, CALLRESULT, or CALLERROR"
+        string action "nullable — e.g. BootNotification"
+        json payload
+        enum processingStatus
+    }
+```
+
+**What is real:** device identity/authentication (Decisions 1 & 2), an in-memory connection registry (no Redis, single-instance), and OCPP 1.6J `BootNotification`/`Heartbeat`/`StatusNotification` only. `StatusNotification` updates `Connector.status` (never `Evse.status` — see [OCPP Domain/Status Mapping](../engineering/OCPP_DOMAIN_STATUS_MAPPING.md) for the full field-level mapping and the deliberate lossy collapse of OCPP's richer status vocabulary into the existing 7-value `ConnectorStatus` enum).
+
+**Explicitly still not pictured here, still out of scope:** `Authorize`/`StartTransaction`/`StopTransaction`, `ChargingSession`, RFID/`AuthorizationCredential`, `Tariff`, `Alert`, `Billing`, `Notifications`, and any functional OCPP 2.0.1 message handling (2.0.1 has a boundary-only adapter that explicitly rejects every message — see [OCPP 2.0.1 Architecture Guide](../engineering/OCPP_201_ARCHITECTURE_GUIDE.md)). Full conceptual design for all of these lives in [OCPP Protocol Coexistence](./OCPP_PROTOCOL_COEXISTENCE_v0.1.md), [MOVOS Authorization Architecture](./MOVOS_AUTHORIZATION_ARCHITECTURE_v0.1.md), and [MOVOS ChargingSession Architecture](./MOVOS_CHARGING_SESSION_ARCHITECTURE_v0.1.md) — architecture-approved, not implemented.
