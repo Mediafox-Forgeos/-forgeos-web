@@ -75,3 +75,7 @@ To exercise **OCPP 2.0.1 detection**, set `protocolVersion: 'OCPP2_0_1'` — the
 ## Not run by CI
 
 The simulator requires a live database and a running server — CI has no live database service (see [Testing Strategy](./TESTING_STRATEGY.md)). Automated coverage of the engine's behavior lives in the unit test suites under `src/ocpp/**/*.spec.ts` (mocked dependencies); the simulator is for manual/local verification and future integration-testing infrastructure once a live DB is available in CI.
+
+## Manual validation record (WO-ARGOS-008, 2026-07-31)
+
+The simulator was run exactly as described above against a real, booted `apps/movos-api` instance backed by a real local PostgreSQL database, exercising all 12 scenarios this guide's methods support (valid connection, Boot/Heartbeat/Status, connector 0, invalid credentials, unknown identity, duplicate connection, disconnect/reconnect, malformed frame, unsupported action, OCPP 2.0.1 detection). Full evidence — exact environment, exact results, database assertions, log-safety findings — is recorded in [CAP-003 Architecture Decisions — WO-ARGOS-008 Runtime Validation Record](../domain/CAP-003_OCPP_ARCHITECTURE_DECISIONS_v0.1.md#wo-argos-008-runtime-validation-record-2026-07-31). This was a one-time manual run, not a new CI capability — the "Not run by CI" limitation above still applies going forward.

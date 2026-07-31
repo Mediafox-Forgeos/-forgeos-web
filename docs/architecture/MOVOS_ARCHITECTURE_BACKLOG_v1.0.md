@@ -28,14 +28,14 @@ Every entry's "Evidence source" links to where the real analysis lives — this 
 - **Architectural status:** ARCHITECTURE APPROVED
 - **Data-model status:** Complete for the first vertical (BootNotification/Heartbeat/StatusNotification); incomplete for the full message set.
 - **Interface-contract status:** Complete for the normalized events this WO implements; partial for the rest of the 1.6J message catalogue.
-- **Implementation status:** Partial — BootNotification, Heartbeat, StatusNotification implemented; remaining 1.6J actions (Authorize, StartTransaction, StopTransaction, MeterValues, remote-command CALLs, etc.) not implemented.
+- **Implementation status:** Partial — BootNotification, Heartbeat, StatusNotification implemented; remaining 1.6J actions (Authorize, StartTransaction, StopTransaction, MeterValues, remote-command CALLs, etc.) not implemented. **Updated 2026-07-31 (WO-ARGOS-008):** the implemented subset is now `SIMULATOR_VALIDATED` — run against a real booted `apps/movos-api` instance, a real PostgreSQL database, and a real WebSocket connection, not just mocked unit tests. Still `Partial`, not `IMPLEMENTED`/`VALIDATED` in the full-entry sense, because most of the 1.6J message catalogue remains unbuilt. See [CAP-003 Architecture Decisions — WO-ARGOS-008 Runtime Validation Record](../domain/CAP-003_OCPP_ARCHITECTURE_DECISIONS_v0.1.md#wo-argos-008-runtime-validation-record-2026-07-31).
 - **Dependencies:** #3 Protocol adapter boundary, #5 Device identity, #6 Device authentication.
 - **Decisions already approved:** CAP-003 Architecture Decisions — Decision 3; ADR-0008.
 - **Decisions still open:** none for the approved scope; message-by-message sequencing for the remaining catalogue is unscoped.
 - **MVP relevance:** Core to the MVP — this is the first vertical slice's protocol.
 - **Recommended implementation phase:** Now (CAP-003, this work order) for the boot vertical; near-term follow-up for Authorize/Transaction messages once #16/#17 (ChargingSession, transaction mapping) are implemented.
 - **Risks if ignored:** None currently — actively being built.
-- **Evidence source:** [OCPP Protocol Coexistence](../domain/OCPP_PROTOCOL_COEXISTENCE_v0.1.md), [OCPP Engine Guide](../engineering/OCPP_ENGINE_GUIDE.md).
+- **Evidence source:** [OCPP Protocol Coexistence](../domain/OCPP_PROTOCOL_COEXISTENCE_v0.1.md), [OCPP Engine Guide](../engineering/OCPP_ENGINE_GUIDE.md), [Hardware Compatibility Validation Policy](../engineering/OCPP_HARDWARE_COMPATIBILITY_VALIDATION_POLICY.md).
 
 ### 2. OCPP 2.0.1
 

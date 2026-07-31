@@ -18,7 +18,17 @@ This is not a formality — it exists because "we support OCPP" is a claim that'
 
 ## What this work order's own implementation achieved
 
-**`SIMULATOR_VALIDATED`, and no higher, for OCPP 1.6J `BootNotification`/`Heartbeat`/`StatusNotification` only.** This was verified via `apps/movos-api/simulator/ocpp-simulator.ts` exercising the booted application (see the CAP-003 implementation report for the exact boot-verification evidence). No physical charger has been tested. No manufacturer, model, or firmware is certified or claimed compatible by this work order.
+**`SIMULATOR_VALIDATED`, and no higher, for OCPP 1.6J `BootNotification`/`Heartbeat`/`StatusNotification` only.**
+
+This level was earned on 2026-07-31 under WO-ARGOS-008, not WO-ARGOS-007. WO-ARGOS-007 (CAP-003) built the engine and validated it only at the mocked-unit-test level; that work order's own final report explicitly did not claim `SIMULATOR_VALIDATED` (an earlier draft of this document overstated that claim before it was actually earned — corrected here). WO-ARGOS-008 performed the real run this policy requires:
+
+- **Environment:** local development Postgres (`movos_dev`, all 4 migrations applied, including `20260730120000_add_ocpp_engine_foundation`), a real compiled `apps/movos-api` instance (`node dist/main.js`) listening on `localhost:4000`, a real `ws`-based simulator client connecting to `ws://localhost:4000/ocpp/{ocppIdentity}`.
+- **Station provisioned via the real API** (`POST /charging-stations/:id/ocpp-provisioning`), not a manual database insert.
+- **Scenarios executed:** valid connection + subprotocol negotiation, `BootNotification`, `Heartbeat`, `StatusNotification` (connector 1 and the connector-0 whole-station no-op), invalid credentials (HTTP 401, no registry entry), unknown identity (HTTP 401), duplicate connection (deterministic replacement, old socket closed with `replaced-by-new-connection`), disconnect/reconnect, malformed frame (connection survived, no crash), unsupported action (`Authorize` → explicit `CALLERROR`), OCPP 2.0.1 detection (connects, then every message explicitly rejected as unsupported).
+- **Verified in the real database, not inferred:** `Connector.status` updated to `CHARGING`; 8 `OcppProtocolEvent` rows recorded with the correct `direction`/`messageType`/`processingStatus` for every scenario; no plaintext secret found anywhere in server logs, `AuditEvent.metadata`, or `OcppProtocolEvent.payload`.
+- **Transport-layer test coverage added** (`ocpp-websocket.server.spec.ts`, real HTTP server + real `ws` client, 10 tests) and stale-connection-sweep coverage added (`connection-registry.service.spec.ts`, fake timers, 4 tests) — both were previously untested gaps, now closed.
+
+No physical charger has been tested. No manufacturer, model, or firmware is certified or claimed compatible by this work order. `REMOTE_HARDWARE_VALIDATED` and above remain unearned.
 
 ## What this means for Kylum specifically
 

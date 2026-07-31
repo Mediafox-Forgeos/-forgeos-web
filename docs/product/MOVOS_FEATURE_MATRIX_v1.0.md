@@ -3,7 +3,8 @@
 **Atlas version:** v1.0 · **Generated:** 2026-07-24 · **Repository HEAD:** `main` @ `bfea8db`
 **Updated:** 2026-07-28 — WO-ARGOS-004 connected Charging Core CRUD to real `apps/movos-web` UI (Site-scoped, not the pre-existing flat mock pages).
 **Updated:** 2026-07-28 — WO-ARGOS-005 retired those flat mock pages (`/stations`, `/chargers`, `/connectors`) per ARGOS's ruling against org-wide list-all endpoints; see note below.
-**Updated:** 2026-07-30 — WO-ARGOS-007 (CAP-003) shipped a first, narrow OCPP vertical: device identity/authentication, in-memory connection registry, and OCPP 1.6J `BootNotification`/`Heartbeat`/`StatusNotification`, `SIMULATOR_VALIDATED`. No `Authorize`/`StartTransaction`/`StopTransaction`, no remote commands, no charging sessions, no functional OCPP 2.0.1.
+**Updated:** 2026-07-30 — WO-ARGOS-007 (CAP-003) shipped a first, narrow OCPP vertical: device identity/authentication, in-memory connection registry, and OCPP 1.6J `BootNotification`/`Heartbeat`/`StatusNotification`. No `Authorize`/`StartTransaction`/`StopTransaction`, no remote commands, no charging sessions, no functional OCPP 2.0.1.
+**Updated:** 2026-07-31 — WO-ARGOS-008 earned that vertical's `SIMULATOR_VALIDATED` label for real: a booted `apps/movos-api` instance, a real local PostgreSQL database, and a real WebSocket connection, not mocked unit tests. See [CAP-003 Architecture Decisions — WO-ARGOS-008 Runtime Validation Record](../domain/CAP-003_OCPP_ARCHITECTURE_DECISIONS_v0.1.md#wo-argos-008-runtime-validation-record-2026-07-31).
 **Part of:** [MOVOS Product Atlas](./MOVOS_PRODUCT_ATLAS_v1.0.md)
 
 Every discovered capability, verified against the live schema (`apps/movos-api/prisma/schema.prisma`), controllers (`apps/movos-api/src/`), and frontend pages (`apps/movos-web/app/`). Completion % reflects the capability in isolation: Production Ready = 100%, Functional = 75%, Partial = 40%, Mock = 5%, Planned = 0%.
