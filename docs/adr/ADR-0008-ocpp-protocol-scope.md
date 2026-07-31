@@ -1,8 +1,8 @@
 # ADR-0008 — OCPP Protocol Scope
 
-**Date:** 2026-07-29
-**Status:** PROPOSED — not accepted, drafted per WO-ARGOS-006 as an outline for ARGOS review
-**Deciders:** VULCAN (drafted) → ARGOS (approval required)
+**Date:** 2026-07-29 (drafted) · 2026-07-30 (accepted)
+**Status:** ACCEPTED — approved by ARGOS per WO-ARGOS-007, with the scope expansion noted below
+**Deciders:** VULCAN (drafted) → ARGOS (approved, WO-ARGOS-007)
 
 > **Numbering note:** WO-ARGOS-006 requested this be filed as ADR-0006. That number is already taken by the real, `Approved` [ADR-0006 — MOVOS API and Tenancy](./ADR-0006-movos-api-and-tenancy.md). This draft is filed as ADR-0008 instead, the next free number after the existing ADR-0005/0006/0007 (all `Approved`). See the version-control section of [CAP-003 Architecture Decisions](../domain/CAP-003_OCPP_ARCHITECTURE_DECISIONS_v0.1.md) and the WO-ARGOS-006 final report for the full explanation.
 
@@ -29,6 +29,10 @@ Build the OCPP transport and message-handling layers behind an internal, protoco
 **If approved:** protocol implementation can begin once hardware is confirmed, without re-architecting the transport boundary if a second protocol is ever needed.
 **If deferred:** no protocol-message code can be safely written — building against the wrong version wastes real implementation effort.
 
+## ARGOS Decision (2026-07-30, WO-ARGOS-007)
+
+Approved as drafted, **with scope expanded**: ARGOS explicitly rejects treating OCPP 2.0.1 as an undefined future idea. Its adapter boundary, capability mapping, message families, and architectural position must be **designed now** — not merely implied by the abstraction-boundary shape. This does not change the implementation decision (OCPP 1.6J first, one concrete adapter, contingent on Kylum hardware) but adds a design deliverable: see [OCPP Protocol Coexistence](../domain/OCPP_PROTOCOL_COEXISTENCE_v0.1.md) for the resulting 2.0.1 boundary design.
+
 ## Related
 
-[CAP-003 OCPP Architecture Decisions — Decision 3](../domain/CAP-003_OCPP_ARCHITECTURE_DECISIONS_v0.1.md#decision-3--ocpp-version-scope) · [CAP-003 OCPP Readiness Note](../domain/CAP-003_OCPP_READINESS_NOTE.md) · [Kylum Hardware Information Request](../product/KYLUM_OCPP_HARDWARE_INFORMATION_REQUEST.md)
+[CAP-003 OCPP Architecture Decisions — Decision 3](../domain/CAP-003_OCPP_ARCHITECTURE_DECISIONS_v0.1.md#decision-3--ocpp-version-scope) · [CAP-003 OCPP Readiness Note](../domain/CAP-003_OCPP_READINESS_NOTE.md) · [Kylum Hardware Information Request](../product/KYLUM_OCPP_HARDWARE_INFORMATION_REQUEST.md) · [OCPP Protocol Coexistence](../domain/OCPP_PROTOCOL_COEXISTENCE_v0.1.md)

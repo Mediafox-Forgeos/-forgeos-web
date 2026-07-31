@@ -9,6 +9,7 @@ import { AppModule } from './app.module';
 import { PrismaService } from './prisma/prisma.service';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { CorrelationIdInterceptor } from './common/interceptors/correlation-id.interceptor';
+import { OcppWebSocketServer } from './ocpp/transport/ocpp-websocket.server';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { bufferLogs: false });
@@ -59,6 +60,14 @@ async function bootstrap(): Promise<void> {
   const port = config.get<number>('PORT') ?? 4000;
   await app.listen(port);
   logger.log(`MOVOS API listening on http://localhost:${port}/api/v1`);
+
+  // OCPP transport (CAP-003) attaches to the same HTTP server Express is
+  // already listening on — a separate module, not a separate deployable
+  // (CAP-003 Architecture Decisions Decision 4). Must happen after
+  // app.listen(), since the underlying http.Server only exists once
+  // listening has started.
+  const ocppWebSocketServer = app.get(OcppWebSocketServer);
+  ocppWebSocketServer.attach(app.getHttpServer());
 }
 
 void bootstrap();

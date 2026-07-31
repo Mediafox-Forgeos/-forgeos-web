@@ -1,8 +1,8 @@
 # ADR-0010 — Device Identity and Authentication
 
-**Date:** 2026-07-29
-**Status:** PROPOSED — not accepted, drafted per WO-ARGOS-006 as an outline for ARGOS review
-**Deciders:** VULCAN (drafted) → ARGOS (approval required)
+**Date:** 2026-07-29 (drafted) · 2026-07-30 (accepted)
+**Status:** ACCEPTED — approved by ARGOS per WO-ARGOS-007, with the provisioning requirements below made explicit
+**Deciders:** VULCAN (drafted) → ARGOS (approved, WO-ARGOS-007)
 
 > **Numbering note:** WO-ARGOS-006 requested this be filed as ADR-0008. Renumbered to ADR-0010 to stay clear of the real, already-`Approved` ADR-0005/0006/0007 and the ADR-0008/0009 filed alongside this one for the same mission. See [ADR-0008](./ADR-0008-ocpp-protocol-scope.md)'s numbering note for the full explanation.
 
@@ -35,6 +35,10 @@ MOVOS currently authenticates only humans (JWT + httpOnly refresh cookie). Nothi
 
 Secrets are never placed in the connection URL — only the identity value is. Credentials travel in the Basic Auth header, over TLS. Rotation and revocation use the same mechanism: generate/invalidate server-side, requiring the physical device's configuration to be updated to match.
 
+## ARGOS Decision (2026-07-30, WO-ARGOS-007)
+
+Approved as drafted. Two provisioning requirements are made explicit and formal (consistent with, and now binding on, the storage/rotation notes above): the plaintext secret is displayed **only once**, at provisioning time, and is **never written to any log** at any point thereafter. Field name `ocppIdentity` confirmed as canonical.
+
 ## Related
 
-[CAP-003 OCPP Architecture Decisions — Decision 1](../domain/CAP-003_OCPP_ARCHITECTURE_DECISIONS_v0.1.md#decision-1--charging-station-network-identity), [Decision 2](../domain/CAP-003_OCPP_ARCHITECTURE_DECISIONS_v0.1.md#decision-2--device-authentication) · [Kylum Hardware Information Request](../product/KYLUM_OCPP_HARDWARE_INFORMATION_REQUEST.md) (mTLS/auth-method support fields)
+[CAP-003 OCPP Architecture Decisions — Decision 1](../domain/CAP-003_OCPP_ARCHITECTURE_DECISIONS_v0.1.md#decision-1--charging-station-network-identity), [Decision 2](../domain/CAP-003_OCPP_ARCHITECTURE_DECISIONS_v0.1.md#decision-2--device-authentication) · [Kylum Hardware Information Request](../product/KYLUM_OCPP_HARDWARE_INFORMATION_REQUEST.md) (mTLS/auth-method support fields) · [Device Provisioning Guide](../engineering/OCPP_DEVICE_PROVISIONING_GUIDE.md) · [Secret Rotation Guide](../engineering/OCPP_SECRET_ROTATION_GUIDE.md)

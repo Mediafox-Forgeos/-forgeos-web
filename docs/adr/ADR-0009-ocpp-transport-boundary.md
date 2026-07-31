@@ -1,8 +1,8 @@
 # ADR-0009 — OCPP Transport Boundary
 
-**Date:** 2026-07-29
-**Status:** PROPOSED — not accepted, drafted per WO-ARGOS-006 as an outline for ARGOS review
-**Deciders:** VULCAN (drafted) → ARGOS (approval required)
+**Date:** 2026-07-29 (drafted) · 2026-07-30 (accepted)
+**Status:** ACCEPTED — approved by ARGOS per WO-ARGOS-007 as drafted
+**Deciders:** VULCAN (drafted) → ARGOS (approved, WO-ARGOS-007)
 
 > **Numbering note:** WO-ARGOS-006 requested this be filed as ADR-0007. That number is already taken by the real, `Approved` [ADR-0007 — Google Maps Location Capability](./ADR-0007-google-maps-location-capability.md). Filed as ADR-0009 instead — see [ADR-0008](./ADR-0008-ocpp-protocol-scope.md)'s numbering note for the full explanation.
 
@@ -29,6 +29,10 @@ Paired with this: enforce a **single-instance deployment constraint** for this m
 **If approved:** OCPP transport work can begin inside a scoped module without committing to a second deployable prematurely; the module boundary preserves an extraction path if/when scale demands it.
 **If deferred:** no module structure exists for transport code to live in, risking entanglement with existing HTTP controllers that would make later extraction harder.
 
+## ARGOS Decision (2026-07-30, WO-ARGOS-007)
+
+Approved as drafted, with one added constraint: future scaling must not require redesigning the protocol adapter or domain layer. The single-instance constraint (Decision 6) is operational/deployment-level, not something code should silently assume — the connection registry must be an injectable/replaceable component, not baked directly into protocol or domain logic. See [OCPP Engine Guide](../engineering/OCPP_ENGINE_GUIDE.md) for how the implemented module boundary satisfies this.
+
 ## Related
 
-[CAP-003 OCPP Architecture Decisions — Decision 4](../domain/CAP-003_OCPP_ARCHITECTURE_DECISIONS_v0.1.md#decision-4--websocket-transport-boundary), [Decision 6](../domain/CAP-003_OCPP_ARCHITECTURE_DECISIONS_v0.1.md#decision-6--multi-instance-connection-routing) · [CAP-003 OCPP Readiness Note](../domain/CAP-003_OCPP_READINESS_NOTE.md)
+[CAP-003 OCPP Architecture Decisions — Decision 4](../domain/CAP-003_OCPP_ARCHITECTURE_DECISIONS_v0.1.md#decision-4--websocket-transport-boundary), [Decision 6](../domain/CAP-003_OCPP_ARCHITECTURE_DECISIONS_v0.1.md#decision-6--multi-instance-connection-routing) · [CAP-003 OCPP Readiness Note](../domain/CAP-003_OCPP_READINESS_NOTE.md) · [Single-Instance Deployment Constraint](../engineering/OCPP_SINGLE_INSTANCE_CONSTRAINT.md)

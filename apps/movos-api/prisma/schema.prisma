@@ -122,6 +122,37 @@ enum PhaseType {
   THREE_PHASE
 }
 
+// CAP-003 — OCPP engine foundation (WO-ARGOS-007). See
+// docs/domain/CAP-003_OCPP_ARCHITECTURE_DECISIONS_v0.1.md and
+// docs/domain/OCPP_PROTOCOL_COEXISTENCE_v0.1.md.
+
+enum OcppProtocolVersion {
+  OCPP1_6J
+  OCPP2_0_1
+}
+
+enum OcppMessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum OcppMessageType {
+  CALL
+  CALLRESULT
+  CALLERROR
+}
+
+// Distinct from ChargingStationStatus/EvseStatus/ConnectorStatus, which
+// describe the *device*. This describes what the engine did with one
+// specific protocol message.
+enum OcppProcessingStatus {
+  RECEIVED
+  PROCESSED
+  UNSUPPORTED
+  REJECTED
+  FAILED
+}
+
 model User {
   id           String     @id @default(cuid())
   email        String     @unique
@@ -220,8 +251,32 @@ model ChargingStation {
   createdAt      DateTime              @default(now())
   updatedAt      DateTime              @updatedAt
 
-  site  Site   @relation(fields: [siteId], references: [id])
-  evses Evse[]
+  // CAP-003 — OCPP network identity (CAP-003_OCPP_ARCHITECTURE_DECISIONS
+  // Decision 1, ADR-0010). Globally unique (not scoped to siteId — this is
+  // the value a physical device presents when it connects), never the
+  // primary key, deliberately provisioned rather than derived from
+  // code/serialNumber. Nullable until a station is actually provisioned for
+  // OCPP; not every ChargingStation needs one immediately after CAP-002
+  // creation.
+  ocppIdentity String? @unique
+
+  // MVP device authentication (Decision 2, ADR-0010): WSS + HTTP Basic Auth
+  // with a strong per-station secret, hashed at rest — same discipline as
+  // User.passwordHash. Never returned by any read endpoint. The plaintext
+  // value exists only transiently at provisioning/rotation time, in the API
+  // response of that one call, and is never persisted or logged.
+  ocppSecretHash      String?
+  ocppProvisionedAt   DateTime?
+  ocppSecretRotatedAt DateTime?
+  // Revocation is distinct from rotation: rotation replaces the secret and
+  // keeps the station connectable; revocation (this field) marks a station
+  // as explicitly disconnected/decommissioned without necessarily
+  // reprovisioning a new secret immediately.
+  ocppRevokedAt       DateTime?
+
+  site               Site                @relation(fields: [siteId], references: [id])
+  evses              Evse[]
+  ocppProtocolEvents OcppProtocolEvent[]
 
   // Nullable-safe: Postgres treats multiple NULLs as distinct, so stations
   // without a business code never collide with each other.
@@ -300,4 +355,52 @@ model AuditEvent {
 
   organization Organization? @relation(fields: [organizationId], references: [id])
   actor        User?         @relation("ActorAuditEvents", fields: [actorUserId], references: [id])
+}
+
+// CAP-003 — append-only raw OCPP protocol-event log (Decision 5, ADR-0011).
+// Distinct from AuditEvent: AuditEvent records human-attributable domain
+// mutations at ordinary CRUD frequency; this records every inbound/outbound
+// protocol frame at device-message frequency, successfully processed or
+// not, so unsupported-feature handling and malformed frames are auditable
+// rather than a silent black hole (see OCPP_PROTOCOL_COEXISTENCE_v0.1.md).
+// Never used to answer "what is the device's current status" — that's
+// Evse.status/Connector.status; this is history, not current state.
+//
+// Retention policy (required by ARGOS's approval of Decision 5 — unlimited
+// retention without a stated policy is explicitly forbidden): during the
+// pilot phase, at pilot fleet volume, rows are retained indefinitely and no
+// automatic purge is implemented by CAP-003. This is an explicit, stated
+// interim policy, not silence — a scheduled purge/archival strategy MUST be
+// designed before general-availability volume makes unbounded growth a
+// real problem. See docs/engineering/OCPP_ENGINE_GUIDE.md.
+model OcppProtocolEvent {
+  id                String               @id @default(cuid())
+  // Nullable: a connection that fails authentication, or a frame received
+  // before the station's identity is resolved, still needs to be logged.
+  chargingStationId String?
+  protocolVersion   OcppProtocolVersion
+  direction         OcppMessageDirection
+  messageType       OcppMessageType
+  // The OCPP action name (e.g. "BootNotification"). Null for a CALLRESULT/
+  // CALLERROR, which carry no action of their own — see protocolMessageId.
+  action            String?
+  // OCPP's own message id (correlates a CALL to its CALLRESULT/CALLERROR).
+  protocolMessageId String?
+  // The raw frame payload. Adapters are responsible for never including a
+  // secret here (the Basic Auth credential travels in the WS handshake
+  // header, never inside an OCPP payload, so this is structural, not just a
+  // scrubbing convention) — see docs/engineering/OCPP_ENGINE_GUIDE.md.
+  payload           Json
+  receivedAt        DateTime             @default(now())
+  processingStatus  OcppProcessingStatus @default(RECEIVED)
+  processingError   String?
+  // Groups the frames belonging to one logical exchange (e.g. a CALL and
+  // its eventual CALLRESULT) for easier debugging — distinct from
+  // protocolMessageId, which is the protocol's own id and may be reused
+  // across unrelated connections over time.
+  correlationId     String?
+
+  chargingStation ChargingStation? @relation(fields: [chargingStationId], references: [id])
+
+  @@index([chargingStationId, receivedAt])
 }

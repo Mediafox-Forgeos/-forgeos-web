@@ -251,3 +251,62 @@ No recommendation in this document authorizes implementation. Every decision exp
 | 7   | ChargingSession Boundary          |           YES           | PARTIALLY (blocks transaction handling, not transport groundwork) |
 
 All seven of the readiness note's blockers are addressed above — none are silently resolved as fact; every resolution proposed here is a **[RECOMMENDATION]** awaiting ARGOS approval, not an implemented or approved decision.
+
+---
+
+## ARGOS Approval Record (2026-07-30, WO-ARGOS-007)
+
+Everything above is preserved unedited as the original recommendation pass. ARGOS has reviewed and approved all seven decisions. This section records the approved, final position for each — including the few places ARGOS refined or expanded VULCAN's original recommendation rather than rubber-stamping it verbatim. Where the approved position differs from the recommendation above, that difference is called out explicitly.
+
+**Decision 1 — Network Identity: APPROVED as recommended.** Canonical field name confirmed as `ocppIdentity`. Unique at the database level, not the primary key, not a secret, deliberately provisioned. Changing it is formally treated as device reprovisioning (not a routine edit) — revokes the prior connection, requires re-provisioning before a new connection under the new value is accepted. Remains distinct from `code`, `serialNumber`, and any future external-system identifier.
+
+**Decision 2 — Device Authentication: APPROVED as recommended, MVP mechanism confirmed.** WSS + HTTP Basic Authentication, strong per-station secret, hashed at rest, rotation and revocation supported, never included in URLs. Two provisioning requirements made explicit (consistent with, and now formal requirements of, the original recommendation's storage/rotation notes): the plaintext secret is returned **only once**, at provisioning time, and is **never written to logs** at any point afterward. Future stronger mechanism (mutual TLS) confirmed, contingent on hardware compatibility confirmation.
+
+**Decision 3 — Protocol Architecture: APPROVED, scope expanded beyond the original recommendation.** The protocol-agnostic internal architecture and OCPP-1.6J-first concrete adapter (contingent on Kylum hardware confirmation) are approved as recommended. **Expansion:** ARGOS explicitly rejects treating OCPP 2.0.1 as "an undefined future idea" — its adapter boundary, capability mapping, message families, and architectural position must be designed now, not merely left as an abstraction placeholder. This does not mean implementing every 2.0.1 message (still explicitly out of scope), but the _design_ — not just the interface shape — must exist. See [OCPP Protocol Coexistence](./OCPP_PROTOCOL_COEXISTENCE_v0.1.md) for that design.
+
+**Decision 4 — WebSocket Transport Boundary: APPROVED as recommended.** Separate module inside `apps/movos-api`, not a separate deployable for the MVP. Internal boundaries (transport / protocol adaptation / domain handling / persistence) must remain separable. No premature microservice split.
+
+**Decision 5 — Live State Write Path: APPROVED as recommended, with one added constraint.** `Evse`/`Connector` retain last-known device-reported state; administrative and device-reported writes remain distinct in the audit trail; relevant protocol events are stored append-only; no Redis for the MVP. **Addition:** unlimited telemetry/event retention is explicitly forbidden without a stated retention policy — CAP-003's raw-event log must document its retention expectations (see the [OCPP engine implementation guide](../engineering/OCPP_ENGINE_GUIDE.md) once written) rather than growing unbounded by default.
+
+**Decision 6 — Multi-instance Connection Routing: APPROVED as recommended, with one added constraint.** Single-instance deployment for the OCPP transport module is the explicit MVP operational constraint; no Redis, broker, or distributed connection registry now; clear triggers for introducing distributed routing later remain as previously recommended. **Addition:** future scaling must not require redesigning the protocol adapter or domain layer — the single-instance constraint is operational/deployment-level, and the code must not be architected in a way that silently assumes it (i.e., the connection registry should be an injectable/replaceable component, not baked into protocol or domain logic).
+
+**Decision 7 — ChargingSession Boundary: APPROVED, with one material refinement to the original recommendation.** The conceptual boundary is approved: a MOVOS `ChargingSession` is a business-domain session, explicitly **not** equivalent to a WebSocket connection, a raw OCPP transaction, an authorization attempt, a payment, or a billing record. Ownership through `Connector → Evse → ChargingStation → Site → Organization` is confirmed. **Refinement:** the original recommendation defaulted to "no" on reconnect-spanning sessions for a first cut. ARGOS's approved position is more precise, not a blanket reversal: **a ChargingSession may survive a WebSocket reconnection specifically when the device continues the same underlying protocol transaction** — i.e., session continuity is tied to transaction continuity, not to connection continuity. A reconnect that does _not_ continue the same transaction does not resume the old session. Initial authorization fields remain optional; full RFID, driver identity, tariffs, billing, and payments remain unimplemented in the first vertical slice, but their architectural relationships must be defined (see [ChargingSession Architecture](./MOVOS_CHARGING_SESSION_ARCHITECTURE_v0.1.md) and [Authorization Architecture](./MOVOS_AUTHORIZATION_ARCHITECTURE_v0.1.md)).
+
+### Consequence of these approvals
+
+The `[NEEDS ARGOS]`-tagged items in Decision 7 above (authorization/idTag identity dependency, reconnect-spanning behavior) are now resolved for architectural purposes — reconnect-spanning is approved conditionally as described; the idTag/driver-identity dependency remains a real, undesigned prerequisite for full authorization, tracked in the [Architecture Backlog](../architecture/MOVOS_ARCHITECTURE_BACKLOG_v1.0.md), not re-opened here.
+
+No decision in this record authorizes implementing every capability it touches. Implementation scope for the first vertical slice is defined separately in the [CAP-003 implementation PR](https://github.com/Mediafox-Forgeos/-forgeos-web/pulls) and the [Architecture Backlog](../architecture/MOVOS_ARCHITECTURE_BACKLOG_v1.0.md)'s MVP-relevance column.
+
+---
+
+## WO-ARGOS-008 Runtime Validation Record (2026-07-31)
+
+WO-ARGOS-007 implemented the first OCPP vertical but validated it only with mocked-dependency unit tests — no real database, no real WebSocket connection, no booted server. WO-ARGOS-008 was authorized specifically to close that gap and determine whether PR #24 was ready to merge. This section is the evidence record for that run; it does not change any decision above.
+
+**Environment.** Local development PostgreSQL (`movos_dev`, credentials clearly marked `local-dev` — no production data), all 4 Prisma migrations applied (including `20260730120000_add_ocpp_engine_foundation`), a real compiled `apps/movos-api` instance (`node dist/main.js`) listening on `localhost:4000`. Seed data (`prisma/seed.ts`) provided the `Organization → Site → ChargingStation → Evse → Connector` hierarchy; the station was provisioned for OCPP through the real `POST /charging-stations/:id/ocpp-provisioning` endpoint, not a manual database insert.
+
+**Boot evidence.** NestJS started with no dependency-injection errors, all modules (including `OcppModule`) initialized, all HTTP routes registered, and the OCPP WebSocket transport logged `OCPP WebSocket transport attached at /ocpp/{ocppIdentity}`. `GET /health` returned `200`. The process remained stable (no crash, no restart) through the entire scenario run.
+
+**Scenarios executed against the real, booted server over a real WebSocket connection** (via the repository simulator, `apps/movos-api/simulator/ocpp-simulator.ts`, driven by a one-time validation script that was deleted after the run — not part of the shipped codebase):
+
+1. Valid connection + subprotocol negotiation — succeeded.
+2. `BootNotification` — `Accepted` CALLRESULT, persisted as `PROCESSED`.
+3. `Heartbeat` — CALLRESULT with `currentTime`, persisted as `PROCESSED`.
+4. `StatusNotification` (connector 1, `Charging`) — persisted as `PROCESSED`; `Connector.status` updated to `CHARGING` in the real database.
+5. `StatusNotification` (connector 0) — accepted as a whole-station no-op; no phantom connector row created.
+6. Invalid credentials — connection rejected with HTTP 401; no connection-registry entry created.
+7. Unknown identity — connection rejected with HTTP 401.
+8. Duplicate connection — second connection replaced the first; first socket closed with code `1000`, reason `replaced-by-new-connection`; second remained open.
+9. Disconnect and reconnect — reconnection succeeded; a subsequent `BootNotification` was accepted normally; no duplicate station/connector rows, no `ChargingSession` created (none exists to create).
+10. Malformed frame — rejected safely (recorded as `FAILED` with no `action`); the connection and the server process both remained alive.
+11. Unsupported action (`Authorize`) — explicit `CALLERROR` (`NotImplemented`), never a false `Accepted`.
+12. OCPP 2.0.1 detection — connection succeeded under the `ocpp2.0.1` subprotocol; the subsequent `BootNotification` was explicitly rejected as `NotImplemented` (`UNSUPPORTED`), never silently accepted.
+
+**Database assertions, taken directly from `movos_dev` after the run:** 8 `OcppProtocolEvent` rows, one per scenario above that reached the router, with correct `direction`/`messageType`/`action`/`processingStatus`/`protocolVersion` values; exactly one `Connector` row (no phantom rows from the connector-0 case); no `lastConnectedAt`/connection-metadata column exists on `ChargingStation` today — connection recency is tracked only in the in-memory registry, never persisted, which is the as-designed behavior for the single-instance MVP (Decision 6), not a gap found by this run.
+
+**Log and audit safety.** The full server log, the `OCPP_STATION_PROVISIONED` audit event's metadata, and every `OcppProtocolEvent.payload` were searched for the plaintext provisioning secret, the raw `Authorization` header, and the bcrypt hash — none were found anywhere. No leak, no fix required.
+
+**Gaps found and closed, not defects.** `ocpp-websocket.server.ts` (the transport class) had zero automated test coverage before this work order; the connection registry's stale-connection sweep was implemented but untested. Both gaps are now closed with real coverage (`ocpp-websocket.server.spec.ts` — real HTTP server + real `ws` client, 10 tests; `connection-registry.service.spec.ts` stale-sweep block — fake timers, 4 tests). No behavioral defect was found in the shipped CAP-003 code; nothing was changed in `boot-notification.handler.ts`, `heartbeat.handler.ts`, `status-notification.handler.ts`, the adapters, or the router as a result of this validation.
+
+**Result: `SIMULATOR_VALIDATED`** for OCPP 1.6J `BootNotification`/`Heartbeat`/`StatusNotification` and the device identity/authentication/connection-registry foundation — see the [Hardware Compatibility Validation Policy](../engineering/OCPP_HARDWARE_COMPATIBILITY_VALIDATION_POLICY.md). No physical hardware was used. No OCPP certification is claimed. OCPP 2.0.1 remains explicitly non-functional by design.
