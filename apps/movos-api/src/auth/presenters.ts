@@ -6,6 +6,10 @@ import type {
   ChargingStation,
   Evse,
   Connector,
+  ChargingSession,
+  MeterValue,
+  AuthorizationCredential,
+  AuthorizationAttempt,
 } from '@prisma/client';
 import type {
   ApiOrganization,
@@ -15,6 +19,10 @@ import type {
   ApiChargingStation,
   ApiEvse,
   ApiConnector,
+  ApiChargingSession,
+  ApiMeterValue,
+  ApiAuthorizationCredential,
+  ApiAuthorizationAttempt,
 } from '@mediafox/shared-types';
 
 /**
@@ -120,5 +128,83 @@ export function toApiConnector(connector: Connector): ApiConnector {
     maxPowerKw: connector.maxPowerKw,
     createdAt: connector.createdAt.toISOString(),
     updatedAt: connector.updatedAt.toISOString(),
+  };
+}
+
+// CAP-004 — Charging Sessions & Authorization Foundation (WO-ARGOS-009).
+
+export function toApiChargingSession(
+  session: ChargingSession,
+): ApiChargingSession {
+  return {
+    id: session.id,
+    organizationId: session.organizationId,
+    siteId: session.siteId,
+    chargingStationId: session.chargingStationId,
+    evseId: session.evseId,
+    connectorId: session.connectorId,
+    authorizationCredentialId: session.authorizationCredentialId,
+    protocolVersion: session.protocolVersion,
+    protocolTransactionId: session.protocolTransactionId,
+    status: session.status,
+    terminationReason: session.terminationReason,
+    meterStart: session.meterStart,
+    meterStop: session.meterStop,
+    energyWh: session.energyWh,
+    startedAt: session.startedAt.toISOString(),
+    endedAt: session.endedAt?.toISOString() ?? null,
+    createdAt: session.createdAt.toISOString(),
+    updatedAt: session.updatedAt.toISOString(),
+  };
+}
+
+export function toApiMeterValue(meterValue: MeterValue): ApiMeterValue {
+  return {
+    id: meterValue.id,
+    sessionId: meterValue.sessionId,
+    timestamp: meterValue.timestamp.toISOString(),
+    energyWh: meterValue.energyWh,
+    powerW: meterValue.powerW,
+    voltage: meterValue.voltage,
+    current: meterValue.current,
+    frequency: meterValue.frequency,
+    temperature: meterValue.temperature,
+  };
+}
+
+// Deliberately omits `metadata` — type-specific data not yet needed by any
+// consumer and not worth committing to a public shape prematurely; add it
+// when a real caller needs it.
+export function toApiAuthorizationCredential(
+  credential: AuthorizationCredential,
+): ApiAuthorizationCredential {
+  return {
+    id: credential.id,
+    organizationId: credential.organizationId,
+    type: credential.type,
+    externalIdentifier: credential.externalIdentifier,
+    status: credential.status,
+    issuedAt: credential.issuedAt?.toISOString() ?? null,
+    expiresAt: credential.expiresAt?.toISOString() ?? null,
+    revokedAt: credential.revokedAt?.toISOString() ?? null,
+    createdAt: credential.createdAt.toISOString(),
+    updatedAt: credential.updatedAt.toISOString(),
+  };
+}
+
+export function toApiAuthorizationAttempt(
+  attempt: AuthorizationAttempt,
+): ApiAuthorizationAttempt {
+  return {
+    id: attempt.id,
+    organizationId: attempt.organizationId,
+    chargingStationId: attempt.chargingStationId,
+    evseId: attempt.evseId,
+    connectorId: attempt.connectorId,
+    authorizationCredentialId: attempt.authorizationCredentialId,
+    presentedIdentifier: attempt.presentedIdentifier,
+    attemptedAt: attempt.attemptedAt.toISOString(),
+    result: attempt.result,
+    reason: attempt.reason,
   };
 }

@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 
 import { OrgContextGuard } from '../guards/org-context.guard';
 import { RolesGuard } from '../guards/roles.guard';
+import { SessionsModule } from '../sessions/sessions.module';
+import { AuthorizationModule } from '../authorization/authorization.module';
 
 import { OcppAuthenticationService } from './authentication/ocpp-authentication.service';
 import { OcppProvisioningService } from './authentication/ocpp-provisioning.service';
@@ -13,6 +15,10 @@ import { OcppProtocolEventService } from './persistence/ocpp-protocol-event.serv
 import { BootNotificationHandler } from './handlers/boot-notification.handler';
 import { HeartbeatHandler } from './handlers/heartbeat.handler';
 import { StatusNotificationHandler } from './handlers/status-notification.handler';
+import { AuthorizationHandler } from './handlers/authorization.handler';
+import { TransactionStartHandler } from './handlers/transaction-start.handler';
+import { TransactionUpdateHandler } from './handlers/transaction-update.handler';
+import { TransactionEndHandler } from './handlers/transaction-end.handler';
 import { OcppMessageRouterService } from './routing/ocpp-message-router.service';
 import { OcppWebSocketServer } from './transport/ocpp-websocket.server';
 
@@ -24,6 +30,7 @@ import { OcppWebSocketServer } from './transport/ocpp-websocket.server';
  * contracts these providers implement.
  */
 @Module({
+  imports: [SessionsModule, AuthorizationModule],
   controllers: [OcppProvisioningController],
   providers: [
     OrgContextGuard,
@@ -37,6 +44,10 @@ import { OcppWebSocketServer } from './transport/ocpp-websocket.server';
     BootNotificationHandler,
     HeartbeatHandler,
     StatusNotificationHandler,
+    AuthorizationHandler,
+    TransactionStartHandler,
+    TransactionUpdateHandler,
+    TransactionEndHandler,
     OcppMessageRouterService,
     OcppWebSocketServer,
   ],

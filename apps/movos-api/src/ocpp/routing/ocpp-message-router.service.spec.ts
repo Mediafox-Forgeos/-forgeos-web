@@ -7,6 +7,10 @@ import { OcppProtocolEventService } from '../persistence/ocpp-protocol-event.ser
 import { BootNotificationHandler } from '../handlers/boot-notification.handler';
 import { HeartbeatHandler } from '../handlers/heartbeat.handler';
 import { StatusNotificationHandler } from '../handlers/status-notification.handler';
+import { AuthorizationHandler } from '../handlers/authorization.handler';
+import { TransactionStartHandler } from '../handlers/transaction-start.handler';
+import { TransactionUpdateHandler } from '../handlers/transaction-update.handler';
+import { TransactionEndHandler } from '../handlers/transaction-end.handler';
 import { Ocpp16Adapter } from '../protocol/ocpp16/ocpp16-adapter';
 import type { RawFrame } from '../protocol/common/normalized-events';
 
@@ -30,6 +34,10 @@ describe('OcppMessageRouterService', () => {
   let bootHandler: { handle: jest.Mock };
   let heartbeatHandler: { handle: jest.Mock };
   let statusHandler: { handle: jest.Mock };
+  let authorizationHandler: { handle: jest.Mock };
+  let transactionStartHandler: { handle: jest.Mock };
+  let transactionUpdateHandler: { handle: jest.Mock };
+  let transactionEndHandler: { handle: jest.Mock };
   let adapter: Ocpp16Adapter;
 
   beforeEach(async () => {
@@ -42,6 +50,18 @@ describe('OcppMessageRouterService', () => {
     statusHandler = {
       handle: jest.fn().mockResolvedValue({ status: 'Accepted' }),
     };
+    authorizationHandler = {
+      handle: jest.fn().mockResolvedValue({ status: 'Accepted' }),
+    };
+    transactionStartHandler = {
+      handle: jest.fn().mockResolvedValue({ status: 'Accepted' }),
+    };
+    transactionUpdateHandler = {
+      handle: jest.fn().mockResolvedValue({ status: 'Accepted' }),
+    };
+    transactionEndHandler = {
+      handle: jest.fn().mockResolvedValue({ status: 'Accepted' }),
+    };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -52,6 +72,16 @@ describe('OcppMessageRouterService', () => {
         { provide: BootNotificationHandler, useValue: bootHandler },
         { provide: HeartbeatHandler, useValue: heartbeatHandler },
         { provide: StatusNotificationHandler, useValue: statusHandler },
+        { provide: AuthorizationHandler, useValue: authorizationHandler },
+        {
+          provide: TransactionStartHandler,
+          useValue: transactionStartHandler,
+        },
+        {
+          provide: TransactionUpdateHandler,
+          useValue: transactionUpdateHandler,
+        },
+        { provide: TransactionEndHandler, useValue: transactionEndHandler },
       ],
     }).compile();
 
@@ -98,18 +128,21 @@ describe('OcppMessageRouterService', () => {
   });
 
   // Test 13/12: Unsupported action -> CALLERROR, and it's recorded.
+  // RemoteStartTransaction remains unimplemented even after CAP-004
+  // (WO-ARGOS-009), which implemented Authorize/StartTransaction/
+  // MeterValues/StopTransaction — see the `it.each` block below for those.
   it('returns a CALLERROR and records UNSUPPORTED for an unimplemented action', async () => {
     const response = await router.handleInboundFrame(
       adapter,
       station,
-      call('Authorize', { idTag: 'ABC' }),
+      call('RemoteStartTransaction', { idTag: 'ABC' }),
     );
 
     expect(response?.raw).toEqual([
       4,
       'msg-1',
       'NotImplemented',
-      'Authorize is not implemented',
+      'RemoteStartTransaction is not implemented',
       {},
     ]);
     expect(protocolEvents.record).toHaveBeenCalledWith(
@@ -182,4 +215,47 @@ describe('OcppMessageRouterService', () => {
       }),
     );
   });
+
+  // CAP-004 (WO-ARGOS-009): the four new event types route to their own
+  // dedicated handlers, same as Boot/Heartbeat/Status do.
+  it.each([
+    ['Authorize', { idTag: 'ABC123' }, 'authorizationHandler'] as const,
+    [
+      'StartTransaction',
+      { connectorId: 1, idTag: 'ABC123', meterStart: 0, timestamp: 'x' },
+      'transactionStartHandler',
+    ] as const,
+    [
+      'MeterValues',
+      {
+        connectorId: 1,
+        transactionId: 42,
+        meterValue: [
+          {
+            sampledValue: [
+              { value: '100', measurand: 'Energy.Active.Import.Register' },
+            ],
+          },
+        ],
+      },
+      'transactionUpdateHandler',
+    ] as const,
+    [
+      'StopTransaction',
+      { transactionId: 42, meterStop: 100, timestamp: 'x' },
+      'transactionEndHandler',
+    ] as const,
+  ])(
+    'routes %s to its dedicated handler',
+    async (action, payload, handlerKey) => {
+      const handlers = {
+        authorizationHandler,
+        transactionStartHandler,
+        transactionUpdateHandler,
+        transactionEndHandler,
+      };
+      await router.handleInboundFrame(adapter, station, call(action, payload));
+      expect(handlers[handlerKey].handle).toHaveBeenCalledTimes(1);
+    },
+  );
 });
