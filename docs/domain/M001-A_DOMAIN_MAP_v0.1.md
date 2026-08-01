@@ -216,3 +216,62 @@ erDiagram
 **What is real:** device identity/authentication (Decisions 1 & 2), an in-memory connection registry (no Redis, single-instance), and OCPP 1.6J `BootNotification`/`Heartbeat`/`StatusNotification` only. `StatusNotification` updates `Connector.status` (never `Evse.status` — see [OCPP Domain/Status Mapping](../engineering/OCPP_DOMAIN_STATUS_MAPPING.md) for the full field-level mapping and the deliberate lossy collapse of OCPP's richer status vocabulary into the existing 7-value `ConnectorStatus` enum).
 
 **Explicitly still not pictured here, still out of scope:** `Authorize`/`StartTransaction`/`StopTransaction`, `ChargingSession`, RFID/`AuthorizationCredential`, `Tariff`, `Alert`, `Billing`, `Notifications`, and any functional OCPP 2.0.1 message handling (2.0.1 has a boundary-only adapter that explicitly rejects every message — see [OCPP 2.0.1 Architecture Guide](../engineering/OCPP_201_ARCHITECTURE_GUIDE.md)). Full conceptual design for all of these lives in [OCPP Protocol Coexistence](./OCPP_PROTOCOL_COEXISTENCE_v0.1.md), [MOVOS Authorization Architecture](./MOVOS_AUTHORIZATION_ARCHITECTURE_v0.1.md), and [MOVOS ChargingSession Architecture](./MOVOS_CHARGING_SESSION_ARCHITECTURE_v0.1.md) — architecture-approved, not implemented.
+
+---
+
+## 2026-07-31 update (WO-ARGOS-009 / CAP-004): the business layer above OCPP is now real
+
+This section is new, added by WO-ARGOS-009 — it does not edit any diagram above. The "explicitly still not pictured" list immediately above is now stale for `ChargingSession`/`AuthorizationCredential`/`AuthorizationAttempt` specifically; left unedited per this document's append-only discipline.
+
+```mermaid
+erDiagram
+    CONNECTOR ||--o{ CHARGINGSESSION : hosts
+    AUTHORIZATIONCREDENTIAL ||--o{ CHARGINGSESSION : authorizes
+    AUTHORIZATIONCREDENTIAL ||--o{ AUTHORIZATIONATTEMPT : "presented as"
+    CHARGINGSESSION ||--o{ METERVALUE : records
+    CHARGINGSTATION ||--o{ AUTHORIZATIONATTEMPT : "presented at"
+
+    CHARGINGSESSION {
+        string id "MOVOS internal cuid — primary key"
+        string organizationId "stored directly — deliberate exception, see note below"
+        string siteId "stored directly"
+        string chargingStationId "stored directly"
+        string evseId "stored directly"
+        string connectorId "stored directly"
+        string authorizationCredentialId "required — every session has exactly one authorizing credential"
+        enum protocolVersion
+        string protocolTransactionId "MOVOS-assigned for 1.6J, unique per chargingStationId"
+        enum status "10 values — see Session Lifecycle Guide"
+        enum terminationReason "nullable until terminated"
+        int meterStart
+        int meterStop "nullable until terminated"
+        int energyWh "authoritative on its own — never derived from MeterValue rows"
+        datetime startedAt "immutable"
+        datetime endedAt "nullable until terminated, set exactly once"
+    }
+    AUTHORIZATIONCREDENTIAL {
+        string id "MOVOS internal cuid — primary key"
+        string organizationId
+        enum type "RFID, QR, APP, REMOTE, API, FLEET, PLUG_AND_CHARGE, GUEST"
+        string externalIdentifier "unique per organization, never the PK"
+        enum status "ACTIVE, REVOKED, EXPIRED, BLOCKED"
+    }
+    AUTHORIZATIONATTEMPT {
+        string id "MOVOS internal cuid — primary key"
+        string presentedIdentifier "captured even when result is UNKNOWN"
+        enum result "ACCEPTED, REJECTED, EXPIRED, REVOKED, UNKNOWN, OFFLINE_ACCEPTED"
+    }
+    METERVALUE {
+        string id "MOVOS internal cuid — primary key"
+        string sessionId "required — no orphaned telemetry"
+        int energyWh "append-only, monotonic"
+    }
+```
+
+**Deliberate exception to the Evse/Connector ownership pattern.** `ChargingSession` stores `organizationId`/`siteId`/`chargingStationId`/`evseId`/`connectorId` directly rather than deriving them through the parent chain the diagrams above use — a documented denormalization for the one table expected to have session-level query volume. See [CAP-004 Charging Sessions Foundation §2](./CAP-004_CHARGING_SESSIONS_FOUNDATION.md#2-domain-hierarchy).
+
+**What is real:** the full model shown above, a validated session-lifecycle state machine (`SessionLifecycleService`), and `Authorize`/`StartTransaction`/`MeterValues`/`StopTransaction` handling for OCPP 1.6J. `AuthorizationDecision`, envisioned as a separate entity in the CAP-003-era Authorization Architecture, is retired — `AuthorizationAttempt.result` carries the outcome directly.
+
+**Explicitly still not pictured here, still out of scope:** `Tariff`, `Alert`, `Billing`, `Notifications`, `Driver`/`Vehicle`/`Fleet` (referenced only conceptually via `AuthorizationCredential.ownerRef`, which does not exist as a column), Local Authorization List sync, RemoteStart/RemoteStop, functional OCPP 2.0.1. See [CAP-004 §11](./CAP-004_CHARGING_SESSIONS_FOUNDATION.md#11-out-of-scope-in-this-work-order) for the complete list.
+
+**Validation level:** unit-tested only (mocked Prisma) as of this work order — no live-database or real-WebSocket run has been performed for this vertical, unlike CAP-003's OCPP transport (separately validated under WO-ARGOS-008). See the WO-ARGOS-009 Final Report for the exact claim.
