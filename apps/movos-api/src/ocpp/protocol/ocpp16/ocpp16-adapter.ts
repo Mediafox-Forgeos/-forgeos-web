@@ -9,6 +9,7 @@ import { CapabilityNotSupportedError } from '../common/errors';
 import type {
   DomainResult,
   MalformedFrame,
+  MeterSample,
   NormalizedDeviceStatus,
   NormalizedInboundEvent,
   NormalizedOutboundCommand,
@@ -21,10 +22,11 @@ import type {
 } from '../common/normalized-events';
 
 /**
- * OCPP 1.6J concrete adapter — implements BootNotification, Heartbeat, and
- * StatusNotification only, per CAP-003's first vertical slice. Every other
- * 1.6J action (Authorize, StartTransaction, StopTransaction, MeterValues,
- * remote-command CALLs, etc.) resolves to UnsupportedMessage — see
+ * OCPP 1.6J concrete adapter — implements BootNotification, Heartbeat,
+ * StatusNotification (CAP-003), and Authorize/StartTransaction/
+ * MeterValues/StopTransaction (CAP-004, WO-ARGOS-009). Every other 1.6J
+ * action (remote-command CALLs, firmware/diagnostics, etc.) still resolves
+ * to UnsupportedMessage — see
  * docs/architecture/MOVOS_ARCHITECTURE_BACKLOG_v1.0.md for where each one
  * is tracked.
  */
@@ -33,7 +35,15 @@ export class Ocpp16Adapter implements ProtocolAdapter {
   readonly version = 'OCPP1_6J' as const;
 
   readonly capabilities: ProtocolCapabilities = {
-    supportedInbound: new Set(['DeviceBoot', 'Heartbeat', 'ConnectorStatus']),
+    supportedInbound: new Set([
+      'DeviceBoot',
+      'Heartbeat',
+      'ConnectorStatus',
+      'Authorization',
+      'TransactionStart',
+      'TransactionUpdate',
+      'TransactionEnd',
+    ]),
     supportedOutbound: new Set(),
   };
 
@@ -64,6 +74,14 @@ export class Ocpp16Adapter implements ProtocolAdapter {
         return { type: 'Heartbeat', stationIdentity: context.stationIdentity };
       case 'StatusNotification':
         return this.parseStatusNotification(message.payload, context);
+      case 'Authorize':
+        return this.parseAuthorize(message.payload, context);
+      case 'StartTransaction':
+        return this.parseStartTransaction(message.payload, context);
+      case 'MeterValues':
+        return this.parseMeterValues(message.payload, context);
+      case 'StopTransaction':
+        return this.parseStopTransaction(message.payload, context);
       default:
         return {
           kind: 'UnsupportedMessage',
@@ -82,7 +100,22 @@ export class Ocpp16Adapter implements ProtocolAdapter {
     result: DomainResult,
     messageId: string,
   ): RawFrame {
-    if (result.status !== 'Accepted') {
+    // Boot/Heartbeat/Status (CAP-003): a domain rejection here means
+    // something went wrong internally (e.g. an unknown connector) — a
+    // protocol-level CALLERROR is the correct encoding.
+    //
+    // Authorization/TransactionStart/TransactionEnd (CAP-004) are
+    // different: OCPP encodes "no, this idTag isn't valid" as a normal
+    // CALLRESULT carrying idTagInfo.status = Invalid/Blocked/Expired, not
+    // as a CALLERROR — a rejected authorization is an ordinary protocol
+    // answer, not a fault. Those cases below deliberately do not go
+    // through this early-return.
+    if (
+      result.status !== 'Accepted' &&
+      (event.type === 'DeviceBoot' ||
+        event.type === 'Heartbeat' ||
+        event.type === 'ConnectorStatus')
+    ) {
       return formatCallError(
         messageId,
         'InternalError',
@@ -103,6 +136,24 @@ export class Ocpp16Adapter implements ProtocolAdapter {
           currentTime: new Date().toISOString(),
         });
       case 'ConnectorStatus':
+        return formatCallResult(messageId, {});
+      case 'Authorization':
+        return formatCallResult(messageId, {
+          idTagInfo: { status: idTagStatusOf(result) },
+        });
+      case 'TransactionStart':
+        return formatCallResult(messageId, {
+          transactionId: protocolTransactionIdOf(result),
+          idTagInfo: { status: idTagStatusOf(result) },
+        });
+      case 'TransactionUpdate':
+        // MeterValues.conf carries no payload per the 1.6J spec, whether
+        // or not the sample was ultimately usable domain-side.
+        return formatCallResult(messageId, {});
+      case 'TransactionEnd':
+        // StopTransaction.conf's idTagInfo is optional per spec; omitted
+        // here rather than re-deriving a status for a transaction that has
+        // already ended.
         return formatCallResult(messageId, {});
       default:
         return formatCallResult(messageId, {});
@@ -174,6 +225,180 @@ export class Ocpp16Adapter implements ProtocolAdapter {
           : new Date().toISOString(),
     };
   }
+
+  private parseAuthorize(
+    payload: Record<string, unknown>,
+    context: ParseContext,
+  ): NormalizedInboundEvent | MalformedFrame {
+    const idTag = payload.idTag;
+    if (typeof idTag !== 'string' || idTag.length === 0) {
+      return {
+        kind: 'MalformedFrame',
+        description: 'Authorize requires a non-empty idTag',
+      };
+    }
+    return {
+      type: 'Authorization',
+      stationIdentity: context.stationIdentity,
+      idTag,
+    };
+  }
+
+  private parseStartTransaction(
+    payload: Record<string, unknown>,
+    context: ParseContext,
+  ): NormalizedInboundEvent | MalformedFrame {
+    const { connectorId, idTag, meterStart, timestamp } = payload;
+    if (
+      typeof connectorId !== 'number' ||
+      typeof idTag !== 'string' ||
+      idTag.length === 0 ||
+      typeof meterStart !== 'number' ||
+      typeof timestamp !== 'string'
+    ) {
+      return {
+        kind: 'MalformedFrame',
+        description:
+          'StartTransaction requires numeric connectorId/meterStart, a non-empty idTag, and a string timestamp',
+      };
+    }
+    return {
+      type: 'TransactionStart',
+      stationIdentity: context.stationIdentity,
+      connectorExternalId: String(connectorId),
+      idTag,
+      meterStart,
+      timestamp,
+      protocolVersion: 'OCPP1_6J',
+    };
+  }
+
+  private parseMeterValues(
+    payload: Record<string, unknown>,
+    context: ParseContext,
+  ): NormalizedInboundEvent | UnsupportedMessage | MalformedFrame {
+    const { connectorId, transactionId, meterValue } = payload;
+    if (typeof connectorId !== 'number' || !Array.isArray(meterValue)) {
+      return {
+        kind: 'MalformedFrame',
+        description:
+          'MeterValues requires a numeric connectorId and a meterValue array',
+      };
+    }
+
+    // MeterValues sent with no transactionId (periodic connector telemetry
+    // unrelated to any charging session) has nowhere to attach in CAP-004's
+    // model — MeterValue.sessionId is required. Not a malformed message
+    // (it's valid, spec-conformant OCPP), just a shape this vertical
+    // doesn't implement. See CAP-004_CHARGING_SESSIONS_FOUNDATION.md §9.
+    if (typeof transactionId !== 'number') {
+      return {
+        kind: 'UnsupportedMessage',
+        action: 'MeterValues',
+        reason: 'not_implemented',
+      };
+    }
+
+    const values = extractMeterSamples(meterValue);
+    if (values.length === 0) {
+      return {
+        kind: 'MalformedFrame',
+        description: 'MeterValues contained no usable sampledValue entries',
+      };
+    }
+
+    const firstEntry = meterValue[0] as Record<string, unknown> | undefined;
+    const timestamp =
+      typeof firstEntry?.timestamp === 'string'
+        ? firstEntry.timestamp
+        : new Date().toISOString();
+
+    return {
+      type: 'TransactionUpdate',
+      stationIdentity: context.stationIdentity,
+      transactionRef: String(transactionId),
+      values,
+      timestamp,
+    };
+  }
+
+  private parseStopTransaction(
+    payload: Record<string, unknown>,
+    context: ParseContext,
+  ): NormalizedInboundEvent | MalformedFrame {
+    const { transactionId, meterStop, timestamp, reason } = payload;
+    if (
+      typeof transactionId !== 'number' ||
+      typeof meterStop !== 'number' ||
+      typeof timestamp !== 'string'
+    ) {
+      return {
+        kind: 'MalformedFrame',
+        description:
+          'StopTransaction requires a numeric transactionId/meterStop and a string timestamp',
+      };
+    }
+    return {
+      type: 'TransactionEnd',
+      stationIdentity: context.stationIdentity,
+      transactionRef: String(transactionId),
+      meterStop,
+      reason: typeof reason === 'string' ? reason : undefined,
+      timestamp,
+    };
+  }
+}
+
+/** Extracts every parseable {measurand, value, unit} sample across all
+ * meterValue[].sampledValue[] entries. Per the 1.6J spec, sampledValue.value
+ * is itself a string (e.g. "230"); entries that don't parse as a finite
+ * number are silently dropped rather than failing the whole message — one
+ * bad sample in a batch of otherwise-valid ones shouldn't reject real data.
+ */
+function extractMeterSamples(meterValue: unknown[]): MeterSample[] {
+  const samples: MeterSample[] = [];
+  for (const entry of meterValue) {
+    if (typeof entry !== 'object' || entry === null) continue;
+    const sampledValue = (entry as Record<string, unknown>).sampledValue;
+    if (!Array.isArray(sampledValue)) continue;
+
+    for (const sample of sampledValue) {
+      if (typeof sample !== 'object' || sample === null) continue;
+      const raw = sample as Record<string, unknown>;
+      const value = typeof raw.value === 'string' ? Number(raw.value) : NaN;
+      if (!Number.isFinite(value)) continue;
+
+      samples.push({
+        measurand:
+          typeof raw.measurand === 'string'
+            ? raw.measurand
+            : 'Energy.Active.Import.Register',
+        value,
+        unit: typeof raw.unit === 'string' ? raw.unit : undefined,
+      });
+    }
+  }
+  return samples;
+}
+
+/** Reads the idTagInfo.status this response should carry from
+ * DomainResult.payload — handlers set this explicitly (see
+ * AuthorizationHandler/TransactionStartHandler) rather than the adapter
+ * inventing a status from a bare Accepted/Rejected boolean, since OCPP's
+ * idTagInfo vocabulary (Accepted/Blocked/Expired/Invalid/ConcurrentTx) is
+ * richer than DomainResult's binary status. */
+function idTagStatusOf(result: DomainResult): string {
+  const status = result.payload?.idTagStatus;
+  if (typeof status === 'string') return status;
+  return result.status === 'Accepted' ? 'Accepted' : 'Invalid';
+}
+
+/** Reads the MOVOS-assigned protocolTransactionId a TransactionStart
+ * handler placed on the result, and serializes it as the JSON integer
+ * 1.6J's StartTransaction.conf requires. */
+function protocolTransactionIdOf(result: DomainResult): number {
+  const raw = result.payload?.protocolTransactionId;
+  return typeof raw === 'string' ? Number(raw) : 0;
 }
 
 const OCPP16_STATUSES = [

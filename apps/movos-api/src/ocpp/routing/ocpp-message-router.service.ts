@@ -18,6 +18,10 @@ import { OcppProtocolEventService } from '../persistence/ocpp-protocol-event.ser
 import { BootNotificationHandler } from '../handlers/boot-notification.handler';
 import { HeartbeatHandler } from '../handlers/heartbeat.handler';
 import { StatusNotificationHandler } from '../handlers/status-notification.handler';
+import { AuthorizationHandler } from '../handlers/authorization.handler';
+import { TransactionStartHandler } from '../handlers/transaction-start.handler';
+import { TransactionUpdateHandler } from '../handlers/transaction-update.handler';
+import { TransactionEndHandler } from '../handlers/transaction-end.handler';
 
 /**
  * The seam between the Protocol Layer and everything else. Domain handlers
@@ -35,6 +39,10 @@ export class OcppMessageRouterService {
     private readonly bootHandler: BootNotificationHandler,
     private readonly heartbeatHandler: HeartbeatHandler,
     private readonly statusHandler: StatusNotificationHandler,
+    private readonly authorizationHandler: AuthorizationHandler,
+    private readonly transactionStartHandler: TransactionStartHandler,
+    private readonly transactionUpdateHandler: TransactionUpdateHandler,
+    private readonly transactionEndHandler: TransactionEndHandler,
   ) {}
 
   /** Returns the RawFrame to send back to the device, or null if no
@@ -161,11 +169,19 @@ export class OcppMessageRouterService {
         return this.heartbeatHandler.handle(event, station);
       case 'ConnectorStatus':
         return this.statusHandler.handle(event, station);
+      case 'Authorization':
+        return this.authorizationHandler.handle(event, station);
+      case 'TransactionStart':
+        return this.transactionStartHandler.handle(event, station);
+      case 'TransactionUpdate':
+        return this.transactionUpdateHandler.handle(event, station);
+      case 'TransactionEnd':
+        return this.transactionEndHandler.handle(event, station);
       default:
-        // Unreachable for CAP-003's adapters (capabilities.supportedInbound
-        // only ever yields DeviceBoot/Heartbeat/ConnectorStatus) — kept as
-        // a defensive exhaustiveness fallback, not a real runtime path for
-        // this work order's implementation.
+        // Unreachable for CAP-003/CAP-004's adapters (capabilities.
+        // supportedInbound only ever yields the seven types handled above)
+        // — kept as a defensive exhaustiveness fallback, not a real
+        // runtime path for this work order's implementation.
         return { status: 'Rejected' };
     }
   }

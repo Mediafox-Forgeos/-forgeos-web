@@ -179,6 +179,13 @@ model Organization {
   memberships Membership[]
   sites       Site[]
   auditEvents AuditEvent[]
+
+  // CAP-004 — denormalized directly onto ChargingSession/AuthorizationAttempt
+  // (see schema comment on ChargingSession) rather than derived through the
+  // Site->ChargingStation chain the rest of this schema uses.
+  chargingSessions         ChargingSession[]
+  authorizationCredentials AuthorizationCredential[]
+  authorizationAttempts    AuthorizationAttempt[]
 }
 
 model Membership {
@@ -225,6 +232,10 @@ model Site {
   organization     Organization      @relation(fields: [organizationId], references: [id])
   createdBy        User              @relation(fields: [createdByUserId], references: [id])
   chargingStations ChargingStation[]
+
+  // CAP-004 — see the ChargingSession model comment for why this is stored
+  // directly rather than derived through chargingStations.
+  chargingSessions ChargingSession[]
 
   @@unique([organizationId, slug])
 }
@@ -278,6 +289,10 @@ model ChargingStation {
   evses              Evse[]
   ocppProtocolEvents OcppProtocolEvent[]
 
+  // CAP-004
+  chargingSessions      ChargingSession[]
+  authorizationAttempts AuthorizationAttempt[]
+
   // Nullable-safe: Postgres treats multiple NULLs as distinct, so stations
   // without a business code never collide with each other.
   @@unique([siteId, code])
@@ -308,6 +323,10 @@ model Evse {
   chargingStation ChargingStation @relation(fields: [chargingStationId], references: [id])
   connectors      Connector[]
 
+  // CAP-004
+  chargingSessions      ChargingSession[]
+  authorizationAttempts AuthorizationAttempt[]
+
   @@unique([chargingStationId, externalId])
 }
 
@@ -326,6 +345,10 @@ model Connector {
   updatedAt  DateTime        @updatedAt
 
   evse Evse @relation(fields: [evseId], references: [id])
+
+  // CAP-004
+  chargingSessions      ChargingSession[]
+  authorizationAttempts AuthorizationAttempt[]
 
   @@unique([evseId, externalId])
 }
@@ -403,4 +426,231 @@ model OcppProtocolEvent {
   chargingStation ChargingStation? @relation(fields: [chargingStationId], references: [id])
 
   @@index([chargingStationId, receivedAt])
+}
+
+// ============================================================================
+// CAP-004 — Charging Sessions & Authorization Foundation (WO-ARGOS-009)
+// See docs/domain/CAP-004_CHARGING_SESSIONS_FOUNDATION.md for the full
+// design (ownership model, session-creation boundary, termination model,
+// energy model, lifecycle, OCPP mapping). Builds on CAP-003 without
+// modifying it — no field on ChargingStation/Evse/Connector/
+// OcppProtocolEvent above is touched by this section.
+// ============================================================================
+
+enum AuthCredentialType {
+  RFID
+  QR
+  APP
+  REMOTE
+  API
+  FLEET
+  PLUG_AND_CHARGE
+  GUEST
+}
+
+enum AuthCredentialStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+  BLOCKED
+}
+
+enum AuthAttemptResult {
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  REVOKED
+  UNKNOWN
+  OFFLINE_ACCEPTED
+}
+
+enum ChargingSessionStatus {
+  PENDING
+  AUTHORIZED
+  STARTING
+  ACTIVE
+  SUSPENDED
+  OFFLINE
+  STOPPING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum ChargingSessionTerminationReason {
+  NORMAL_COMPLETION
+  CABLE_DISCONNECTED
+  VEHICLE_FULL
+  REMOTE_STOP
+  EMERGENCY_STOP
+  FAULT
+  TIMEOUT
+  POWER_LOSS
+  STATION_REBOOT
+  USER_CANCELLED
+  NETWORK_FAILURE
+  UNKNOWN
+}
+
+// The single abstraction every authorization method is an instance of — a
+// physical RFID card, an app-issued token, a QR payload, an API key, a
+// fleet account reference, or a future Plug & Charge certificate. See
+// docs/domain/MOVOS_AUTHORIZATION_ARCHITECTURE_v0.1.md for the full
+// conceptual design this model implements.
+model AuthorizationCredential {
+  id                 String               @id @default(cuid())
+  organizationId     String
+  type               AuthCredentialType
+  // The physical/protocol-facing identifier (e.g. an RFID UID, normalized
+  // to uppercase hex with no separators before storage) — deliberately
+  // never the primary key, same discipline as Evse.externalId/
+  // Connector.externalId. Unique per organization, not globally: two
+  // different organizations may each issue a card that happens to produce
+  // the same raw UID on a specific reader/vendor combination.
+  externalIdentifier String
+  status             AuthCredentialStatus @default(ACTIVE)
+  issuedAt           DateTime?
+  expiresAt          DateTime?
+  revokedAt          DateTime?
+  // Type-specific data (e.g. a friendly label, issuing fleet reference).
+  // Never used to store secrets — this credential type is not itself a
+  // secret (see MOVOS_AUTHORIZATION_ARCHITECTURE_v0.1.md's RFID section).
+  metadata           Json?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  organization          Organization           @relation(fields: [organizationId], references: [id])
+  chargingSessions      ChargingSession[]
+  authorizationAttempts AuthorizationAttempt[]
+
+  @@unique([organizationId, externalIdentifier])
+}
+
+// One record per presentation of a credential at a station — stored
+// unconditionally, whether the outcome was ACCEPTED or not (a rejected
+// attempt is itself operationally meaningful). Created both for a
+// standalone OCPP Authorize message and, again, as part of resolving the
+// idTag carried on a StartTransaction — see CAP-004_CHARGING_SESSIONS_
+// FOUNDATION.md §5/§8 for why the same model serves both call sites.
+model AuthorizationAttempt {
+  id             String @id @default(cuid())
+  organizationId String
+
+  chargingStationId String
+  evseId            String?
+  connectorId       String?
+
+  authorizationCredentialId String?
+
+  // The raw identifier as presented (e.g. the OCPP idTag string), captured
+  // even when it resolves to no known AuthorizationCredential (result =
+  // UNKNOWN) — without this, an UNKNOWN attempt would record that
+  // *something* was presented but not *what*, defeating the point of an
+  // append-only audit trail. Not part of the WO's literal field list;
+  // added because "every authorization attempt must be stored" requires
+  // enough information to reconstruct what happened.
+  presentedIdentifier String
+
+  attemptedAt DateTime          @default(now())
+  result      AuthAttemptResult
+  reason      String?
+
+  organization            Organization             @relation(fields: [organizationId], references: [id])
+  chargingStation         ChargingStation          @relation(fields: [chargingStationId], references: [id])
+  evse                    Evse?                    @relation(fields: [evseId], references: [id])
+  connector               Connector?               @relation(fields: [connectorId], references: [id])
+  authorizationCredential AuthorizationCredential? @relation(fields: [authorizationCredentialId], references: [id])
+
+  @@index([chargingStationId, attemptedAt])
+  @@index([authorizationCredentialId])
+}
+
+// A business-domain charging session — see CAP-004_CHARGING_SESSIONS_
+// FOUNDATION.md for the full design. Ownership fields (organizationId,
+// siteId, chargingStationId, evseId, connectorId) are stored directly
+// here, a deliberate exception to the Evse/Connector "derive through the
+// parent chain" pattern used elsewhere in this schema — see §2 of that
+// document for why this table specifically denormalizes.
+model ChargingSession {
+  id             String @id @default(cuid())
+  organizationId String
+  siteId         String
+
+  chargingStationId String
+  evseId            String
+  connectorId       String
+
+  authorizationCredentialId String
+
+  protocolVersion       OcppProtocolVersion
+  // MOVOS-assigned (1.6J) or device-assigned (2.0.1, not implemented)
+  // transaction identifier — see §5's "Where protocolTransactionId comes
+  // from". Unique per station, not globally: two different stations may
+  // legitimately mint the same-looking transaction id from independent
+  // sequences.
+  protocolTransactionId String
+
+  status            ChargingSessionStatus             @default(PENDING)
+  terminationReason ChargingSessionTerminationReason?
+
+  // Raw device-reported cumulative meter readings, not MOVOS-computed
+  // deltas — meterStart is known at creation (StartTransaction always
+  // carries it), meterStop only once the session ends.
+  meterStart Int
+  meterStop  Int?
+  // The accumulated total — always resolvable without any MeterValue rows
+  // existing (DEC-016). Starts at 0, updated as data arrives, finalized as
+  // meterStop - meterStart at termination.
+  energyWh   Int  @default(0)
+
+  // Immutable once set — see the lifecycle engine's enforcement, not just
+  // this comment; no service method accepts startedAt as an update param.
+  startedAt DateTime
+  // Null until the session reaches a terminal state; a session cannot
+  // terminate twice (lifecycle engine refuses to re-terminate a row whose
+  // endedAt is already non-null).
+  endedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization            Organization            @relation(fields: [organizationId], references: [id])
+  site                    Site                    @relation(fields: [siteId], references: [id])
+  chargingStation         ChargingStation         @relation(fields: [chargingStationId], references: [id])
+  evse                    Evse                    @relation(fields: [evseId], references: [id])
+  connector               Connector               @relation(fields: [connectorId], references: [id])
+  authorizationCredential AuthorizationCredential @relation(fields: [authorizationCredentialId], references: [id])
+  meterValues             MeterValue[]
+
+  // "protocolTransactionId is unique per charging station" (WO rule) plus
+  // the idempotency requirement in §13: a retransmitted StartTransaction
+  // for a transaction MOVOS already has a session for must be detectable
+  // as a duplicate via this exact constraint, not a race-prone read-then-
+  // write check.
+  @@unique([chargingStationId, protocolTransactionId])
+  @@index([organizationId, status])
+  @@index([siteId, status])
+}
+
+// Periodic telemetry during an active session (OCPP MeterValues /
+// TransactionEvent(Updated)) — optional, append-only, never a dependency
+// of ChargingSession's own correctness (DEC-016). No update/delete is
+// exposed by MeterValuesService; rows are write-once.
+model MeterValue {
+  id        String   @id @default(cuid())
+  sessionId String
+  timestamp DateTime
+  energyWh  Int
+
+  powerW      Int?
+  voltage     Float?
+  current     Float?
+  frequency   Float?
+  temperature Float?
+
+  createdAt DateTime @default(now())
+
+  session ChargingSession @relation(fields: [sessionId], references: [id])
+
+  @@index([sessionId, timestamp])
 }

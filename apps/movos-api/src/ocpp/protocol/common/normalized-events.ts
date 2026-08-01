@@ -53,12 +53,22 @@ export type NormalizedInboundEvent =
       idTag: string;
       meterStart: number;
       timestamp: string;
+      // Added by CAP-004 (WO-ARGOS-009) — ChargingSession.protocolVersion
+      // needs it and TransactionStartHandler has no other way to learn
+      // which adapter produced this event, mirroring DeviceBoot's existing
+      // protocolVersion field.
+      protocolVersion: OcppProtocolVersion;
     }
   | {
       type: 'TransactionUpdate';
       stationIdentity: string;
       transactionRef: string;
       values: MeterSample[];
+      // Added by CAP-004 (WO-ARGOS-009) — represents the first
+      // meterValue[].timestamp in the batch (1.6J's MeterValues.req can
+      // carry multiple readings per message; MeterValue rows are recorded
+      // one per handler call, not one per underlying sample).
+      timestamp: string;
     }
   | {
       type: 'TransactionEnd';

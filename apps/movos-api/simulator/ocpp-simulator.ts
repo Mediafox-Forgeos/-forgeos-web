@@ -6,13 +6,14 @@
  *
  * Simulates a physical charge point's WebSocket client behavior: connects
  * with Basic Auth + a declared OCPP subprotocol, sends BootNotification/
- * Heartbeat/StatusNotification, and can deliberately misbehave (malformed
- * frames, invalid credentials, unsupported actions, duplicate connections)
- * to exercise the engine's defensive paths. It does not simulate real
- * charger firmware — it proves the MOVOS OCPP engine behaves correctly
- * against a well-formed and deliberately-adversarial protocol stream, not
- * that any specific vendor's hardware will behave identically. See the
- * hardware validation levels in
+ * Heartbeat/StatusNotification/Authorize/StartTransaction/MeterValues/
+ * StopTransaction, and can deliberately misbehave (malformed frames,
+ * invalid credentials, unsupported actions, duplicate connections) to
+ * exercise the engine's defensive paths. It does not simulate real charger
+ * firmware — it proves the MOVOS OCPP engine behaves correctly against a
+ * well-formed and deliberately-adversarial protocol stream, not that any
+ * specific vendor's hardware will behave identically. See the hardware
+ * validation levels in
  * docs/domain/MOVOS_DEVICE_CAPABILITY_ARCHITECTURE_v0.1.md — this tool can
  * only ever produce SIMULATOR_VALIDATED evidence, never more.
  */
@@ -116,9 +117,83 @@ export class OcppSimulator {
 
   /** Sends a CALL for an action the engine doesn't implement — proves
    * unsupported-action handling responds with a protocol-correct
-   * CALLERROR instead of silently dropping or crashing. */
+   * CALLERROR instead of silently dropping or crashing.
+   * RemoteStartTransaction (Architecture Backlog #36) remains
+   * unimplemented even after CAP-004 (WO-ARGOS-009), which implemented
+   * Authorize/StartTransaction/MeterValues/StopTransaction. */
   async sendUnsupportedAction(): Promise<CallResponse> {
-    return this.call('Authorize', { idTag: 'SIMULATOR-TEST-TAG' });
+    return this.call('RemoteStartTransaction', { idTag: 'SIMULATOR-TEST-TAG' });
+  }
+
+  /** OCPP Authorize — a standalone credential check, independent of
+   * physically starting a transaction. Never creates a ChargingSession by
+   * itself (DEC-014) — see CAP-004_CHARGING_SESSIONS_FOUNDATION.md §5. */
+  async sendAuthorize(idTag: string): Promise<CallResponse> {
+    return this.call('Authorize', { idTag });
+  }
+
+  /** OCPP StartTransaction — the only message that creates a
+   * ChargingSession, contingent on the idTag resolving to an ACCEPTED
+   * AuthorizationAttempt. MOVOS assigns transactionId in the response;
+   * this simulator never invents one client-side. */
+  async sendStartTransaction(
+    connectorId: number,
+    idTag: string,
+    meterStart: number,
+    timestamp = new Date().toISOString(),
+  ): Promise<CallResponse> {
+    return this.call('StartTransaction', {
+      connectorId,
+      idTag,
+      meterStart,
+      timestamp,
+    });
+  }
+
+  /** OCPP MeterValues, transaction-scoped — appends telemetry to the
+   * ChargingSession identified by transactionId. Sends a single
+   * Energy.Active.Import.Register sample, matching the one measurand
+   * TransactionUpdateHandler currently persists as MeterValue.energyWh. */
+  async sendMeterValues(
+    connectorId: number,
+    transactionId: number,
+    energyWh: number,
+    timestamp = new Date().toISOString(),
+  ): Promise<CallResponse> {
+    return this.call('MeterValues', {
+      connectorId,
+      transactionId,
+      meterValue: [
+        {
+          timestamp,
+          sampledValue: [
+            {
+              value: String(energyWh),
+              measurand: 'Energy.Active.Import.Register',
+              unit: 'Wh',
+            },
+          ],
+        },
+      ],
+    });
+  }
+
+  /** OCPP StopTransaction — terminates the ChargingSession identified by
+   * transactionId. `reason` is optional per spec (absence means a normal
+   * stop) — see the 1.6J StopTransaction.reason -> ChargingSessionTermination
+   * Reason mapping table in CAP-004_CHARGING_SESSIONS_FOUNDATION.md §6. */
+  async sendStopTransaction(
+    transactionId: number,
+    meterStop: number,
+    reason?: string,
+    timestamp = new Date().toISOString(),
+  ): Promise<CallResponse> {
+    return this.call('StopTransaction', {
+      transactionId,
+      meterStop,
+      timestamp,
+      ...(reason ? { reason } : {}),
+    });
   }
 
   /** Sends raw, non-JSON bytes directly over the socket — proves malformed

@@ -1,6 +1,7 @@
 # MOVOS Architecture Backlog v1.0
 
 **Generated:** 2026-07-30 (WO-ARGOS-007)
+**Updated:** 2026-07-31 — WO-ARGOS-009 (CAP-004) updated entries #8 (RFID authorization), #16 (ChargingSession), and #17 (OCPP transaction mapping) to reflect real implementation of the generic credential/session/transaction-mapping infrastructure. See each entry for detail.
 **Part of:** [MOVOS Charging Ecosystem Architecture](./MOVOS_CHARGING_ECOSYSTEM_ARCHITECTURE_v0.1.md)
 
 **This is not a task backlog.** It is the official register of every future MOVOS charging-ecosystem capability whose architectural position must not be lost to chat memory or a single work order's report. Nothing registered here is implemented merely by being listed — see each entry's own status fields for what's actually true today. No database model was created solely to make this register look complete; several entries below are intentionally `UNDEFINED` or `DISCOVERY` with no schema at all.
@@ -160,16 +161,16 @@ Every entry's "Evidence source" links to where the real analysis lives — this 
 - **Related entities:** future `AuthorizationCredential` (type `RFID`), `ChargingSession`.
 - **Related protocols:** OCPP 1.6J `idTag`; OCPP 2.0.1 `idToken` (type `ISO14443`/`ISO15693`).
 - **Architectural status:** ARCHITECTURE DRAFTED — explicitly designed in depth per this work order's Phase 6 requirement (identifier normalization, storage, status, validity, assignment, revocation, replacement, local-list sync, offline behavior, protocol mapping, physical-card-vs-credential-ID distinction).
-- **Data-model status:** Conceptual only — no Prisma model.
-- **Interface-contract status:** Conceptual only.
-- **Implementation status:** None.
-- **Dependencies:** #16 ChargingSession, #15 Local Authorization List, #47 Driver.
-- **Decisions already approved:** none yet — architecture drafted, not approved.
-- **Decisions still open:** whether RFID is the first authorization method implemented after CAP-003's boot vertical; secure-storage mechanism for card identifiers.
-- **MVP relevance:** Not required for the first vertical slice (BootNotification/Heartbeat/StatusNotification only).
-- **Recommended implementation phase:** First authorization method to build once ChargingSession is real — the most likely next capability after CAP-003's initial slice.
+- **Data-model status:** Partial — **updated 2026-07-31 (WO-ARGOS-009):** `AuthorizationCredential` is now a real Prisma model with `RFID` as one of 8 supported `AuthCredentialType` values, generic CRUD only. No RFID-specific fields (no UID-normalization tracking, no local-list-sync state).
+- **Interface-contract status:** Partial — generic credential issue/list/revoke contracts are real (`POST/GET /credentials`, `PATCH /credentials/:id/revoke`); no RFID-specific contract (UID normalization, local-list push) exists.
+- **Implementation status:** Partial — generic credential CRUD and generic `AuthorizationAttempt` resolution (unknown/revoked/expired/blocked) work for any credential type including RFID; RFID-specific behavior (UID normalization to canonical hex, Local Authorization List sync, offline-authorization-then-reconcile flow) remains unimplemented.
+- **Dependencies:** #16 ChargingSession (done — CAP-004), #15 Local Authorization List, #47 Driver.
+- **Decisions already approved:** none yet for RFID-specific behavior — the generic credential infrastructure it depends on is now implemented (CAP-004), but that was not itself an RFID-specific decision.
+- **Decisions still open:** secure-storage mechanism for card identifiers beyond generic credential storage; whether/when Local Authorization List sync gets built.
+- **MVP relevance:** Not required for the first vertical slice (BootNotification/Heartbeat/StatusNotification/Authorize/StartTransaction/MeterValues/StopTransaction).
+- **Recommended implementation phase:** RFID-specific behavior (UID normalization, local-list sync) is the natural next increment now that the generic credential model exists.
 - **Risks if ignored:** None immediate; architecture is captured so it isn't reinvented later.
-- **Evidence source:** [Authorization Architecture](../domain/MOVOS_AUTHORIZATION_ARCHITECTURE_v0.1.md).
+- **Evidence source:** [Authorization Architecture](../domain/MOVOS_AUTHORIZATION_ARCHITECTURE_v0.1.md), [Authorization Guide](../engineering/AUTHORIZATION_GUIDE.md).
 
 ### 9. QR authorization
 
@@ -308,16 +309,16 @@ Every entry's "Evidence source" links to where the real analysis lives — this 
 - **Related entities:** `Connector` (owning relation), `Evse`, `ChargingStation`, `Site`, `Organization` (derived).
 - **Related protocols:** OCPP 1.6J `StartTransaction`/`StopTransaction`, OCPP 2.0.1 transaction-event model.
 - **Architectural status:** ARCHITECTURE APPROVED — CAP-003 Architecture Decisions Decision 7, refined and approved by ARGOS (WO-ARGOS-007), with a dedicated architecture document.
-- **Data-model status:** None — explicitly not modeled in this work order.
-- **Interface-contract status:** Conceptual only.
-- **Implementation status:** None.
-- **Dependencies:** #17 OCPP transaction mapping, #8 RFID authorization (or another auth method) for a non-optional authorization reference.
-- **Decisions already approved:** CAP-003 Architecture Decisions — Decision 7; ADR-0012.
-- **Decisions still open:** authorization/idTag identity dependency (no driver/vehicle identity concept exists yet — see #47/#48).
-- **MVP relevance:** Not required for the first vertical slice; required for the next one (any real transaction handling).
-- **Recommended implementation phase:** Immediately after CAP-003's boot vertical, before Authorize/StartTransaction/StopTransaction can be handled.
-- **Risks if ignored:** `StartTransaction`/`StopTransaction` messages would have nowhere durable to write.
-- **Evidence source:** [ChargingSession Architecture](../domain/MOVOS_CHARGING_SESSION_ARCHITECTURE_v0.1.md), ADR-0012.
+- **Data-model status:** Complete for the mandatory shape — **updated 2026-07-31 (WO-ARGOS-009):** `ChargingSession` is now a real Prisma model with all required fields (identity/ownership, `protocolVersion`/`protocolTransactionId`, `status`/`terminationReason`, `meterStart`/`meterStop`/`energyWh`, `startedAt`/`endedAt`). No pricing/invoice/payment fields — those remain explicitly out of scope.
+- **Interface-contract status:** Complete for the first vertical — `SessionLifecycleService`'s full method set (`createSession`/`activateSession`/`suspendSession`/`resumeSession`/`stopSession`/`failSession`/`cancelSession`/`updateEnergy`) and a validated transition table.
+- **Implementation status:** Partial — session creation, lifecycle transitions, and OCPP 1.6J wiring (`Authorize`→attempt, `StartTransaction`→create, `MeterValues`→energy, `StopTransaction`→terminate) are implemented and unit-tested. **Not yet validated against a live database or real WebSocket connection** (unlike CAP-003's OCPP transport). No billing/cost calculation, no `Driver`/`Vehicle`/`Fleet` linkage (conceptual only via `AuthorizationCredential.ownerRef`, which doesn't exist as a column).
+- **Dependencies:** #17 OCPP transaction mapping (done — CAP-004), #8 RFID authorization (generic credential infrastructure done — CAP-004; RFID-specific behavior still open).
+- **Decisions already approved:** CAP-003 Architecture Decisions — Decision 7; ADR-0012; DEC-013–DEC-016 (WO-ARGOS-009, ACCEPTED).
+- **Decisions still open:** authorization/idTag identity dependency beyond `AuthorizationCredential` (no driver/vehicle identity concept exists yet — see #47/#48).
+- **MVP relevance:** Core — first real transaction-handling vertical, built on top of CAP-003's boot vertical.
+- **Recommended implementation phase:** Done (CAP-004, this entry) for the mandatory shape; live-database/runtime validation is the next required step before this can be claimed `SIMULATOR_VALIDATED`.
+- **Risks if ignored:** N/A — implemented. Residual risk: no runtime validation performed yet (see Implementation status).
+- **Evidence source:** [ChargingSession Architecture](../domain/MOVOS_CHARGING_SESSION_ARCHITECTURE_v0.1.md), [CAP-004 Charging Sessions Foundation](../domain/CAP-004_CHARGING_SESSIONS_FOUNDATION.md), [Charging Session Guide](../engineering/CHARGING_SESSION_GUIDE.md), [Session Lifecycle Guide](../engineering/SESSION_LIFECYCLE_GUIDE.md), ADR-0012.
 
 ### 17. OCPP transaction mapping
 
@@ -326,16 +327,16 @@ Every entry's "Evidence source" links to where the real analysis lives — this 
 - **Related entities:** `ChargingSession` (future), protocol-event log.
 - **Related protocols:** OCPP 1.6J `transactionId`; OCPP 2.0.1 `transactionInfo`.
 - **Architectural status:** ARCHITECTURE APPROVED — documented in both the ChargingSession Architecture and the Protocol Coexistence doc.
-- **Data-model status:** None (depends on #16).
-- **Interface-contract status:** Conceptual only.
-- **Implementation status:** None.
-- **Dependencies:** #16 ChargingSession.
-- **Decisions already approved:** CAP-003 Architecture Decisions — Decision 7 (transaction vs. session distinction).
+- **Data-model status:** Complete for 1.6J — `ChargingSession.protocolTransactionId`, unique per `chargingStationId`, MOVOS-assigned (see implementation note below).
+- **Interface-contract status:** Complete for 1.6J — `TransactionStart`/`TransactionUpdate`/`TransactionEnd` normalized events (reserved by CAP-003, implemented by CAP-004) map onto `SessionLifecycleService` calls; documented-only for 2.0.1.
+- **Implementation status:** Partial — 1.6J mapping fully implemented (`Authorize`/`StartTransaction`/`MeterValues`/`StopTransaction` → `AuthorizationHandler`/`TransactionStartHandler`/`TransactionUpdateHandler`/`TransactionEndHandler`), unit-tested, not yet runtime-validated. OCPP 2.0.1's `TransactionEvent` mapping remains documentation-only, consistent with the 2.0.1 adapter itself.
+- **Dependencies:** #16 ChargingSession (done — CAP-004).
+- **Decisions already approved:** CAP-003 Architecture Decisions — Decision 7 (transaction vs. session distinction); DEC-014 (WO-ARGOS-009, ACCEPTED — session-creation boundary).
 - **Decisions still open:** none beyond what #16 leaves open.
-- **MVP relevance:** Not required for the first vertical slice.
-- **Recommended implementation phase:** Same phase as #16.
-- **Risks if ignored:** Conflating a protocol transaction with a business session, breaking reconnect-spanning semantics ARGOS already approved.
-- **Evidence source:** [ChargingSession Architecture](../domain/MOVOS_CHARGING_SESSION_ARCHITECTURE_v0.1.md), [OCPP Protocol Coexistence](../domain/OCPP_PROTOCOL_COEXISTENCE_v0.1.md).
+- **MVP relevance:** Core — implemented as part of the first real transaction-handling vertical.
+- **Recommended implementation phase:** Done (CAP-004, this entry) for 1.6J.
+- **Risks if ignored:** N/A — implemented. The reconnect-spanning semantics ARGOS approved (session continuity tied to transaction continuity, not connection continuity) are documented in [CAP-004 §8](../domain/CAP-004_CHARGING_SESSIONS_FOUNDATION.md#8-session-lifecycle) but not yet exercised by a live-reconnect test — tracked as a residual gap alongside #16's runtime-validation note.
+- **Evidence source:** [ChargingSession Architecture](../domain/MOVOS_CHARGING_SESSION_ARCHITECTURE_v0.1.md), [OCPP Protocol Coexistence](../domain/OCPP_PROTOCOL_COEXISTENCE_v0.1.md), [OCPP Mapping Guide](../engineering/OCPP_MAPPING_GUIDE.md).
 
 ### 18. Reservations
 
@@ -968,4 +969,4 @@ Every entry's "Evidence source" links to where the real analysis lives — this 
 
 Total: 50 capabilities registered. This table is a navigation aid — see each individual entry for its precise status and reasoning.
 
-Nothing in this register is implemented merely by appearing here. See [CAP-003 implementation report] (this work order's final report) for exactly what shipped in this vertical slice: BootNotification, Heartbeat, StatusNotification, and the protocol/identity/authentication foundation only.
+Nothing in this register is implemented merely by appearing here. See the CAP-003 (WO-ARGOS-007/008) final reports for exactly what shipped in that vertical slice: BootNotification, Heartbeat, StatusNotification, and the protocol/identity/authentication foundation, `SIMULATOR_VALIDATED`. See the CAP-004 (WO-ARGOS-009) final report for what shipped on top of it: `ChargingSession`/`AuthorizationCredential`/`AuthorizationAttempt`/`MeterValue` models, a validated session-lifecycle state machine, and `Authorize`/`StartTransaction`/`MeterValues`/`StopTransaction` handling for 1.6J — unit-tested only, not yet runtime-validated. Entries #8, #16, and #17 above reflect this CAP-004 progress at the field level (Data-model/Interface-contract/Implementation status); their top-level Architectural status is unchanged, so the table above still counts them correctly.

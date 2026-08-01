@@ -160,9 +160,8 @@ describe('Ocpp16Adapter', () => {
     });
   });
 
-  // Test 13: Unsupported OCPP action handling.
-  describe('unsupported actions', () => {
-    it('returns UnsupportedMessage for a recognized-but-unimplemented 1.6J action', () => {
+  describe('Authorize', () => {
+    it('parses a valid Authorize into an Authorization event', () => {
       const event = adapter.parseInbound(
         call('Authorize', { idTag: 'ABC123' }),
         {
@@ -170,8 +169,304 @@ describe('Ocpp16Adapter', () => {
         },
       );
       expect(event).toEqual({
+        type: 'Authorization',
+        stationIdentity: 'movos-abc123',
+        idTag: 'ABC123',
+      });
+    });
+
+    it('rejects an Authorize with a missing idTag as malformed', () => {
+      const event = adapter.parseInbound(call('Authorize', {}), {
+        stationIdentity: 'movos-abc123',
+      });
+      expect(event).toMatchObject({ kind: 'MalformedFrame' });
+    });
+
+    it('formats an accepted Authorize as a CALLRESULT carrying idTagInfo.status', () => {
+      const frame = adapter.formatResponse(
+        {
+          type: 'Authorization',
+          stationIdentity: 'movos-abc123',
+          idTag: 'ABC123',
+        },
+        { status: 'Accepted', payload: { idTagStatus: 'Accepted' } },
+        'msg-1',
+      );
+      expect(frame.raw).toEqual([
+        3,
+        'msg-1',
+        { idTagInfo: { status: 'Accepted' } },
+      ]);
+    });
+
+    it('formats a rejected Authorize as a CALLRESULT, never a CALLERROR', () => {
+      const frame = adapter.formatResponse(
+        {
+          type: 'Authorization',
+          stationIdentity: 'movos-abc123',
+          idTag: 'BAD',
+        },
+        { status: 'Rejected', payload: { idTagStatus: 'Invalid' } },
+        'msg-1',
+      );
+      expect((frame.raw as unknown[])[0]).toBe(3); // CALLRESULT, not CALLERROR
+      expect(frame.raw).toEqual([
+        3,
+        'msg-1',
+        { idTagInfo: { status: 'Invalid' } },
+      ]);
+    });
+  });
+
+  describe('StartTransaction', () => {
+    it('parses a valid StartTransaction into a TransactionStart event', () => {
+      const event = adapter.parseInbound(
+        call('StartTransaction', {
+          connectorId: 1,
+          idTag: 'ABC123',
+          meterStart: 1000,
+          timestamp: '2026-07-31T00:00:00.000Z',
+        }),
+        { stationIdentity: 'movos-abc123' },
+      );
+      expect(event).toEqual({
+        type: 'TransactionStart',
+        stationIdentity: 'movos-abc123',
+        connectorExternalId: '1',
+        idTag: 'ABC123',
+        meterStart: 1000,
+        timestamp: '2026-07-31T00:00:00.000Z',
+        protocolVersion: 'OCPP1_6J',
+      });
+    });
+
+    it('rejects a StartTransaction missing required fields as malformed', () => {
+      const event = adapter.parseInbound(
+        call('StartTransaction', { connectorId: 1 }),
+        { stationIdentity: 'movos-abc123' },
+      );
+      expect(event).toMatchObject({ kind: 'MalformedFrame' });
+    });
+
+    it('formats an accepted StartTransaction as a CALLRESULT with transactionId and idTagInfo', () => {
+      const frame = adapter.formatResponse(
+        {
+          type: 'TransactionStart',
+          stationIdentity: 'movos-abc123',
+          connectorExternalId: '1',
+          idTag: 'ABC123',
+          meterStart: 1000,
+          timestamp: '2026-07-31T00:00:00.000Z',
+          protocolVersion: 'OCPP1_6J',
+        },
+        {
+          status: 'Accepted',
+          payload: { protocolTransactionId: '12345', idTagStatus: 'Accepted' },
+        },
+        'msg-2',
+      );
+      expect(frame.raw).toEqual([
+        3,
+        'msg-2',
+        { transactionId: 12345, idTagInfo: { status: 'Accepted' } },
+      ]);
+    });
+
+    it('formats a rejected StartTransaction as a CALLRESULT, never a CALLERROR', () => {
+      const frame = adapter.formatResponse(
+        {
+          type: 'TransactionStart',
+          stationIdentity: 'movos-abc123',
+          connectorExternalId: '1',
+          idTag: 'UNKNOWN',
+          meterStart: 1000,
+          timestamp: '2026-07-31T00:00:00.000Z',
+          protocolVersion: 'OCPP1_6J',
+        },
+        { status: 'Rejected', payload: { idTagStatus: 'Invalid' } },
+        'msg-2',
+      );
+      expect((frame.raw as unknown[])[0]).toBe(3);
+      expect(frame.raw).toEqual([
+        3,
+        'msg-2',
+        { transactionId: 0, idTagInfo: { status: 'Invalid' } },
+      ]);
+    });
+  });
+
+  describe('MeterValues', () => {
+    it('parses a valid MeterValues (with transactionId) into a TransactionUpdate event', () => {
+      const event = adapter.parseInbound(
+        call('MeterValues', {
+          connectorId: 1,
+          transactionId: 12345,
+          meterValue: [
+            {
+              timestamp: '2026-07-31T00:05:00.000Z',
+              sampledValue: [
+                {
+                  value: '1500',
+                  measurand: 'Energy.Active.Import.Register',
+                  unit: 'Wh',
+                },
+              ],
+            },
+          ],
+        }),
+        { stationIdentity: 'movos-abc123' },
+      );
+      expect(event).toEqual({
+        type: 'TransactionUpdate',
+        stationIdentity: 'movos-abc123',
+        transactionRef: '12345',
+        values: [
+          {
+            measurand: 'Energy.Active.Import.Register',
+            value: 1500,
+            unit: 'Wh',
+          },
+        ],
+        timestamp: '2026-07-31T00:05:00.000Z',
+      });
+    });
+
+    it('returns UnsupportedMessage for MeterValues with no transactionId', () => {
+      const event = adapter.parseInbound(
+        call('MeterValues', {
+          connectorId: 1,
+          meterValue: [{ sampledValue: [{ value: '10' }] }],
+        }),
+        { stationIdentity: 'movos-abc123' },
+      );
+      expect(event).toEqual({
         kind: 'UnsupportedMessage',
-        action: 'Authorize',
+        action: 'MeterValues',
+        reason: 'not_implemented',
+      });
+    });
+
+    it('drops individually unparseable sampledValue entries without failing the message', () => {
+      const event = adapter.parseInbound(
+        call('MeterValues', {
+          connectorId: 1,
+          transactionId: 12345,
+          meterValue: [
+            {
+              sampledValue: [{ value: 'not-a-number' }, { value: '2000' }],
+            },
+          ],
+        }),
+        { stationIdentity: 'movos-abc123' },
+      );
+      expect(event).toMatchObject({
+        type: 'TransactionUpdate',
+        values: [{ value: 2000 }],
+      });
+    });
+
+    it('rejects MeterValues with no usable samples at all as malformed', () => {
+      const event = adapter.parseInbound(
+        call('MeterValues', {
+          connectorId: 1,
+          transactionId: 12345,
+          meterValue: [{ sampledValue: [{ value: 'garbage' }] }],
+        }),
+        { stationIdentity: 'movos-abc123' },
+      );
+      expect(event).toMatchObject({ kind: 'MalformedFrame' });
+    });
+
+    it('formats a MeterValues response as an empty CALLRESULT', () => {
+      const frame = adapter.formatResponse(
+        {
+          type: 'TransactionUpdate',
+          stationIdentity: 'movos-abc123',
+          transactionRef: '12345',
+          values: [],
+          timestamp: '2026-07-31T00:05:00.000Z',
+        },
+        { status: 'Accepted' },
+        'msg-3',
+      );
+      expect(frame.raw).toEqual([3, 'msg-3', {}]);
+    });
+  });
+
+  describe('StopTransaction', () => {
+    it('parses a valid StopTransaction into a TransactionEnd event', () => {
+      const event = adapter.parseInbound(
+        call('StopTransaction', {
+          transactionId: 12345,
+          meterStop: 2000,
+          timestamp: '2026-07-31T01:00:00.000Z',
+          reason: 'Local',
+        }),
+        { stationIdentity: 'movos-abc123' },
+      );
+      expect(event).toEqual({
+        type: 'TransactionEnd',
+        stationIdentity: 'movos-abc123',
+        transactionRef: '12345',
+        meterStop: 2000,
+        reason: 'Local',
+        timestamp: '2026-07-31T01:00:00.000Z',
+      });
+    });
+
+    it('parses a StopTransaction with no reason (absent means normal stop)', () => {
+      const event = adapter.parseInbound(
+        call('StopTransaction', {
+          transactionId: 12345,
+          meterStop: 2000,
+          timestamp: '2026-07-31T01:00:00.000Z',
+        }),
+        { stationIdentity: 'movos-abc123' },
+      );
+      expect(event).toMatchObject({
+        type: 'TransactionEnd',
+        reason: undefined,
+      });
+    });
+
+    it('rejects a StopTransaction missing required fields as malformed', () => {
+      const event = adapter.parseInbound(
+        call('StopTransaction', { transactionId: 12345 }),
+        { stationIdentity: 'movos-abc123' },
+      );
+      expect(event).toMatchObject({ kind: 'MalformedFrame' });
+    });
+
+    it('formats a StopTransaction response as an empty CALLRESULT', () => {
+      const frame = adapter.formatResponse(
+        {
+          type: 'TransactionEnd',
+          stationIdentity: 'movos-abc123',
+          transactionRef: '12345',
+          meterStop: 2000,
+          timestamp: '2026-07-31T01:00:00.000Z',
+        },
+        { status: 'Accepted' },
+        'msg-4',
+      );
+      expect(frame.raw).toEqual([3, 'msg-4', {}]);
+    });
+  });
+
+  // Test 13: Unsupported OCPP action handling. Authorize/StartTransaction/
+  // MeterValues/StopTransaction were implemented by CAP-004 (WO-ARGOS-009)
+  // — RemoteStartTransaction remains a genuinely unimplemented action.
+  describe('unsupported actions', () => {
+    it('returns UnsupportedMessage for a recognized-but-unimplemented 1.6J action', () => {
+      const event = adapter.parseInbound(
+        call('RemoteStartTransaction', { idTag: 'ABC123' }),
+        {
+          stationIdentity: 'movos-abc123',
+        },
+      );
+      expect(event).toEqual({
+        kind: 'UnsupportedMessage',
+        action: 'RemoteStartTransaction',
         reason: 'not_implemented',
       });
     });
@@ -179,14 +474,14 @@ describe('Ocpp16Adapter', () => {
     it('formats an error response for an unsupported action', () => {
       const frame = adapter.formatErrorResponse('msg-3', {
         code: 'NotImplemented',
-        description: 'Authorize is not implemented',
+        description: 'RemoteStartTransaction is not implemented',
         category: 'unsupported',
       });
       expect(frame.raw).toEqual([
         4,
         'msg-3',
         'NotImplemented',
-        'Authorize is not implemented',
+        'RemoteStartTransaction is not implemented',
         {},
       ]);
     });
@@ -211,9 +506,17 @@ describe('Ocpp16Adapter', () => {
     }
   });
 
-  it('declares its capabilities as exactly Boot/Heartbeat/Status inbound and no outbound', () => {
+  it('declares its capabilities as exactly Boot/Heartbeat/Status/Authorization/Transaction* inbound and no outbound', () => {
     expect(Array.from(adapter.capabilities.supportedInbound).sort()).toEqual(
-      ['ConnectorStatus', 'DeviceBoot', 'Heartbeat'].sort(),
+      [
+        'Authorization',
+        'ConnectorStatus',
+        'DeviceBoot',
+        'Heartbeat',
+        'TransactionEnd',
+        'TransactionStart',
+        'TransactionUpdate',
+      ].sort(),
     );
     expect(adapter.capabilities.supportedOutbound.size).toBe(0);
   });

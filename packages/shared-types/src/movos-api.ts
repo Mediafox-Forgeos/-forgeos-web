@@ -125,6 +125,71 @@ export interface ApiConnector {
   updatedAt: string;
 }
 
+// CAP-004 — Charging Sessions & Authorization Foundation (WO-ARGOS-009).
+// See docs/domain/CAP-004_CHARGING_SESSIONS_FOUNDATION.md.
+
+export interface ApiChargingSession {
+  id: string;
+  organizationId: string;
+  siteId: string;
+  chargingStationId: string;
+  evseId: string;
+  connectorId: string;
+  authorizationCredentialId: string;
+  protocolVersion: string;
+  protocolTransactionId: string;
+  status: string;
+  terminationReason: string | null;
+  meterStart: number;
+  meterStop: number | null;
+  energyWh: number;
+  startedAt: string;
+  endedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ApiMeterValue {
+  id: string;
+  sessionId: string;
+  timestamp: string;
+  energyWh: number;
+  powerW: number | null;
+  voltage: number | null;
+  current: number | null;
+  frequency: number | null;
+  temperature: number | null;
+}
+
+export interface ApiAuthorizationCredential {
+  id: string;
+  organizationId: string;
+  type: string;
+  // Never the raw physical UID's storage key, but the value itself is not
+  // a secret (see MOVOS_AUTHORIZATION_ARCHITECTURE_v0.1.md) — safe to
+  // return to an authenticated, role-gated caller.
+  externalIdentifier: string;
+  status: string;
+  issuedAt: string | null;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ApiAuthorizationAttempt {
+  id: string;
+  organizationId: string;
+  chargingStationId: string;
+  evseId: string | null;
+  connectorId: string | null;
+  authorizationCredentialId: string | null;
+  presentedIdentifier: string;
+  attemptedAt: string;
+  result: string;
+  reason: string | null;
+}
+
 export interface LoginResponse {
   accessToken: string;
   user: ApiUser;
