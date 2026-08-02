@@ -3,6 +3,7 @@ import type WebSocket from 'ws';
 
 import type { OcppProtocolVersion } from '../protocol/common/normalized-events';
 import { ConnectivityCoordinator } from '../connectivity/connectivity-coordinator.service';
+import { ConcurrencyLimiter } from '../../common/concurrency-limiter';
 
 export interface ConnectionRecord {
   ocppIdentity: string;
@@ -23,6 +24,15 @@ export interface ConnectionSummary {
 
 const STALE_THRESHOLD_MS = 5 * 60_000; // 5 minutes without any message
 const SWEEP_INTERVAL_MS = 60_000;
+
+/** CAP-006A (WO-ARGOS-012) Objective 3 — closes RA-003: how many
+ * connectivity notifications (connect or close, so this single limiter
+ * covers both a mass-disconnect from sweepStale() AND a reconnect storm
+ * once a shared outage resolves) may be in flight against the database at
+ * once. Deliberately conservative and not (yet) configurable — see
+ * CAP-006A_INVARIANTS.md for the reasoning and CAP-006A_FAILURE_MATRIX.md
+ * for the mass-disconnect/regional-outage scenarios this bounds. */
+const NOTIFY_CONCURRENCY_LIMIT = 25;
 
 /**
  * In-memory connection registry — deliberately not Redis-backed (CAP-003
@@ -51,6 +61,9 @@ export class ConnectionRegistryService implements OnModuleDestroy {
   private readonly logger = new Logger(ConnectionRegistryService.name);
   private readonly connections = new Map<string, ConnectionRecord>();
   private readonly sweepTimer: NodeJS.Timeout;
+  private readonly notifyLimiter = new ConcurrencyLimiter(
+    NOTIFY_CONCURRENCY_LIMIT,
+  );
 
   constructor(private readonly connectivity: ConnectivityCoordinator) {
     this.sweepTimer = setInterval(() => this.sweepStale(), SWEEP_INTERVAL_MS);
@@ -144,20 +157,30 @@ export class ConnectionRegistryService implements OnModuleDestroy {
     }
   }
 
-  /** Fire-and-forget — a connectivity-side failure (e.g. a transient DB
-   * error) must never propagate back into transport-layer connection
-   * handling. Logged, never thrown. */
+  /** Fire-and-forget from this class's own point of view (a connectivity-
+   * side failure must never propagate back into transport-layer
+   * connection handling — logged, never thrown), but every call — whether
+   * it arrives one at a time from individual register() calls or in a
+   * tight burst from sweepStale()'s single-tick loop — is routed through
+   * the shared `notifyLimiter` (CAP-006A, WO-ARGOS-012 Objective 3): at
+   * most NOTIFY_CONCURRENCY_LIMIT of these are ever in flight against the
+   * database at once, with the rest queued (FIFO), not fired unbounded.
+   * This is what bounds both a mass-disconnect (many sweepStale evictions
+   * in one tick) and a reconnect storm (many independent register() calls
+   * once a shared outage resolves) to the same, predictable worst case. */
   private notifyConnected(
     chargingStationId: string,
     ocppIdentity: string,
     protocolVersion: OcppProtocolVersion,
   ): void {
-    this.connectivity
-      .handleConnectionEstablished({
-        chargingStationId,
-        ocppIdentity,
-        protocolVersion,
-      })
+    void this.notifyLimiter
+      .run(() =>
+        this.connectivity.handleConnectionEstablished({
+          chargingStationId,
+          ocppIdentity,
+          protocolVersion,
+        }),
+      )
       .catch((error: unknown) => {
         this.logger.error(
           `ConnectivityCoordinator.handleConnectionEstablished failed for ${ocppIdentity}`,
@@ -170,9 +193,15 @@ export class ConnectionRegistryService implements OnModuleDestroy {
     chargingStationId: string,
     ocppIdentity: string,
     reason: 'clean' | 'stale',
-  ): void {
-    this.connectivity
-      .handleConnectionClosed({ chargingStationId, ocppIdentity, reason })
+  ): Promise<void> {
+    return this.notifyLimiter
+      .run(() =>
+        this.connectivity.handleConnectionClosed({
+          chargingStationId,
+          ocppIdentity,
+          reason,
+        }),
+      )
       .catch((error: unknown) => {
         this.logger.error(
           `ConnectivityCoordinator.handleConnectionClosed failed for ${ocppIdentity}`,
