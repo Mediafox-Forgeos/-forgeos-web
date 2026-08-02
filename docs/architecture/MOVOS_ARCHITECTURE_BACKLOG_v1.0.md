@@ -2,6 +2,7 @@
 
 **Generated:** 2026-07-30 (WO-ARGOS-007)
 **Updated:** 2026-07-31 — WO-ARGOS-009 (CAP-004) updated entries #8 (RFID authorization), #16 (ChargingSession), and #17 (OCPP transaction mapping) to reflect real implementation of the generic credential/session/transaction-mapping infrastructure. See each entry for detail.
+**Updated:** 2026-08-01 — WO-ARGOS-009A opened entry #51 (CAP-005: Authorization & Connectivity) as a post-merge action following PR #25's approval, carrying forward DEC-017's offline-policy recommendation and CAP-004's deferred RFID-specific behavior. No other entry changed.
 **Part of:** [MOVOS Charging Ecosystem Architecture](./MOVOS_CHARGING_ECOSYSTEM_ARCHITECTURE_v0.1.md)
 
 **This is not a task backlog.** It is the official register of every future MOVOS charging-ecosystem capability whose architectural position must not be lost to chat memory or a single work order's report. Nothing registered here is implemented merely by being listed — see each entry's own status fields for what's actually true today. No database model was created solely to make this register look complete; several entries below are intentionally `UNDEFINED` or `DISCOVERY` with no schema at all.
@@ -956,6 +957,24 @@ Every entry's "Evidence source" links to where the real analysis lives — this 
 - **Risks if ignored:** None immediate.
 - **Evidence source:** none prior — first captured here.
 
+### 51. CAP-005: Authorization & Connectivity
+
+- **Business purpose:** close the two gaps CAP-004's own validation gate (WO-ARGOS-009A) identified without fixing — a `ChargingSession` accurately reflecting real device connectivity, and RFID moving from generic-credential-only to its designed-in-depth behavior actually working.
+- **Domain boundary:** the seam between the Transport Layer (`ConnectionRegistryService`, CAP-003) and Charging Operations (`SessionLifecycleService`, CAP-004); Authorization (RFID specifically).
+- **Related entities:** `ChargingSession.status` (`OFFLINE`/`SUSPENDED` transitions), `AuthorizationCredential` (type `RFID`).
+- **Related protocols:** none new — reuses CAP-003's existing connection-loss signal and CAP-004's existing `Authorize`/idTag handling.
+- **Architectural status:** ARCHITECTURE DRAFTED — `DEC-017` (offline policy) provides the trigger-condition analysis; RFID-specific behavior was already designed in depth by the CAP-003-era Authorization Architecture, just never implemented.
+- **Data-model status:** None required — no new model. `ChargingSession.status`/`AuthorizationCredential` already have the fields this needs.
+- **Interface-contract status:** Partial — `SessionLifecycleService.suspendSession(id, 'OFFLINE')` and `resumeSession(id)` already exist and are correct; `ConnectionRegistryService` already emits connection-loss information, just not to any subscriber.
+- **Implementation status:** None. `suspendSession(id, 'OFFLINE')` has never been called by any code path other than a direct test call — confirmed by code search during WO-ARGOS-009A, zero cross-references between the two services in either direction.
+- **Dependencies:** #16 ChargingSession (done — CAP-004), #6 Device authentication/connection registry (done — CAP-003), #8 RFID authorization (generic credential infrastructure done — CAP-004; RFID-specific behavior itself is this entry's second half).
+- **Decisions already approved:** DEC-017 is a recommendation, not yet an ARGOS-approved decision — this entry exists so the recommendation isn't lost, not because it's authorized to build.
+- **Decisions still open:** whether ARGOS approves DEC-017's specific recommendation (Option B, coordinated with the existing stale-sweep) as-is, or amends it; sequencing between the connectivity half and the RFID half (they don't depend on each other and could ship separately).
+- **MVP relevance:** Not required for CAP-004's own scope; a real gap for any operator relying on `ChargingSession.status` to reflect actual device connectivity in production.
+- **Recommended implementation phase:** Next capability after CAP-004 — both halves build directly on infrastructure that already exists (CAP-003's connection registry, CAP-004's session lifecycle and generic credentials), no new foundational work required first.
+- **Risks if ignored:** A session can show `ACTIVE` indefinitely after its underlying connection is verifiably gone, with no automatic correction — directly affects any dashboard, alerting, or billing logic that trusts session status as a proxy for "is this station actually charging right now."
+- **Evidence source:** [DEC-017 Offline Policy](../domain/DEC-017_OFFLINE_POLICY.md), [MOVOS Authorization Architecture — RFID section](../domain/MOVOS_AUTHORIZATION_ARCHITECTURE_v0.1.md#rfid--designed-in-depth), [CAP-004 Post-Mortem](../postmortems/CAP-004_POST_MORTEM.md).
+
 ---
 
 ## Summary by architectural status
@@ -963,10 +982,10 @@ Every entry's "Evidence source" links to where the real analysis lives — this 
 | Status                | Count | Capabilities                                                                             |
 | --------------------- | ----- | ---------------------------------------------------------------------------------------- |
 | ARCHITECTURE APPROVED | 8     | #1, #2, #3, #5, #6, #16, #17, #35                                                        |
-| ARCHITECTURE DRAFTED  | 11    | #4, #8, #15, #32, #33, #34, #36, #37, #38, #39, #42                                      |
+| ARCHITECTURE DRAFTED  | 12    | #4, #8, #15, #32, #33, #34, #36, #37, #38, #39, #42, #51                                 |
 | DISCOVERY             | 13    | #7, #9, #10, #11, #12, #19, #20, #24, #29, #30, #40, #43, #45                            |
 | UNDEFINED             | 18    | #13, #14, #18, #21, #22, #23, #25, #26, #27, #28, #31, #41, #44, #46, #47, #48, #49, #50 |
 
-Total: 50 capabilities registered. This table is a navigation aid — see each individual entry for its precise status and reasoning.
+Total: 51 capabilities registered (50 from the original WO-ARGOS-007 register, plus #51 CAP-005: Authorization & Connectivity, opened 2026-08-01 by WO-ARGOS-009A as a post-merge action tracking DEC-017's recommendation and the RFID-specific behavior CAP-004 left generic). This table is a navigation aid — see each individual entry for its precise status and reasoning.
 
 Nothing in this register is implemented merely by appearing here. See the CAP-003 (WO-ARGOS-007/008) final reports for exactly what shipped in that vertical slice: BootNotification, Heartbeat, StatusNotification, and the protocol/identity/authentication foundation, `SIMULATOR_VALIDATED`. See the CAP-004 (WO-ARGOS-009) final report for what shipped on top of it: `ChargingSession`/`AuthorizationCredential`/`AuthorizationAttempt`/`MeterValue` models, a validated session-lifecycle state machine, and `Authorize`/`StartTransaction`/`MeterValues`/`StopTransaction` handling for 1.6J — unit-tested only, not yet runtime-validated. Entries #8, #16, and #17 above reflect this CAP-004 progress at the field level (Data-model/Interface-contract/Implementation status); their top-level Architectural status is unchanged, so the table above still counts them correctly.
