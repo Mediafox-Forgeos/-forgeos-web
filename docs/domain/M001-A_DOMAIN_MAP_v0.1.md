@@ -274,4 +274,38 @@ erDiagram
 
 **Explicitly still not pictured here, still out of scope:** `Tariff`, `Alert`, `Billing`, `Notifications`, `Driver`/`Vehicle`/`Fleet` (referenced only conceptually via `AuthorizationCredential.ownerRef`, which does not exist as a column), Local Authorization List sync, RemoteStart/RemoteStop, functional OCPP 2.0.1. See [CAP-004 §11](./CAP-004_CHARGING_SESSIONS_FOUNDATION.md#11-out-of-scope-in-this-work-order) for the complete list.
 
-**Validation level:** unit-tested only (mocked Prisma) as of this work order — no live-database or real-WebSocket run has been performed for this vertical, unlike CAP-003's OCPP transport (separately validated under WO-ARGOS-008). See the WO-ARGOS-009 Final Report for the exact claim.
+**Validation level:** unit-tested only (mocked Prisma) as of this work order — no live-database or real-WebSocket run has been performed for this vertical, unlike CAP-003's OCPP transport (separately validated under WO-ARGOS-008). See the WO-ARGOS-009 Final Report for the exact claim. (Superseded by WO-ARGOS-009A/009's later live-database/real-WebSocket validation and, for the OFFLINE/reconnect path specifically, by the 2026-08-02 update immediately below — left unedited here per this document's append-only discipline.)
+
+---
+
+## 2026-08-02 update (WO-ARGOS-010 / CAP-005): connectivity is now real, wired to sessions
+
+This section is new — it does not edit any diagram above. `ChargingStation` gains 5 persisted connectivity fields (no new entity); `ConnectivityCoordinator` is the new seam connecting the CAP-003 connection registry to the CAP-004 session lifecycle for the first time.
+
+```mermaid
+erDiagram
+    CHARGINGSTATION {
+        enum connectivityStatus "ONLINE, OFFLINE, UNKNOWN — default UNKNOWN"
+        datetime lastConnectedAt "nullable — set on every connect/reconnect"
+        datetime lastDisconnectedAt "nullable — set on every clean or stale close"
+        datetime lastSeenAt "nullable — set only at connect/reconnect, not per message (known simplification)"
+        enum lastProtocolVersion "nullable — OCPP1_6J or OCPP2_0_1, last negotiated"
+    }
+```
+
+```
+ConnectionRegistryService (CAP-003, in-memory)
+        │ register() / unregister() / sweepStale()
+        ▼
+ConnectivityCoordinator (CAP-005, new)
+        │ persists ChargingStation connectivity fields
+        │ only a verified-STALE close reaches further:
+        ▼
+SessionLifecycleService.suspendSession(id, 'OFFLINE')  (CAP-004)
+```
+
+**What is real:** `ConnectivityStatus`/`ConnectivityEvent` types, `ConnectivityCoordinator` (startup reconciliation, connect/reconnect handling, stale-close session-OFFLINE transition, bounded reconnect-recovery), the 5 persisted `ChargingStation` fields, and connectivity fields surfaced in the existing station API responses and the `apps/movos-web` station list/detail views.
+
+**Explicitly still not pictured here, still out of scope:** RFID-specific behavior, billing/tariffs/payments, remote start/stop, functional OCPP 2.0.1, Redis/multi-instance connection routing, SLA/uptime analytics. A clean (non-stale) disconnect still does **not** move a session to `OFFLINE` — a documented, deliberate limitation (see [CAP-005 §4](./CAP-005_CONNECTIVITY_ENGINE.md#4-known-deliberate-asymmetry-clean-disconnect-vs-stale)), not an oversight.
+
+**Validation level:** real-boot/real-Postgres/real-WebSocket validated — a compiled `apps/movos-api` instance, real local PostgreSQL, and the repository's real `OcppSimulator` proved connect→ONLINE, a real idle-past-threshold stale close→station and session both OFFLINE, and a genuine reconnect→session recovered to ACTIVE with exactly one session throughout. See [CAP-005 Connectivity Engine](./CAP-005_CONNECTIVITY_ENGINE.md) and the [Connectivity Runtime Guide](../engineering/CONNECTIVITY_RUNTIME_GUIDE.md).

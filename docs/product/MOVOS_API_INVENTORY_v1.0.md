@@ -1,9 +1,10 @@
 # MOVOS API Inventory v1.0
 
-**Atlas version:** v1.0 · **Generated:** 2026-07-24 · **Repository HEAD:** `main` @ `bfea8db`
+**Atlas version:** v1.0 · **Generated:** 2026-07-24 · **Repository HEAD:** `main` @ `94b867dda6c55229d70e435cbe2de91d9d31e353` (PR #26) — corrected 2026-08-02 (WO-ARGOS-010); previously stale at `bfea8db` since this document's original generation.
 **Updated:** 2026-07-27 — CAP-002 (charging core CRUD) added, see note below.
 **Updated:** 2026-07-30 — WO-ARGOS-007 (CAP-003) added 3 OCPP device-provisioning HTTP endpoints. The OCPP protocol traffic itself (BootNotification/Heartbeat/StatusNotification) is not HTTP — it runs over a WebSocket transport (`wss://<host>/ocpp/:ocppIdentity`) and is intentionally not listed in the table below, which only covers `/api/v1` HTTP routes; see [OCPP Engine Guide](../engineering/OCPP_ENGINE_GUIDE.md).
 **Updated:** 2026-07-31 — WO-ARGOS-009 (CAP-004) added 7 HTTP endpoints: 3 read-only under `/sessions`, 3 under `/credentials` (2 read/write + revoke), 1 read-only under `/authorization-attempts`. `Authorize`/`StartTransaction`/`MeterValues`/`StopTransaction` themselves are OCPP protocol traffic, not HTTP — same WebSocket transport as CAP-003's messages, not listed here.
+**Updated:** 2026-08-02 — WO-ARGOS-010 (CAP-005, unmerged branch `feat/cap-005-connectivity-engine`): no new HTTP endpoint. The existing `GET /sites/:siteId/charging-stations` and `GET /charging-stations/:id` responses now additionally include `connectivityStatus`, `lastConnectedAt`, `lastDisconnectedAt`, `lastSeenAt`, `lastProtocolVersion` — see [CAP-005 Connectivity Engine](../domain/CAP-005_CONNECTIVITY_ENGINE.md). Connectivity detection itself is transport-layer (the same WebSocket surface as CAP-003/CAP-004's protocol traffic), not HTTP.
 **Part of:** [MOVOS Product Atlas](./MOVOS_PRODUCT_ATLAS_v1.0.md)
 
 All 35 real HTTP endpoints in `apps/movos-api`, prefix `/api/v1` (set in `src/main.ts`). This is the complete set — confirmed by reading every module import in `src/app.module.ts`; no partial or stub routes exist beyond these. (The OCPP WebSocket transport is a separate, non-HTTP surface — see the update notes above.)
