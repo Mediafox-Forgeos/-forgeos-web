@@ -27,6 +27,10 @@ enum MemberRole {
   SUPPORT
   ANALYST
   VIEWER
+  // CAP-007 (WO-ARGOS-013) — reserved for a future Fleet capability; no
+  // guard references this value yet (no fleet endpoints exist to gate).
+  // See CAP-007_TENANT_MODEL.md §3.1.
+  FLEET_MANAGER
 }
 
 enum MemberStatus {
@@ -179,12 +183,22 @@ model User {
 }
 
 model Organization {
-  id        String    @id @default(cuid())
-  name      String
-  slug      String    @unique
-  status    OrgStatus @default(ACTIVE)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id     String    @id @default(cuid())
+  name   String
+  slug   String    @unique
+  status OrgStatus @default(ACTIVE)
+
+  // CAP-007 (WO-ARGOS-013) — this is the entity that work order's "Tenant"
+  // proposal maps onto (see CAP-007_TENANT_MODEL.md §0); these four fields
+  // are its only schema addition. All nullable: existing rows require no
+  // backfill/migration script — see CAP-007_TENANT_MODEL.md §5.
+  legalName String? // registered/legal company name, distinct from the display `name` above
+  taxId     String? // tax/fiscal identifier (e.g. NIT in Colombia) — free-form, not validated per-country here
+  country   String? // ISO 3166-1 alpha-2, not enforced at the DB level yet
+  timezone  String? // IANA timezone name (e.g. "America/Bogota") — not yet consumed by any scheduling/reporting logic
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   memberships Membership[]
   sites       Site[]
