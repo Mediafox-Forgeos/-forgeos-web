@@ -7,10 +7,14 @@ import type { ApiChargingStation, ApiSite } from '@mediafox/shared-types';
 import { PageContainer } from '@/components/layout/page-container';
 import { PageHeader } from '@/components/layout/page-header';
 import { EmptyState } from '@/components/movos/empty-state';
-import { ApiChargingStationStatusBadge } from '@/components/movos/api-charging-status-badges';
+import {
+  ApiChargingStationStatusBadge,
+  ApiConnectivityStatusBadge,
+} from '@/components/movos/api-charging-status-badges';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { apiClient, ApiError } from '@/lib/api-client';
+import { formatDateTime } from '@/lib/format';
 import { getChargingStation } from '@/lib/charging-api';
 import { useAuth } from '@/context/auth-context';
 import { EvseList } from '@/components/charging/evse-list';
@@ -96,6 +100,7 @@ export default function ChargingStationDetailPage() {
         actions={
           <div className="flex items-center gap-2">
             <ApiChargingStationStatusBadge status={station.status} />
+            <ApiConnectivityStatusBadge status={station.connectivityStatus} />
             {canManage && (
               <Button
                 variant="outline"
@@ -118,6 +123,16 @@ export default function ChargingStationDetailPage() {
         <DetailCard
           label="Protocolo"
           value={station.protocol ?? 'Sin especificar'}
+        />
+        <DetailCard
+          label="Última conexión vista"
+          value={
+            station.lastSeenAt ? formatDateTime(station.lastSeenAt) : 'Nunca'
+          }
+        />
+        <DetailCard
+          label="Versión de protocolo (última conexión)"
+          value={station.lastProtocolVersion ?? 'Sin especificar'}
         />
       </div>
 

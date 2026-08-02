@@ -56,3 +56,24 @@ export function ApiConnectorStatusBadge({ status }: { status: string }) {
   };
   return <Badge tone={descriptor.tone}>{descriptor.label}</Badge>;
 }
+
+// CAP-005 — device connectivity (last-known WebSocket connection evidence),
+// deliberately distinct from ChargingStationStatus above (administrative)
+// and from Evse/Connector operational status (charging-session state). See
+// docs/domain/CAP-005_CONNECTIVITY_ENGINE.md.
+const connectivityStatusMap: Record<
+  string,
+  { label: string; tone: BadgeTone }
+> = {
+  ONLINE: { label: 'En línea', tone: 'success' },
+  OFFLINE: { label: 'Desconectado', tone: 'danger' },
+  UNKNOWN: { label: 'Desconocido', tone: 'neutral' },
+};
+
+export function ApiConnectivityStatusBadge({ status }: { status: string }) {
+  const descriptor = connectivityStatusMap[status] ?? {
+    label: status,
+    tone: 'neutral' as const,
+  };
+  return <Badge tone={descriptor.tone}>{descriptor.label}</Badge>;
+}
