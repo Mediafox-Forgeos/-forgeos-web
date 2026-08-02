@@ -6,7 +6,10 @@ import * as React from 'react';
 import type { ApiChargingStation } from '@mediafox/shared-types';
 
 import { EmptyState } from '@/components/movos/empty-state';
-import { ApiChargingStationStatusBadge } from '@/components/movos/api-charging-status-badges';
+import {
+  ApiChargingStationStatusBadge,
+  ApiConnectivityStatusBadge,
+} from '@/components/movos/api-charging-status-badges';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { listChargingStationsBySite } from '@/lib/charging-api';
@@ -109,7 +112,12 @@ export function ChargingStationList({
                           : ''}
                       </p>
                     </div>
-                    <ApiChargingStationStatusBadge status={station.status} />
+                    <div className="flex flex-col items-end gap-1">
+                      <ApiChargingStationStatusBadge status={station.status} />
+                      <ApiConnectivityStatusBadge
+                        status={station.connectivityStatus}
+                      />
+                    </div>
                   </div>
                 </CardHeader>
               </Card>

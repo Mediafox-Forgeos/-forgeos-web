@@ -99,6 +99,14 @@ export interface ApiChargingStation {
   commissionedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  // CAP-005 — device connectivity, distinct from `status` above
+  // (ChargingStationStatus is administrative; this is last-known
+  // connectivity evidence). See docs/domain/CAP-005_CONNECTIVITY_ENGINE.md.
+  connectivityStatus: string;
+  lastConnectedAt: string | null;
+  lastDisconnectedAt: string | null;
+  lastSeenAt: string | null;
+  lastProtocolVersion: string | null;
 }
 
 export interface ApiEvse {

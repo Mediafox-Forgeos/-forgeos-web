@@ -1,14 +1,31 @@
 import { ConnectionRegistryService } from './connection-registry.service';
+import type { ConnectivityCoordinator } from '../connectivity/connectivity-coordinator.service';
 
 function fakeSocket() {
   return { close: jest.fn() } as unknown as import('ws').WebSocket;
 }
 
+function fakeConnectivityCoordinator(): jest.Mocked<
+  Pick<
+    ConnectivityCoordinator,
+    'handleConnectionEstablished' | 'handleConnectionClosed'
+  >
+> {
+  return {
+    handleConnectionEstablished: jest.fn().mockResolvedValue(undefined),
+    handleConnectionClosed: jest.fn().mockResolvedValue(undefined),
+  };
+}
+
 describe('ConnectionRegistryService', () => {
   let registry: ConnectionRegistryService;
+  let connectivity: ReturnType<typeof fakeConnectivityCoordinator>;
 
   beforeEach(() => {
-    registry = new ConnectionRegistryService();
+    connectivity = fakeConnectivityCoordinator();
+    registry = new ConnectionRegistryService(
+      connectivity as unknown as ConnectivityCoordinator,
+    );
   });
 
   afterEach(() => {
@@ -40,6 +57,31 @@ describe('ConnectionRegistryService', () => {
     expect(second.close).not.toHaveBeenCalled();
     expect(registry.get('movos-abc123')?.socket).toBe(second);
     expect(registry.listConnected()).toHaveLength(1);
+
+    // CAP-005 scenario 10: a socket replacement is two genuine connection
+    // events (register, register), never a spurious extra transition — the
+    // replaced socket's own close is a direct WebSocket call, not routed
+    // through unregister(), so it never produces a second
+    // handleConnectionClosed call of its own.
+    expect(connectivity.handleConnectionEstablished).toHaveBeenCalledTimes(2);
+    expect(connectivity.handleConnectionClosed).not.toHaveBeenCalled();
+  });
+
+  // CAP-005 scenario 1: a valid connection is reported to the coordinator
+  // with exactly the identity/station/protocol it registered with.
+  it('notifies ConnectivityCoordinator of a new connection on register', () => {
+    registry.register({
+      ocppIdentity: 'movos-abc123',
+      chargingStationId: 'cs1',
+      protocolVersion: 'OCPP1_6J',
+      socket: fakeSocket(),
+    });
+
+    expect(connectivity.handleConnectionEstablished).toHaveBeenCalledWith({
+      chargingStationId: 'cs1',
+      ocppIdentity: 'movos-abc123',
+      protocolVersion: 'OCPP1_6J',
+    });
   });
 
   // Test 17 (connection-layer half): reconnecting does not create any
@@ -78,9 +120,20 @@ describe('ConnectionRegistryService', () => {
     // the newer, live (second) connection.
     registry.unregister('movos-abc123', first);
     expect(registry.get('movos-abc123')?.socket).toBe(second);
+    // CAP-005 scenario 11: the mismatched-socket close must not notify the
+    // coordinator either — nothing actually disconnected.
+    expect(connectivity.handleConnectionClosed).not.toHaveBeenCalled();
 
+    // CAP-005 scenario 2: a genuine (matching-socket) close does notify,
+    // with reason 'clean'.
     registry.unregister('movos-abc123', second);
     expect(registry.get('movos-abc123')).toBeUndefined();
+    expect(connectivity.handleConnectionClosed).toHaveBeenCalledTimes(1);
+    expect(connectivity.handleConnectionClosed).toHaveBeenCalledWith({
+      chargingStationId: 'cs1',
+      ocppIdentity: 'movos-abc123',
+      reason: 'clean',
+    });
   });
 
   it('forceDisconnect closes the socket and removes the record', () => {
@@ -119,12 +172,16 @@ describe('ConnectionRegistryService', () => {
 // STALE_THRESHOLD_MS constants, which this suite does not alter.
 describe('ConnectionRegistryService — stale connection sweep', () => {
   let registry: ConnectionRegistryService;
+  let connectivity: ReturnType<typeof fakeConnectivityCoordinator>;
 
   const SWEEP_INTERVAL_MS = 60_000;
 
   beforeEach(() => {
     jest.useFakeTimers();
-    registry = new ConnectionRegistryService();
+    connectivity = fakeConnectivityCoordinator();
+    registry = new ConnectionRegistryService(
+      connectivity as unknown as ConnectivityCoordinator,
+    );
   });
 
   afterEach(() => {
@@ -147,6 +204,15 @@ describe('ConnectionRegistryService — stale connection sweep', () => {
 
     expect(socket.close).toHaveBeenCalledWith(1001, 'stale-connection');
     expect(registry.isConnected('movos-stale')).toBe(false);
+    // CAP-005 scenario 3: only the stale sweep (not a clean close) reports
+    // reason 'stale' — this is what lets ConnectivityCoordinator distinguish
+    // "should move an ACTIVE/SUSPENDED session to OFFLINE" from a clean
+    // disconnect, which must not.
+    expect(connectivity.handleConnectionClosed).toHaveBeenCalledWith({
+      chargingStationId: 'cs1',
+      ocppIdentity: 'movos-stale',
+      reason: 'stale',
+    });
   });
 
   it('retains a connection that is touched before it goes stale', () => {
@@ -194,6 +260,10 @@ describe('ConnectionRegistryService — stale connection sweep', () => {
     // sweep timer rather than in isolation.
     registry.unregister('movos-replaced', older);
     expect(registry.get('movos-replaced')?.socket).toBe(newer);
+    // CAP-005 scenario 11 (sweep-adjacent variant): the old socket's late
+    // close must not tell the coordinator anything closed — the live
+    // (newer) connection is unaffected and still ONLINE.
+    expect(connectivity.handleConnectionClosed).not.toHaveBeenCalled();
 
     // t=360s total: the OLD record's original lastMessageAt (t=0) would
     // have been stale by now, but the live record tracks the NEWER

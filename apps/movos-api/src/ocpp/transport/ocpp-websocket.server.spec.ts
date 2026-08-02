@@ -8,6 +8,7 @@ import type { ChargingStation } from '@prisma/client';
 import { OcppWebSocketServer } from './ocpp-websocket.server';
 import { OcppAuthenticationService } from '../authentication/ocpp-authentication.service';
 import { ConnectionRegistryService } from '../connection-registry/connection-registry.service';
+import { ConnectivityCoordinator } from '../connectivity/connectivity-coordinator.service';
 import { OcppMessageRouterService } from '../routing/ocpp-message-router.service';
 import { Ocpp16Adapter } from '../protocol/ocpp16/ocpp16-adapter';
 import { Ocpp201Adapter } from '../protocol/ocpp201/ocpp201-adapter';
@@ -52,6 +53,13 @@ describe('OcppWebSocketServer (real HTTP + real WebSocket, mocked auth/router)',
         Ocpp201Adapter,
         { provide: OcppAuthenticationService, useValue: authentication },
         { provide: OcppMessageRouterService, useValue: router },
+        {
+          provide: ConnectivityCoordinator,
+          useValue: {
+            handleConnectionEstablished: jest.fn().mockResolvedValue(undefined),
+            handleConnectionClosed: jest.fn().mockResolvedValue(undefined),
+          },
+        },
       ],
     }).compile();
 

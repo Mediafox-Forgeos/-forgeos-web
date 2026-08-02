@@ -100,6 +100,11 @@ export function toApiChargingStation(
     commissionedAt: station.commissionedAt?.toISOString() ?? null,
     createdAt: station.createdAt.toISOString(),
     updatedAt: station.updatedAt.toISOString(),
+    connectivityStatus: station.connectivityStatus,
+    lastConnectedAt: station.lastConnectedAt?.toISOString() ?? null,
+    lastDisconnectedAt: station.lastDisconnectedAt?.toISOString() ?? null,
+    lastSeenAt: station.lastSeenAt?.toISOString() ?? null,
+    lastProtocolVersion: station.lastProtocolVersion,
   };
 }
 

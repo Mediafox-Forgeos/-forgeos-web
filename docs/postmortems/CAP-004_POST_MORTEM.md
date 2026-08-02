@@ -65,3 +65,7 @@ Every item below has a registered Architecture Backlog entry, a documented relat
 ## Next
 
 `CAP-005_AUTHORIZATION_AND_CONNECTIVITY` opened in the Architecture Backlog to carry forward: the `ConnectionRegistryService`↔`SessionLifecycleService` OFFLINE wiring (per DEC-017's recommendation), and RFID-specific credential behavior (UID normalization, Local Authorization List sync).
+
+## 2026-08-02 follow-up (WO-ARGOS-010): the OFFLINE-wiring gap is closed
+
+The single real gap this post-mortem flagged — `SessionLifecycleService.suspendSession(id, 'OFFLINE')` having no automatic caller — is resolved. DEC-017 was approved (RECOMMENDATION → ACCEPTED) and implemented as CAP-005's `ConnectivityCoordinator`, wired to `ConnectionRegistryService`'s existing stale-sweep exactly as DEC-017 required (no independent competing timer). Real-boot/real-Postgres/real-WebSocket validated: a session left `ACTIVE` through a verified-stale disconnect is now moved to `OFFLINE` automatically, and recovered automatically on a reconnect within the recovery window. See [CAP-005 Connectivity Engine](../domain/CAP-005_CONNECTIVITY_ENGINE.md). The RFID half of the original `CAP-005_AUTHORIZATION_AND_CONNECTIVITY` backlog entry was explicitly out of scope for WO-ARGOS-010 ("connectivity only") and remains open.
