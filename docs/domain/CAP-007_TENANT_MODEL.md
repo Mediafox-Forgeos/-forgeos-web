@@ -42,7 +42,7 @@ Connector
 
 - **ChargingStation, Evse, Connector**: own no `organizationId` column directly — ownership is derived by walking the parent chain. This is the established CAP-002 pattern, unchanged here.
 - **ChargingSession, AuthorizationCredential, AuthorizationAttempt**: denormalize `organizationId` directly onto the row (CAP-004's documented, deliberate exception — session-level query volume doesn't tolerate a 4-way join). `ChargingSession` additionally denormalizes `siteId`, `chargingStationId`, `evseId`, `connectorId`.
-- **Tariffs, Invoices, Fleets**: **do not exist as models.** No schema, no code, no artifact of any kind — confirmed by the same grep-based verification every prior Atlas/Feature-Matrix update in this project has used. This document does not invent them to answer the WO's ownership question prematurely; seeCAP-007_ISOLATION_INVARIANTS.md Invariant 4 for how the _future_ Invoice model should inherit ownership, stated as a design constraint on that future work, not as code shipped now.
+- **Tariffs, Invoices, Fleets**: **do not exist as models.** No schema, no code, no artifact of any kind — confirmed by the same grep-based verification every prior Atlas/Feature-Matrix update in this project has used. This document does not invent them to answer the WO's ownership question prematurely; see CAP-007_ISOLATION_INVARIANTS.md Invariant 4 for how the _future_ Invoice model should inherit ownership, stated as a design constraint on that future work, not as code shipped now.
 - **Users**: belong to zero or more Organizations via `Membership` (already many-to-many, already exists).
 
 ## 2. Who can — access rules (today, verified)
