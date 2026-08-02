@@ -131,6 +131,16 @@ enum OcppProtocolVersion {
   OCPP2_0_1
 }
 
+// CAP-005 (WO-ARGOS-010) — device connectivity, deliberately distinct from
+// ChargingStationStatus (administrative), EvseStatus/ConnectorStatus
+// (operational), and ChargingSessionStatus (business). See
+// docs/domain/CAP-005_CONNECTIVITY_ENGINE.md.
+enum ConnectivityStatus {
+  ONLINE
+  OFFLINE
+  UNKNOWN
+}
+
 enum OcppMessageDirection {
   INBOUND
   OUTBOUND
@@ -284,6 +294,31 @@ model ChargingStation {
   // as explicitly disconnected/decommissioned without necessarily
   // reprovisioning a new secret immediately.
   ocppRevokedAt       DateTime?
+
+  // CAP-005 (WO-ARGOS-010) — last-known connectivity evidence, distinct
+  // from ChargingStationStatus (administrative) and from live connection
+  // state (which stays in-memory in ConnectionRegistryService, never
+  // persisted here — see docs/domain/CAP-005_CONNECTIVITY_ENGINE.md).
+  // Deliberately NOT authoritative for "is this station connected right
+  // now" — only for "what do we last know," including across a process
+  // restart, where startup reconciliation forces ONLINE -> UNKNOWN rather
+  // than trusting a value that predates the restart (see
+  // docs/engineering/CONNECTIVITY_RUNTIME_GUIDE.md).
+  connectivityStatus  ConnectivityStatus   @default(UNKNOWN)
+  lastConnectedAt     DateTime?
+  lastDisconnectedAt  DateTime?
+  // Set alongside lastConnectedAt at connect/reconnect time — deliberately
+  // NOT updated on every inbound OCPP message (that would mean a DB write
+  // per Heartbeat/StatusNotification/MeterValues across the whole fleet,
+  // exactly the write-amplification HeartbeatHandler's own doc comment
+  // already argues against for CAP-003). ConnectionRegistryService's
+  // in-memory lastMessageAt remains the fine-grained, per-message signal;
+  // this field is the coarser, restart-surviving one. A known
+  // simplification, not yet distinguishable from lastConnectedAt in this
+  // version — see docs/domain/CAP-005_CONNECTIVITY_ENGINE.md's known
+  // limitations.
+  lastSeenAt          DateTime?
+  lastProtocolVersion OcppProtocolVersion?
 
   site               Site                @relation(fields: [siteId], references: [id])
   evses              Evse[]

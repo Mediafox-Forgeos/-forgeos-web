@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import type WebSocket from 'ws';
 
 import type { OcppProtocolVersion } from '../protocol/common/normalized-events';
+import { ConnectivityCoordinator } from '../connectivity/connectivity-coordinator.service';
 
 export interface ConnectionRecord {
   ocppIdentity: string;
@@ -36,6 +37,14 @@ const SWEEP_INTERVAL_MS = 60_000;
  * before registering the new one — never two live sockets for the same
  * station. A connection's presence here means "a WebSocket is open," not
  * "the station is operationally available" — see the OCPP Engine Guide.
+ *
+ * CAP-005 (WO-ARGOS-010) — this class is also the sole source of
+ * connectivity events (DEC-017's approved design): register(), unregister(),
+ * and the stale sweep each notify ConnectivityCoordinator, which owns what
+ * happens next (persisted ChargingStation connectivity fields, session
+ * OFFLINE transitions, audit events). Notifications are fire-and-forget
+ * from this class's point of view — a connectivity-side failure must never
+ * block or break the transport-layer connection handling above it.
  */
 @Injectable()
 export class ConnectionRegistryService implements OnModuleDestroy {
@@ -43,7 +52,7 @@ export class ConnectionRegistryService implements OnModuleDestroy {
   private readonly connections = new Map<string, ConnectionRecord>();
   private readonly sweepTimer: NodeJS.Timeout;
 
-  constructor() {
+  constructor(private readonly connectivity: ConnectivityCoordinator) {
     this.sweepTimer = setInterval(() => this.sweepStale(), SWEEP_INTERVAL_MS);
     this.sweepTimer.unref?.();
   }
@@ -72,6 +81,12 @@ export class ConnectionRegistryService implements OnModuleDestroy {
       connectedAt: now,
       lastMessageAt: now,
     });
+
+    this.notifyConnected(
+      record.chargingStationId,
+      record.ocppIdentity,
+      record.protocolVersion,
+    );
   }
 
   /** Called on every inbound message to keep liveness accurate. */
@@ -87,6 +102,7 @@ export class ConnectionRegistryService implements OnModuleDestroy {
     const record = this.connections.get(ocppIdentity);
     if (record && record.socket === socket) {
       this.connections.delete(ocppIdentity);
+      this.notifyClosed(record.chargingStationId, ocppIdentity, 'clean');
     }
   }
 
@@ -123,7 +139,45 @@ export class ConnectionRegistryService implements OnModuleDestroy {
         );
         record.socket.close(1001, 'stale-connection');
         this.connections.delete(ocppIdentity);
+        this.notifyClosed(record.chargingStationId, ocppIdentity, 'stale');
       }
     }
+  }
+
+  /** Fire-and-forget — a connectivity-side failure (e.g. a transient DB
+   * error) must never propagate back into transport-layer connection
+   * handling. Logged, never thrown. */
+  private notifyConnected(
+    chargingStationId: string,
+    ocppIdentity: string,
+    protocolVersion: OcppProtocolVersion,
+  ): void {
+    this.connectivity
+      .handleConnectionEstablished({
+        chargingStationId,
+        ocppIdentity,
+        protocolVersion,
+      })
+      .catch((error: unknown) => {
+        this.logger.error(
+          `ConnectivityCoordinator.handleConnectionEstablished failed for ${ocppIdentity}`,
+          error instanceof Error ? error.stack : undefined,
+        );
+      });
+  }
+
+  private notifyClosed(
+    chargingStationId: string,
+    ocppIdentity: string,
+    reason: 'clean' | 'stale',
+  ): void {
+    this.connectivity
+      .handleConnectionClosed({ chargingStationId, ocppIdentity, reason })
+      .catch((error: unknown) => {
+        this.logger.error(
+          `ConnectivityCoordinator.handleConnectionClosed failed for ${ocppIdentity}`,
+          error instanceof Error ? error.stack : undefined,
+        );
+      });
   }
 }

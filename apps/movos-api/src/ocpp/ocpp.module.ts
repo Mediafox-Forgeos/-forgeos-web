@@ -9,6 +9,7 @@ import { OcppAuthenticationService } from './authentication/ocpp-authentication.
 import { OcppProvisioningService } from './authentication/ocpp-provisioning.service';
 import { OcppProvisioningController } from './authentication/ocpp-provisioning.controller';
 import { ConnectionRegistryService } from './connection-registry/connection-registry.service';
+import { ConnectivityCoordinator } from './connectivity/connectivity-coordinator.service';
 import { Ocpp16Adapter } from './protocol/ocpp16/ocpp16-adapter';
 import { Ocpp201Adapter } from './protocol/ocpp201/ocpp201-adapter';
 import { OcppProtocolEventService } from './persistence/ocpp-protocol-event.service';
@@ -37,6 +38,7 @@ import { OcppWebSocketServer } from './transport/ocpp-websocket.server';
     RolesGuard,
     OcppAuthenticationService,
     OcppProvisioningService,
+    ConnectivityCoordinator,
     ConnectionRegistryService,
     Ocpp16Adapter,
     Ocpp201Adapter,
