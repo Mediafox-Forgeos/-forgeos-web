@@ -1,5 +1,4 @@
 import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
-import type { ChargingSession } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../../audit/audit.service';
@@ -110,7 +109,7 @@ export class ConnectivityCoordinator implements OnModuleInit {
     });
 
     if (offlineSession) {
-      await this.attemptRecovery(offlineSession, input.chargingStationId);
+      await this.attemptRecovery(offlineSession.id, input.chargingStationId);
     }
   }
 
@@ -165,69 +164,59 @@ export class ConnectivityCoordinator implements OnModuleInit {
   }
 
   /**
-   * The recovery policy (DEC-017 item 4 / Phase 7): an OFFLINE session may
-   * return to ACTIVE only when the reconnecting station is the same one
-   * that went offline (trivially true here — we only look up OFFLINE
-   * sessions scoped to `chargingStationId`), the transaction is still
-   * non-terminal (true by definition of being OFFLINE, not COMPLETED/
-   * FAILED/CANCELLED), no conflicting active session exists on the same
-   * connector, and the reconnect lands within the recovery window
-   * (measured from the session's own last update — the moment it was
-   * moved to OFFLINE). If evidence is insufficient, the session stays
-   * OFFLINE and a diagnostic audit event is recorded — never a guess.
+   * The recovery policy (DEC-017 item 4 / Phase 7), hardened by CAP-006A
+   * (WO-ARGOS-012): the actual conflict-check-then-resume decision is now
+   * one atomic, connector-lock-protected operation inside
+   * `SessionLifecycleService.recoverOfflineSession` (Invariant 1 & 3) —
+   * this method's job is reduced to interpreting that result and owning
+   * the audit trail, since it has the station/ocppIdentity context the
+   * lifecycle service intentionally doesn't.
    */
   private async attemptRecovery(
-    session: ChargingSession,
+    sessionId: string,
     chargingStationId: string,
   ): Promise<void> {
-    const conflicting = await this.prisma.chargingSession.findFirst({
-      where: {
-        connectorId: session.connectorId,
-        status: {
-          in: [
-            'PENDING',
-            'AUTHORIZED',
-            'STARTING',
-            'ACTIVE',
-            'SUSPENDED',
-            'STOPPING',
-          ],
-        },
-        id: { not: session.id },
-      },
-    });
+    const result = await this.sessionLifecycle.recoverOfflineSession(
+      sessionId,
+      ConnectivityCoordinator.RECOVERY_WINDOW_MS,
+    );
 
-    const withinWindow =
-      Date.now() - session.updatedAt.getTime() <=
-      ConnectivityCoordinator.RECOVERY_WINDOW_MS;
+    if (result.outcome === 'already-resolved') {
+      // A concurrent duplicate reconnect or an in-flight StopTransaction
+      // resolved this session while this call waited for the connector
+      // lock — CAP-006A Invariant 3 (reconnect is idempotent): nothing to
+      // record here, the event that actually resolved it owns its own
+      // audit trail.
+      this.logger.log(
+        `Recovery skipped for session ${sessionId} on station ${chargingStationId}: already resolved to ${result.session.status} before the connector lock was acquired`,
+      );
+      return;
+    }
 
-    if (conflicting || !withinWindow) {
+    if (result.outcome === 'rejected') {
       this.logger.warn(
-        `Recovery rejected for session ${session.id} on station ${chargingStationId}: ${conflicting ? 'conflicting session on connector' : 'outside recovery window'}`,
+        `Recovery rejected for session ${sessionId} on station ${chargingStationId}: ${result.rejectionReason}`,
       );
       await this.audit.record({
         action: 'SESSION_RECOVERY_REJECTED',
         subjectType: 'ChargingSession',
-        subjectId: session.id,
+        subjectId: sessionId,
         metadata: {
           chargingStationId,
-          protocolTransactionId: session.protocolTransactionId,
-          reason: conflicting
-            ? 'conflicting-session-on-connector'
-            : 'outside-recovery-window',
+          protocolTransactionId: result.session.protocolTransactionId,
+          reason: result.rejectionReason,
         },
       });
       return;
     }
 
-    await this.sessionLifecycle.resumeSession(session.id);
     await this.audit.record({
       action: 'SESSION_RECOVERED',
       subjectType: 'ChargingSession',
-      subjectId: session.id,
+      subjectId: sessionId,
       metadata: {
         chargingStationId,
-        protocolTransactionId: session.protocolTransactionId,
+        protocolTransactionId: result.session.protocolTransactionId,
       },
     });
   }

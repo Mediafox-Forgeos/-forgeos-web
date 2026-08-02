@@ -1,7 +1,16 @@
+import type { ChargingSession } from '@prisma/client';
+
 import { ConnectivityCoordinator } from './connectivity-coordinator.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { AuditService } from '../../audit/audit.service';
 import type { SessionLifecycleService } from '../../sessions/session-lifecycle.service';
+
+// Test fixtures below are deliberately partial (only the fields each test
+// actually reads) — cast at the boundary rather than filling in a dozen
+// irrelevant ChargingSession columns per fixture.
+function asSession(partial: Record<string, unknown>): ChargingSession {
+  return partial as unknown as ChargingSession;
+}
 
 type PrismaMock = {
   chargingStation: {
@@ -32,7 +41,7 @@ function createAuditMock(): jest.Mocked<Pick<AuditService, 'record'>> {
 }
 
 function createSessionLifecycleMock(): jest.Mocked<
-  Pick<SessionLifecycleService, 'suspendSession' | 'resumeSession'>
+  Pick<SessionLifecycleService, 'suspendSession' | 'recoverOfflineSession'>
 > {
   return {
     suspendSession: jest
@@ -40,11 +49,16 @@ function createSessionLifecycleMock(): jest.Mocked<
       .mockImplementation((id: string) =>
         Promise.resolve({ id, status: 'OFFLINE' }),
       ),
-    resumeSession: jest
-      .fn()
-      .mockImplementation((id: string) =>
-        Promise.resolve({ id, status: 'ACTIVE' }),
-      ),
+    // CAP-006A: the conflict-check + window-check + resume decision is now
+    // one atomic call into SessionLifecycleService — the coordinator only
+    // interprets the result. Defaults to 'recovered'; individual tests
+    // override with mockResolvedValueOnce for the other outcomes.
+    recoverOfflineSession: jest.fn().mockImplementation((id: string) =>
+      Promise.resolve({
+        outcome: 'recovered',
+        session: { id, status: 'ACTIVE' },
+      }),
+    ),
   };
 }
 
@@ -115,7 +129,7 @@ describe('ConnectivityCoordinator', () => {
       expect(audit.record).toHaveBeenCalledWith(
         expect.objectContaining({ action: 'STATION_CONNECTIVITY_CONNECTED' }),
       );
-      expect(sessionLifecycle.resumeSession).not.toHaveBeenCalled();
+      expect(sessionLifecycle.recoverOfflineSession).not.toHaveBeenCalled();
     });
 
     // Scenario 8: an OFFLINE session on the reconnecting station, within
@@ -123,9 +137,11 @@ describe('ConnectivityCoordinator', () => {
     // restored to ACTIVE — reported as RECONNECTED, not CONNECTED.
     it('restores an OFFLINE session and records RECONNECTED when recovery succeeds', async () => {
       const session = offlineSession();
-      prisma.chargingSession.findFirst
-        .mockResolvedValueOnce(session) // the OFFLINE-session lookup
-        .mockResolvedValueOnce(null); // no conflicting session on the connector
+      prisma.chargingSession.findFirst.mockResolvedValueOnce(session); // the OFFLINE-session lookup
+      sessionLifecycle.recoverOfflineSession.mockResolvedValueOnce({
+        outcome: 'recovered',
+        session: asSession({ ...session, status: 'ACTIVE' }),
+      });
 
       await coordinator.handleConnectionEstablished({
         chargingStationId: 'cs1',
@@ -138,7 +154,10 @@ describe('ConnectivityCoordinator', () => {
           action: 'STATION_CONNECTIVITY_RECONNECTED',
         }),
       );
-      expect(sessionLifecycle.resumeSession).toHaveBeenCalledWith(session.id);
+      expect(sessionLifecycle.recoverOfflineSession).toHaveBeenCalledWith(
+        session.id,
+        ConnectivityCoordinator.RECOVERY_WINDOW_MS,
+      );
       expect(audit.record).toHaveBeenCalledWith(
         expect.objectContaining({ action: 'SESSION_RECOVERED' }),
       );
@@ -153,10 +172,12 @@ describe('ConnectivityCoordinator', () => {
     // session stays OFFLINE, not silently resumed alongside it.
     it('rejects recovery when a conflicting session exists on the same connector', async () => {
       const session = offlineSession();
-      const conflicting = { id: 'session-2' };
-      prisma.chargingSession.findFirst
-        .mockResolvedValueOnce(session)
-        .mockResolvedValueOnce(conflicting);
+      prisma.chargingSession.findFirst.mockResolvedValueOnce(session);
+      sessionLifecycle.recoverOfflineSession.mockResolvedValueOnce({
+        outcome: 'rejected',
+        session: asSession(session),
+        rejectionReason: 'conflicting-session-on-connector',
+      });
 
       await coordinator.handleConnectionEstablished({
         chargingStationId: 'cs1',
@@ -164,7 +185,6 @@ describe('ConnectivityCoordinator', () => {
         protocolVersion: 'OCPP1_6J',
       });
 
-      expect(sessionLifecycle.resumeSession).not.toHaveBeenCalled();
       expect(audit.record).toHaveBeenCalledWith(
         expect.objectContaining({
           action: 'SESSION_RECOVERY_REJECTED',
@@ -181,9 +201,12 @@ describe('ConnectivityCoordinator', () => {
           Date.now() - ConnectivityCoordinator.RECOVERY_WINDOW_MS - 60_000,
         ),
       });
-      prisma.chargingSession.findFirst
-        .mockResolvedValueOnce(session)
-        .mockResolvedValueOnce(null);
+      prisma.chargingSession.findFirst.mockResolvedValueOnce(session);
+      sessionLifecycle.recoverOfflineSession.mockResolvedValueOnce({
+        outcome: 'rejected',
+        session: asSession(session),
+        rejectionReason: 'outside-recovery-window',
+      });
 
       await coordinator.handleConnectionEstablished({
         chargingStationId: 'cs1',
@@ -191,7 +214,6 @@ describe('ConnectivityCoordinator', () => {
         protocolVersion: 'OCPP1_6J',
       });
 
-      expect(sessionLifecycle.resumeSession).not.toHaveBeenCalled();
       expect(audit.record).toHaveBeenCalledWith(
         expect.objectContaining({
           action: 'SESSION_RECOVERY_REJECTED',
@@ -199,6 +221,33 @@ describe('ConnectivityCoordinator', () => {
             reason: 'outside-recovery-window',
           }),
         }),
+      );
+    });
+
+    // CAP-006A Invariant 3 (WO-ARGOS-012): a duplicate/replayed reconnect
+    // that finds the session already resolved (recovered by a concurrent
+    // call, or terminated by a StopTransaction, while this call waited for
+    // the connector lock) is a clean no-op — no audit event of its own,
+    // since the event that actually resolved the session owns that trail.
+    it('records no audit event when recovery finds the session already resolved', async () => {
+      const session = offlineSession();
+      prisma.chargingSession.findFirst.mockResolvedValueOnce(session);
+      sessionLifecycle.recoverOfflineSession.mockResolvedValueOnce({
+        outcome: 'already-resolved',
+        session: asSession({ ...session, status: 'ACTIVE' }),
+      });
+
+      await coordinator.handleConnectionEstablished({
+        chargingStationId: 'cs1',
+        ocppIdentity: 'movos-abc123',
+        protocolVersion: 'OCPP1_6J',
+      });
+
+      expect(audit.record).not.toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'SESSION_RECOVERED' }),
+      );
+      expect(audit.record).not.toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'SESSION_RECOVERY_REJECTED' }),
       );
     });
 
