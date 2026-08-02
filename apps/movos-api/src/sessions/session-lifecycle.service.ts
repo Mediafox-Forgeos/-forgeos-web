@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
   ChargingSessionStatus,
+  Prisma,
   type ChargingSession,
   type ChargingSessionTerminationReason,
   type OcppProtocolVersion,
@@ -28,9 +29,26 @@ export interface StopSessionInput {
   endedAt?: Date;
 }
 
+export type RecoverOfflineSessionOutcome =
+  'recovered' | 'already-resolved' | 'rejected';
+
+export type RecoverOfflineSessionRejectionReason =
+  'conflicting-session-on-connector' | 'outside-recovery-window';
+
+export interface RecoverOfflineSessionResult {
+  outcome: RecoverOfflineSessionOutcome;
+  session: ChargingSession;
+  rejectionReason?: RecoverOfflineSessionRejectionReason;
+}
+
 /** Non-terminal statuses — a connector may have at most one session in one
- * of these at a time (see createSession's idempotency check below). */
-const NON_TERMINAL_STATUSES: ChargingSessionStatus[] = [
+ * of these at a time (see createSession's idempotency check below, and the
+ * partial unique index `ChargingSession_connectorId_nonterminal_key` added
+ * in CAP-006A that enforces this same set at the database level). Exported
+ * for reuse by anything else that needs to reason about "is this session
+ * still running" without duplicating the list (e.g. the CAP-006A orphan
+ * sweep). */
+export const NON_TERMINAL_STATUSES: ChargingSessionStatus[] = [
   ChargingSessionStatus.PENDING,
   ChargingSessionStatus.AUTHORIZED,
   ChargingSessionStatus.STARTING,
@@ -39,6 +57,13 @@ const NON_TERMINAL_STATUSES: ChargingSessionStatus[] = [
   ChargingSessionStatus.OFFLINE,
   ChargingSessionStatus.STOPPING,
 ];
+
+/** The Postgres error code for a unique-constraint violation — used to
+ * gracefully fall back to "return the existing row" if the CAP-006A
+ * partial unique index ever catches a race the advisory lock below should
+ * already have prevented (defense in depth, see CAP-006A_INVARIANTS.md
+ * Invariant 1). */
+const UNIQUE_CONSTRAINT_VIOLATION = 'P2002';
 
 /** The allowed-transitions table from CAP-004_CHARGING_SESSIONS_
  * FOUNDATION.md §8. SUSPENDED shares OFFLINE's rules (both mean
@@ -128,43 +153,144 @@ export class SessionLifecycleService {
    * session, that session is returned as-is rather than creating a second
    * concurrent one — the same response a genuine retransmission and a
    * connector-already-occupied conflict both need.
+   *
+   * CAP-006A (WO-ARGOS-012, Invariant 1): the existence check and the
+   * insert now run inside one transaction holding a Postgres advisory lock
+   * keyed on `connectorId` — the same lock `recoverOfflineSession` takes —
+   * so a concurrent reconnect-triggered recovery on this connector cannot
+   * interleave with this call. See CAP-006A_INVARIANTS.md for the full
+   * justification (evaluated against SELECT FOR UPDATE, optimistic
+   * concurrency, and a dedicated reservation table before choosing this).
+   * The partial unique index `ChargingSession_connectorId_nonterminal_key`
+   * is the defense-in-depth backstop if the lock is ever bypassed by a
+   * future bug — caught below and resolved the same way a normal
+   * duplicate-connector hit is.
    */
   async createSession(input: CreateSessionInput): Promise<ChargingSession> {
-    const existing = await this.prisma.chargingSession.findFirst({
-      where: {
-        connectorId: input.connectorId,
-        status: { in: NON_TERMINAL_STATUSES },
-      },
-    });
-    if (existing) {
-      this.logger.log(
-        `createSession: connector ${input.connectorId} already has a non-terminal session (${existing.id}) — returning it, not creating a duplicate`,
-      );
-      return existing;
-    }
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.connectorId})::bigint)`;
 
-    // The PENDING -> AUTHORIZED -> STARTING -> ACTIVE walk (§8) collapses
-    // into a single insert here: 1.6J's StartTransaction already implies a
-    // validated, physically-connecting device, and no other process ever
-    // observes this row between PENDING and ACTIVE within one handler
-    // invocation. See ALLOWED_TRANSITIONS above for proof each hop in that
-    // walk is independently valid — verified directly in this service's
-    // spec, not just asserted here.
-    return this.prisma.chargingSession.create({
-      data: {
-        organizationId: input.organizationId,
-        siteId: input.siteId,
-        chargingStationId: input.chargingStationId,
-        evseId: input.evseId,
-        connectorId: input.connectorId,
-        authorizationCredentialId: input.authorizationCredentialId,
-        protocolVersion: input.protocolVersion,
-        protocolTransactionId: this.transactionIds.next(),
-        status: ChargingSessionStatus.ACTIVE,
-        meterStart: input.meterStart,
-        energyWh: 0,
-        startedAt: input.startedAt,
-      },
+        const existing = await tx.chargingSession.findFirst({
+          where: {
+            connectorId: input.connectorId,
+            status: { in: NON_TERMINAL_STATUSES },
+          },
+        });
+        if (existing) {
+          this.logger.log(
+            `createSession: connector ${input.connectorId} already has a non-terminal session (${existing.id}) — returning it, not creating a duplicate`,
+          );
+          return existing;
+        }
+
+        // The PENDING -> AUTHORIZED -> STARTING -> ACTIVE walk (§8)
+        // collapses into a single insert here: 1.6J's StartTransaction
+        // already implies a validated, physically-connecting device, and
+        // no other process ever observes this row between PENDING and
+        // ACTIVE within one handler invocation. See ALLOWED_TRANSITIONS
+        // above for proof each hop in that walk is independently valid —
+        // verified directly in this service's spec, not just asserted
+        // here.
+        return tx.chargingSession.create({
+          data: {
+            organizationId: input.organizationId,
+            siteId: input.siteId,
+            chargingStationId: input.chargingStationId,
+            evseId: input.evseId,
+            connectorId: input.connectorId,
+            authorizationCredentialId: input.authorizationCredentialId,
+            protocolVersion: input.protocolVersion,
+            protocolTransactionId: this.transactionIds.next(),
+            status: ChargingSessionStatus.ACTIVE,
+            meterStart: input.meterStart,
+            energyWh: 0,
+            startedAt: input.startedAt,
+          },
+        });
+      });
+    } catch (error) {
+      if (isUniqueConstraintViolation(error)) {
+        this.logger.warn(
+          `createSession: partial unique index caught a connector race for ${input.connectorId} that the advisory lock should have prevented — falling back to the existing session`,
+        );
+        const existing = await this.prisma.chargingSession.findFirst({
+          where: {
+            connectorId: input.connectorId,
+            status: { in: NON_TERMINAL_STATUSES },
+          },
+        });
+        if (existing) return existing;
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Attempts to resume a specific OFFLINE session to ACTIVE — the atomic
+   * core of DEC-017/CAP-005's reconnect-recovery policy, hardened by
+   * CAP-006A (Invariant 1 & 3). Takes the same per-connector advisory lock
+   * `createSession` takes, so a concurrent StartTransaction on this
+   * connector cannot interleave with this check, and re-reads the session
+   * AFTER acquiring the lock — not before — since it may have changed
+   * (recovered by a concurrent duplicate reconnect, or terminated by a
+   * StopTransaction) while this call waited. Never invents a session,
+   * never re-checks credential validity, and records no audit event
+   * itself — the caller (ConnectivityCoordinator) owns that, since it
+   * already has the station/ocppIdentity context this method doesn't.
+   */
+  async recoverOfflineSession(
+    sessionId: string,
+    recoveryWindowMs: number,
+  ): Promise<RecoverOfflineSessionResult> {
+    return this.prisma.$transaction(async (tx) => {
+      const session = await tx.chargingSession.findUnique({
+        where: { id: sessionId },
+      });
+      if (!session) {
+        throw new NotFoundException(`ChargingSession ${sessionId} not found`);
+      }
+
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${session.connectorId})::bigint)`;
+
+      const fresh = await tx.chargingSession.findUnique({
+        where: { id: sessionId },
+      });
+      if (!fresh) {
+        throw new NotFoundException(`ChargingSession ${sessionId} not found`);
+      }
+      if (fresh.status !== ChargingSessionStatus.OFFLINE) {
+        // Resolved by someone else (a duplicate reconnect that won the
+        // lock first, or a StopTransaction) while this call waited for
+        // the lock — not an error, and not this call's job to undo.
+        return { outcome: 'already-resolved', session: fresh };
+      }
+
+      const conflicting = await tx.chargingSession.findFirst({
+        where: {
+          connectorId: fresh.connectorId,
+          status: { in: NON_TERMINAL_STATUSES },
+          id: { not: fresh.id },
+        },
+      });
+      const withinWindow =
+        Date.now() - fresh.updatedAt.getTime() <= recoveryWindowMs;
+
+      if (conflicting || !withinWindow) {
+        return {
+          outcome: 'rejected',
+          session: fresh,
+          rejectionReason: conflicting
+            ? 'conflicting-session-on-connector'
+            : 'outside-recovery-window',
+        };
+      }
+
+      const updated = await tx.chargingSession.update({
+        where: { id: fresh.id },
+        data: { status: ChargingSessionStatus.ACTIVE },
+      });
+      return { outcome: 'recovered', session: updated };
     });
   }
 
@@ -334,4 +460,11 @@ export class SessionLifecycleService {
     }
     return session;
   }
+}
+
+function isUniqueConstraintViolation(error: unknown): boolean {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === UNIQUE_CONSTRAINT_VIOLATION
+  );
 }

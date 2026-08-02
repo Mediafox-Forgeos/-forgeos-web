@@ -16,17 +16,28 @@ type PrismaMock = {
     create: jest.Mock;
     update: jest.Mock;
   };
+  $executeRaw: jest.Mock;
+  $transaction: jest.Mock;
 };
 
 function createPrismaMock(): PrismaMock {
-  return {
+  const mock: PrismaMock = {
     chargingSession: {
       findFirst: jest.fn(),
       findUnique: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
     },
+    $executeRaw: jest.fn().mockResolvedValue(0),
+    // CAP-006A: createSession/recoverOfflineSession run inside
+    // $transaction(async (tx) => ...) for the connector advisory lock.
+    // The mock has no real Postgres to lock against, so the callback just
+    // receives this same mock object as `tx` — every chargingSession.*
+    // call inside the transaction hits the identical jest.fn()s the tests
+    // already configure via `prisma.chargingSession.*`.
+    $transaction: jest.fn((fn: (tx: PrismaMock) => unknown) => fn(mock)),
   };
+  return mock;
 }
 
 function baseSession(overrides: Record<string, unknown> = {}) {

@@ -663,6 +663,13 @@ model ChargingSession {
   // as a duplicate via this exact constraint, not a race-prone read-then-
   // write check.
   @@unique([chargingStationId, protocolTransactionId])
+  // CAP-006A (WO-ARGOS-012, Invariant 1): "at most one non-terminal
+  // session per connector" is additionally enforced by a partial unique
+  // index on (connectorId) WHERE status is non-terminal — not
+  // representable in Prisma's schema DSL, so it exists only in migration
+  // `20260802055353_add_connector_nonterminal_unique_index`'s raw SQL,
+  // same convention as the CHECK constraints in the charging-sessions-
+  // foundation migration. See CAP-006A_INVARIANTS.md.
   @@index([organizationId, status])
   @@index([siteId, status])
 }
