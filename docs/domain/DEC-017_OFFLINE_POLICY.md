@@ -1,7 +1,7 @@
 # DEC-017 — ChargingSession OFFLINE Transition Policy
 
 **Generated:** 2026-08-01 (WO-ARGOS-009A)
-**Status:** RECOMMENDATION — awaiting ARGOS decision. Not implemented by this work order (validation-only mandate).
+**Status:** **ACCEPTED** (2026-08-02, WO-ARGOS-010) — see "ARGOS Approval Record" below. Originally: RECOMMENDATION — awaiting ARGOS decision. Not implemented by this work order (validation-only mandate).
 **Scope:** the trigger condition and threshold for `ACTIVE → OFFLINE` (and, symmetrically, when to attempt `OFFLINE → ACTIVE` on recovery). Does not touch `ACTIVE → SUSPENDED` (device-reported charging suspension — a different trigger, already distinguished in [CAP-004 §8](./CAP-004_CHARGING_SESSIONS_FOUNDATION.md#8-session-lifecycle)).
 **Related:** [Session Lifecycle Guide](../engineering/SESSION_LIFECYCLE_GUIDE.md), [CAP-003 Architecture Decisions — Decision 6](./CAP-003_OCPP_ARCHITECTURE_DECISIONS_v0.1.md#decision-6--multi-instance-connection-routing)
 
@@ -56,3 +56,24 @@ This recommendation does not authorize implementation. It identifies precisely w
 ## Implementation note (not authorized by this document)
 
 Building this correctly requires, at minimum: (1) wiring `ConnectionRegistryService`'s disconnect/stale events to `SessionLifecycleService.suspendSession(id, 'OFFLINE')` for any session active on the affected station, and (2) a heartbeat-silence check as the secondary trigger. Both are genuinely new work, not covered by CAP-004, and not implemented by this validation gate.
+
+---
+
+## ARGOS Approval Record (2026-08-02, WO-ARGOS-010)
+
+Everything above is preserved unedited as the original recommendation and analysis. ARGOS has reviewed and approves this decision, with the interpretation and required behavior below — implementation is authorized under CAP-005 (WO-ARGOS-010), not by this document itself.
+
+**Interpretation:** a session must transition away from `ACTIVE` when device connectivity is _verifiably_ lost — not on a bare timer disconnected from real evidence. The timeout policy is confirmed as **3 × the negotiated/configured heartbeat interval**, exactly as recommended above, and it **must** coordinate with — never compete with — the existing `ConnectionRegistryService` stale-connection detection. No independent, second timer is authorized.
+
+**Required behavior, as approved:**
+
+1. `ConnectionRegistryService` remains the single source of connection-loss events. `SessionLifecycleService` does not itself watch sockets, poll connection state, or run its own stale-detection timer — it only reacts to what the registry reports.
+2. `SessionLifecycleService` consumes a connectivity event (via the `ConnectivityCoordinator` seam CAP-005 introduces — see [CAP-005 Connectivity Engine](./CAP-005_CONNECTIVITY_ENGINE.md)); it does not infer connectivity from any other signal (e.g., absence of `MeterValues`).
+3. An `ACTIVE` or `SUSPENDED` session **may** transition to `OFFLINE` on a verified connectivity-loss event. This was already a valid transition in `ALLOWED_TRANSITIONS` (CAP-004) — DEC-017 approves _triggering_ it automatically, not a new transition.
+4. A valid reconnect **may** restore an `OFFLINE` session to its prior recoverable state — under the recovery policy CAP-005 defines (station identity match, same protocol transaction, non-terminal, within the recovery window). "May," not "always": insufficient evidence keeps the session `OFFLINE` rather than guessing.
+5. **A disconnect alone must never complete or fail a session.** `DISCONNECTED`/`STALE` connectivity events move a session toward `OFFLINE`, never toward `COMPLETED`, `FAILED`, or `CANCELLED`. Terminal transitions remain exclusively protocol-driven (`StopTransaction`) or explicit administrative action.
+6. **Session identity remains independent of WebSocket connection identity.** A `ChargingSession` is keyed by `(chargingStationId, protocolTransactionId)`, never by a socket, connection-registry entry, or any transport-layer identifier. This was already true by construction in CAP-004's schema (no FK from `ChargingSession` to any connection-layer concept) — DEC-017's approval reaffirms it as a hard constraint CAP-005 must not violate while wiring the two layers together.
+
+**What remains exactly as originally recommended, not modified by this approval:** the 3× multiplier, the "first of (a) registry event or (b) heartbeat silence" trigger logic, and the explicit rejection of Option A (fixed 60s, incoherent with the shipped 300s interval) and Option C (requires a vendor catalog that doesn't exist).
+
+**Consequence of this approval:** CAP-005 (branch `feat/cap-005-connectivity-engine`) is authorized to build the wiring this document's own "Implementation note" described as not-yet-authorized. Scope beyond that wiring (RFID, billing, OCPP 2.0.1 functional messages, etc.) remains unauthorized by this approval — see CAP-005's own out-of-scope list.
