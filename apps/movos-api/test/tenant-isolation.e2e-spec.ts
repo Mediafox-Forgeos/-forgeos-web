@@ -129,21 +129,37 @@ describe('Tenant isolation (e2e)', () => {
     expect(res.body[0].name).toBe('Site A1');
   });
 
-  maybe('User A requesting org B sites is forbidden', async () => {
-    const res = await request(app.getHttpServer())
-      .get('/api/v1/sites')
-      .set('Authorization', `Bearer ${tokenAOwner}`)
-      .set('X-Organization-Id', orgB);
-    expect(res.status).toBe(403);
-  });
+  // DEC-022 (WO-ARGOS-015) Invariant 2/3: the JWT `orgId` claim is the sole
+  // source of truth — `X-Organization-Id` has no effect on ordinary human
+  // requests, whether it names a real organization the caller isn't a
+  // member of, or a nonexistent one. Isolation is enforced by the token
+  // alone: the header cannot widen access, and cannot narrow it either —
+  // the request simply resolves against the token's own organization (A)
+  // exactly as if no header had been sent at all.
+  maybe(
+    "X-Organization-Id naming another real organization has no effect: still resolves to the token's own org",
+    async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/sites')
+        .set('Authorization', `Bearer ${tokenAOwner}`)
+        .set('X-Organization-Id', orgB);
+      expect(res.status).toBe(200);
+      const names = (res.body as Array<{ name: string }>).map((s) => s.name);
+      expect(names).not.toContain('Site B1');
+      expect(names.every((n) => n.startsWith('Site A'))).toBe(true);
+    },
+  );
 
-  maybe('User A with a forged org header is forbidden', async () => {
-    const res = await request(app.getHttpServer())
-      .get('/api/v1/sites')
-      .set('Authorization', `Bearer ${tokenAOwner}`)
-      .set('X-Organization-Id', 'org-does-not-exist');
-    expect(res.status).toBe(403);
-  });
+  maybe(
+    "a forged, nonexistent X-Organization-Id has no effect: still resolves to the token's own org",
+    async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/sites')
+        .set('Authorization', `Bearer ${tokenAOwner}`)
+        .set('X-Organization-Id', 'org-does-not-exist');
+      expect(res.status).toBe(200);
+    },
+  );
 
   maybe('VIEWER cannot create a site', async () => {
     const res = await request(app.getHttpServer())
