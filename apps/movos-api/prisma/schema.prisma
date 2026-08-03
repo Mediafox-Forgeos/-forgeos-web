@@ -196,6 +196,14 @@ model Organization {
   chargingSessions         ChargingSession[]
   authorizationCredentials AuthorizationCredential[]
   authorizationAttempts    AuthorizationAttempt[]
+
+  // CAP-009 — BillingAccount is tenant-scoped like every other business
+  // record (never spans organizations, per DEC-022's tenant-isolation
+  // precedent). TariffSnapshot is denormalized here too, deliberately not
+  // always equal to the owning ChargingSession's organizationId — see the
+  // roaming note on TariffSnapshot itself.
+  billingAccounts BillingAccount[]
+  tariffSnapshots TariffSnapshot[]
 }
 
 model Membership {
@@ -617,6 +625,21 @@ model ChargingSession {
 
   authorizationCredentialId String
 
+  // CAP-009 (WO-ARGOS-017) — nullable, deliberately. Not every session
+  // resolves to a debtor at creation time (CAP-008_BILLING_MODEL.md's own
+  // headline finding: several real deployment shapes, e.g. an anonymous
+  // shopping-mall walk-up, may never have a persisted BillingAccount at
+  // all), and no historical session in this database could be
+  // retroactively backfilled with a fabricated one. This is a considered
+  // exception to the standing "ChargingSession does not grow
+  // pricing/invoice/payment fields" constraint (CAP-004 §16, DEC-018,
+  // MOVOS_CHARGING_SESSION_ARCHITECTURE) — a debtor *reference* is an
+  // ownership fact, not a price or invoice field, and CAP-008's own
+  // ownership chain (Organization -> Site -> ChargingSession ->
+  // TariffSnapshot -> Invoice) requires this link to exist somewhere. See
+  // docs/domain/CAP-009_INVARIANTS.md.
+  billingAccountId String?
+
   protocolVersion       OcppProtocolVersion
   // MOVOS-assigned (1.6J) or device-assigned (2.0.1, not implemented)
   // transaction identifier — see §5's "Where protocolTransactionId comes
@@ -656,6 +679,8 @@ model ChargingSession {
   connector               Connector               @relation(fields: [connectorId], references: [id])
   authorizationCredential AuthorizationCredential @relation(fields: [authorizationCredentialId], references: [id])
   meterValues             MeterValue[]
+  billingAccount          BillingAccount?         @relation(fields: [billingAccountId], references: [id])
+  tariffSnapshots         TariffSnapshot[]
 
   // "protocolTransactionId is unique per charging station" (WO rule) plus
   // the idempotency requirement in §13: a retransmitted StartTransaction
@@ -688,4 +713,104 @@ model MeterValue {
   session ChargingSession @relation(fields: [sessionId], references: [id])
 
   @@index([sessionId, timestamp])
+}
+
+// CAP-009 (WO-ARGOS-017) — materializes the canonical-debt-owner decision
+// from CAP-008 (docs/domain/CAP-008_DEBT_OWNERSHIP.md). The party
+// responsible for paying for a ChargingSession, deliberately decoupled
+// from the operational facts of how the session happened (which
+// credential authorized it, which vehicle/driver used it — see CAP-008's
+// rejection of AuthorizationCredential/Vehicle/Driver/Fleet as the
+// canonical owner). Deliberately minimal: no address, payment method, tax
+// information, or invoice field — those belong to future capabilities
+// (Architecture Backlog #25/#26), not this foundation.
+enum BillingAccountType {
+  INDIVIDUAL
+  COMPANY
+  FLEET
+  HOA_CONDOMINIUM
+  ROAMING_PARTNER
+}
+
+// Deliberately two values, not the ACTIVE/INACTIVE/ARCHIVED pattern used
+// elsewhere (e.g. OrgStatus) — CAP-009's own invariants (see
+// docs/domain/CAP-009_INVARIANTS.md) only ever discuss "archived, never
+// deleted." A third state was not invented without a named business
+// reason for it to exist.
+enum BillingAccountStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+model BillingAccount {
+  id             String               @id @default(cuid())
+  organizationId String
+  type           BillingAccountType
+  displayName    String
+  status         BillingAccountStatus @default(ACTIVE)
+  // ISO 4217 currency code (e.g. "USD", "COP"). Plain String, not an enum
+  // — enumerating every ISO 4217 code in the schema is impractical, and no
+  // Currency concept exists anywhere else in this codebase to reuse.
+  // Validation belongs to the future service implementation, not this
+  // foundation (see docs/domain/CAP-009_BILLING_ACCOUNT_MODEL.md).
+  currency  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization     Organization      @relation(fields: [organizationId], references: [id])
+  chargingSessions ChargingSession[]
+
+  // No @@unique constraint: evaluated and deliberately not added — see
+  // docs/domain/CAP-009_BILLING_ACCOUNT_MODEL.md's "Uniqueness
+  // constraints" section for why no natural key exists at this
+  // deliberately minimal field set.
+  @@index([organizationId, status])
+}
+
+// CAP-009 (WO-ARGOS-017) — materializes CAP-008_DECISION.md's tariff-timing
+// choice (Option C: a snapshot captured at session start and again at each
+// pricing-relevant boundary crossed, degenerating to a single snapshot for
+// a session that crosses none). Immutable and append-only by convention:
+// deliberately no `updatedAt` field, and no update/delete method exists on
+// TariffSnapshotService's interface (see
+// apps/movos-api/src/billing/tariff-snapshot.service.interface.ts) — see
+// docs/domain/CAP-009_TARIFF_SNAPSHOT_MODEL.md for why this is an
+// application-level guarantee, not a database trigger, in this foundation.
+model TariffSnapshot {
+  id                String @id @default(cuid())
+  chargingSessionId String
+  // Denormalized, deliberately not always equal to
+  // ChargingSession.organizationId — DEC-018's roaming case means a
+  // session may be priced from a different organization's tariff than the
+  // one operating the station. See
+  // docs/domain/CAP-009_TARIFF_SNAPSHOT_MODEL.md.
+  organizationId String
+
+  // All three price components are frozen at capture time — never
+  // recomputed, never looked up live. Decimal, never Float: these are
+  // money values (see docs/domain/CAP-009_TARIFF_SNAPSHOT_MODEL.md for the
+  // precision rationale).
+  energyPricePerKwh Decimal @db.Decimal(12, 6)
+  pricePerMinute    Decimal @db.Decimal(12, 6)
+  fixedFee          Decimal @db.Decimal(12, 2)
+  // ISO 4217 currency code — must match every other TariffSnapshot for the
+  // same ChargingSession (CAP-009_INVARIANTS.md's "session currency never
+  // changes" rule), enforced at the service layer, not by a database
+  // constraint, in this foundation.
+  currency String
+  // IANA timezone name (e.g. "America/Bogota") — the timezone this
+  // snapshot's rate schedule (day/night, peak/off-peak) is defined
+  // against, independent of the database server's own timezone.
+  timezone String
+  // The moment this snapshot's terms began applying — a business fact,
+  // distinct from createdAt (when the row was physically written, which
+  // could differ if a snapshot is ever backfilled).
+  effectiveAt DateTime
+
+  createdAt DateTime @default(now())
+
+  chargingSession ChargingSession @relation(fields: [chargingSessionId], references: [id])
+  organization    Organization    @relation(fields: [organizationId], references: [id])
+
+  @@index([chargingSessionId, effectiveAt])
 }
