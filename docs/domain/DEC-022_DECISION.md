@@ -105,3 +105,28 @@ The accepted trade is stated once, plainly: Option A meaningfully narrows the bl
 ## Future constraints
 
 Any future capability — Billing, RFID, a future `SUPER_ADMIN`/platform-staff surface, background financial jobs — must respect the four-part attribution framework `DEC-022_SCENARIOS.md` establishes: human web-session context (this decision's subject) is never the source of truth for device/OCPP ownership, persisted business-record ownership, or background-job attribution. Concretely: a future `Invoice` model must denormalize `organizationId` from the `ChargingSession` it bills, never from whichever organization the issuing staff member's session happened to be scoped to at generation time (`DEC-022_SCENARIOS.md` Scenario 5, Scenario 7). This constraint holds regardless of anything else these future capabilities decide, and does not need to be re-litigated when they're designed.
+
+---
+
+## Implementation record (WO-ARGOS-015)
+
+**Implemented:** 2026-08-03. **Branch:** `feat/dec-022-single-active-organization`. **Evidence:** [DEC-022_MIGRATION.md](./DEC-022_MIGRATION.md) (what changed and how it rolls out), [DEC-022_VALIDATION.md](../postmortems/DEC-022_VALIDATION.md) (live-server proof of all 8 required scenarios), `apps/movos-api/src/auth/auth.service.spec.ts` (20 tests), `apps/movos-api/src/guards/org-context.guard.spec.ts` (6 tests), `apps/movos-api/test/auth.e2e-spec.ts` (14 tests against real Postgres), `apps/movos-web/src/context/auth-context.test.tsx`, `apps/movos-web/src/components/organizations/organization-switcher.test.tsx`, `apps/movos-web/src/lib/auth.test.ts` (16 frontend tests).
+
+This work order implemented the model exactly as decided above — no re-litigation of Option A vs. B vs. C occurred, and none of the 7 architectural invariants were modified from how they were approved.
+
+### Gap closure
+
+| #   | Gap                                                | Status     | Closed by                                                                                                                                                                                                                                                                                                              |
+| --- | -------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Login does not set `orgId`                         | **CLOSED** | `AuthService.login()` auto-selects when exactly one ACTIVE membership exists; audits the selection with `metadata: { trigger: 'auto' }`.                                                                                                                                                                               |
+| 2   | Refresh drops `orgId`                              | **CLOSED** | `RefreshDto.organizationId` (previously unused on the DTO) is now read by `AuthController.refresh()` and re-validated by `AuthService.refresh()`, preserving affinity when the caller supplies it.                                                                                                                     |
+| 3   | Frontend never calls `select-organization`         | **CLOSED** | `OrganizationSwitcher` (both variants) is the sole caller of `AuthContext.selectOrganization`, which calls the endpoint.                                                                                                                                                                                               |
+| 4   | Frontend uses non-deterministic `organizations[0]` | **CLOSED** | Removed outright. `AuthContext.applySession()` derives `currentOrg` only from the backend's stated `organizationId`; membership listing queries also gained `orderBy: { organization: { name: 'asc' } }`, closing the ordering non-determinism at its source.                                                          |
+| 5   | No organization-switcher UI                        | **CLOSED** | `src/components/organizations/organization-switcher.tsx` — a blocking full-page selector (`variant="list"`) for Case B (0/>1 memberships), and a sidebar dropdown (`variant="dropdown"`) for switching afterward.                                                                                                      |
+| 8   | Multi-tab refresh-rotation race                    | **CLOSED** | `RefreshSession.replacedByTokenHash` + a 10-second grace window in `AuthService.refresh()`, resolving a near-simultaneous duplicate refresh as a safe reuse rather than a spurious `401`. Proven under real concurrent load in `DEC-022_VALIDATION.md` Scenario 5 and `auth.e2e-spec.ts`'s `multi-tab isolation` test. |
+
+Gaps 6 and 7 (independent audit debt — `ConnectivityCoordinator` organizationId, unaudited OCPP session lifecycle) and Gap 9 (membership-lifecycle APIs) remain **open**, exactly as classified above — this work order did not touch OCPP, Billing, RFID, or Smart Charging, per its explicit constraints, and none of the three were in scope for DEC-022 itself.
+
+### Deviations from the decision as written
+
+None. The one place this implementation made a judgment call the decision text left open — rule 1's "the exact mechanism is implementation detail left to that future work order" (Gap 1's original reasoning) — was resolved as backend-side auto-selection at login, one of the two options the decision itself named as acceptable.
