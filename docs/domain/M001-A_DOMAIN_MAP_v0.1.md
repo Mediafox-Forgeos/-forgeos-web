@@ -309,3 +309,36 @@ SessionLifecycleService.suspendSession(id, 'OFFLINE')  (CAP-004)
 **Explicitly still not pictured here, still out of scope:** RFID-specific behavior, billing/tariffs/payments, remote start/stop, functional OCPP 2.0.1, Redis/multi-instance connection routing, SLA/uptime analytics. A clean (non-stale) disconnect still does **not** move a session to `OFFLINE` — a documented, deliberate limitation (see [CAP-005 §4](./CAP-005_CONNECTIVITY_ENGINE.md#4-known-deliberate-asymmetry-clean-disconnect-vs-stale)), not an oversight.
 
 **Validation level:** real-boot/real-Postgres/real-WebSocket validated — a compiled `apps/movos-api` instance, real local PostgreSQL, and the repository's real `OcppSimulator` proved connect→ONLINE, a real idle-past-threshold stale close→station and session both OFFLINE, and a genuine reconnect→session recovered to ACTIVE with exactly one session throughout. See [CAP-005 Connectivity Engine](./CAP-005_CONNECTIVITY_ENGINE.md) and the [Connectivity Runtime Guide](../engineering/CONNECTIVITY_RUNTIME_GUIDE.md).
+
+---
+
+## 2026-08-03 update (WO-ARGOS-016/016A / CAP-008): Billing's domain shape is now decided — architecture only, zero schema
+
+This section is new — it does not edit any diagram above. `Billing` moves from the "⚪ DOCUMENTED — named, zero artifact" bucket in the implementation-status flowchart to something the flowchart's own three-tier legend has no box for yet: **fully architected, still zero schema.** The flowchart itself is left unedited per this document's append-only discipline; this section is the correction.
+
+```mermaid
+erDiagram
+    ORGANIZATION ||--o{ BILLINGACCOUNT : "would scope (tenant-owned, per DEC-022)"
+    BILLINGACCOUNT ||--o{ INVOICE : "would owe"
+    CHARGINGSESSION ||--o{ TARIFFSNAPSHOT : "would price"
+    TARIFFSNAPSHOT }o--|| INVOICE : "would back"
+    AUTHORIZATIONCREDENTIAL }o--o| BILLINGACCOUNT : "would authorize use of (method, not debtor)"
+
+    BILLINGACCOUNT {
+        string note "PROPOSED, not implemented — canonical debt owner per CAP-008_DEBT_OWNERSHIP.md; no fields, FK, or migration designed"
+    }
+    TARIFFSNAPSHOT {
+        string note "PROPOSED, not implemented — captured at session start, and again at each pricing-relevant boundary crossed, per CAP-008_DECISION.md Option C"
+    }
+    INVOICE {
+        string note "PROPOSED, not implemented — DEC-018's original naming, unchanged"
+    }
+```
+
+**What is real:** nothing pictured above. This update is documentation only — no Prisma model, migration, field, or line of application code was written. What changed is that the _shape_ of Billing is no longer an open question: `CAP-008_BILLING_MODEL.md` names the billable entity (`ChargingSession`, generating revenue) as structurally distinct from the debt-owning entity (`BillingAccount`, a new concept — `CAP-008_DEBT_OWNERSHIP.md` — chosen over `Organization`/`Driver`/`Vehicle`/`Fleet`/`AuthorizationCredential`, all evaluated and rejected); `CAP-008_DECISION.md` names when pricing is captured (`TariffSnapshot`, at session start and at each pricing-relevant boundary, degenerating to a single snapshot for any session that crosses none); and `CAP-008_BILLING_THREAT_MODEL.md`/`CAP-008_SCENARIOS.md` validate both against 7 financial-integrity threats and 5 deployment shapes.
+
+**Explicitly still out of scope, still not implemented:** `Invoice`, `Payment`, `Refund`, `Tax`, `Discount`, any Stripe or accounting integration, and any UI. `Driver`/`Vehicle`/`Fleet` remain exactly as classified in every prior section of this map (named, unimplemented) — CAP-008 evaluated them as debt-owner _candidates_ and rejected all three; it did not change their implementation status.
+
+**Next capability:** CAP-009 — `BillingAccount` & `TariffSnapshot` Foundation, registered in the [Architecture Backlog](../architecture/MOVOS_ARCHITECTURE_BACKLOG_v1.0.md), not started.
+
+**Validation level:** N/A — no code exists to validate. See [CAP-008_BILLING_MODEL.md](./CAP-008_BILLING_MODEL.md), [CAP-008_DECISION.md](./CAP-008_DECISION.md), [CAP-008_DEBT_OWNERSHIP.md](./CAP-008_DEBT_OWNERSHIP.md), [CAP-008_BILLING_THREAT_MODEL.md](../reviews/CAP-008_BILLING_THREAT_MODEL.md), and [CAP-008_SCENARIOS.md](../reviews/CAP-008_SCENARIOS.md).
