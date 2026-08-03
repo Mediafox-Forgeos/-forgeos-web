@@ -5,6 +5,7 @@ import {
   getAccessToken,
   getActiveOrganizationId,
   setAccessToken,
+  setActiveOrganizationId,
 } from './auth';
 
 const API_BASE_URL =
@@ -26,8 +27,6 @@ interface RequestOptions {
   body?: unknown;
   /** Skip the automatic 401 -> refresh -> retry loop (used by refresh itself). */
   skipRefresh?: boolean;
-  /** Skip attaching the X-Organization-Id header. */
-  skipOrgHeader?: boolean;
 }
 
 function buildUrl(path: string): string {
@@ -44,12 +43,6 @@ function buildHeaders(options: RequestOptions): Headers {
   const token = getAccessToken();
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
-  }
-  if (!options.skipOrgHeader) {
-    const orgId = getActiveOrganizationId();
-    if (orgId) {
-      headers.set('X-Organization-Id', orgId);
-    }
   }
   return headers;
 }
@@ -69,20 +62,40 @@ async function parseError(response: Response): Promise<string> {
 /**
  * Attempts to silently refresh the access token using the httpOnly cookie.
  * Returns the new token, or null if the session cannot be refreshed.
+ *
+ * DEC-022 (WO-ARGOS-015): sends this tab's own active organization id
+ * (from sessionStorage, so it is genuinely per-tab) so the reissued token
+ * preserves organization affinity across refresh. The backend re-validates
+ * membership fresh and may omit `orgId` if it's no longer valid (e.g. the
+ * membership was revoked) rather than failing the refresh outright — when
+ * that happens we sync local state to match what the token actually
+ * carries, so the UI can prompt reselection instead of silently continuing
+ * to act as if the old organization were still active.
  */
 async function attemptRefresh(): Promise<string | null> {
   try {
+    const organizationId = getActiveOrganizationId();
     const response = await fetch(buildUrl('/auth/refresh'), {
       method: 'POST',
       credentials: 'include',
-      headers: { Accept: 'application/json' },
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ organizationId: organizationId ?? undefined }),
     });
     if (!response.ok) {
       return null;
     }
-    const data = (await response.json()) as { accessToken?: string };
+    const data = (await response.json()) as {
+      accessToken?: string;
+      organizationId?: string | null;
+    };
     if (data.accessToken) {
       setAccessToken(data.accessToken);
+      if (organizationId && data.organizationId !== organizationId) {
+        setActiveOrganizationId(data.organizationId ?? null);
+      }
       return data.accessToken;
     }
     return null;

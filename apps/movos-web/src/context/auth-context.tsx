@@ -32,8 +32,17 @@ interface AuthContextValue {
   membership: ApiMembership | null;
   organizations: ApiOrganization[];
   isLoading: boolean;
+  /** True once the user/memberships are known but no organization is bound
+   * to the access token yet (DEC-022 "pre-selection" token — 0 or >1 ACTIVE
+   * memberships). The UI must show an explicit selector; there is no
+   * `organizations[0]` fallback. */
+  needsOrganizationSelection: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  /** DEC-022 Invariant 4: the only way the active organization ever
+   * changes. Mints a new access token scoped to `organizationId` after the
+   * backend re-validates ACTIVE membership. */
+  selectOrganization: (organizationId: string) => Promise<void>;
 }
 
 const AuthContext = React.createContext<AuthContextValue | null>(null);
@@ -50,8 +59,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
   const [isLoading, setIsLoading] = React.useState(true);
 
+  // DEC-022: the active organization is whichever one the backend says the
+  // access token is bound to (`organizationId`, echoing the token's own
+  // `orgId` claim) — never the first entry of the organizations list. When
+  // `organizationId` is null the token is a "pre-selection" token and
+  // `currentOrg` stays null until an explicit `selectOrganization` call.
   const applySession = React.useCallback(
     (data: {
+      organizationId: string | null;
       user: ApiUser;
       organizations: ApiOrganization[];
       memberships: ApiMembership[];
@@ -59,9 +74,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setCurrentUser(data.user);
       setOrganizations(data.organizations);
       setMemberships(data.memberships);
-      const firstOrg = data.organizations[0] ?? null;
-      setCurrentOrg(firstOrg);
-      setActiveOrganizationId(firstOrg?.id ?? null);
+      const activeOrg =
+        data.organizations.find((org) => org.id === data.organizationId) ??
+        null;
+      setCurrentOrg(activeOrg);
+      setActiveOrganizationId(activeOrg?.id ?? null);
     },
     [],
   );
@@ -112,13 +129,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const data = await apiClient.post<LoginResponse>(
         '/auth/login',
         { email, password },
-        { skipRefresh: true, skipOrgHeader: true },
+        { skipRefresh: true },
       );
       setAccessToken(data.accessToken);
       setSessionCookie();
       applySession(data);
     },
     [applySession],
+  );
+
+  const selectOrganization = React.useCallback(
+    async (organizationId: string): Promise<void> => {
+      const result = await apiClient.post<{
+        accessToken: string;
+        organizationId: string;
+      }>('/auth/select-organization', { organizationId });
+      setAccessToken(result.accessToken);
+      const activeOrg =
+        organizations.find((org) => org.id === result.organizationId) ?? null;
+      setCurrentOrg(activeOrg);
+      setActiveOrganizationId(activeOrg?.id ?? null);
+    },
+    [organizations],
   );
 
   const logout = React.useCallback(async (): Promise<void> => {
@@ -135,24 +167,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [resetSession, router]);
 
+  const needsOrganizationSelection =
+    !isLoading && !currentOrg && organizations.length > 0;
+
+  const membership = currentOrg
+    ? (memberships.find((m) => m.organizationId === currentOrg.id) ?? null)
+    : null;
+
   const value = React.useMemo<AuthContextValue>(
     () => ({
       currentUser,
       currentOrg,
-      membership: memberships[0] ?? null,
+      membership,
       organizations,
       isLoading,
+      needsOrganizationSelection,
       login,
       logout,
+      selectOrganization,
     }),
     [
       currentUser,
       currentOrg,
-      memberships,
+      membership,
       organizations,
       isLoading,
+      needsOrganizationSelection,
       login,
       logout,
+      selectOrganization,
     ],
   );
 
