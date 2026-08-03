@@ -1,7 +1,7 @@
 # DEC-018 — Billing Ownership Boundary Analysis
 
 **Generated:** 2026-08-01 (WO-ARGOS-009A)
-**Status:** ANALYSIS AND RECOMMENDATION ONLY — no model created, no field added, no migration generated. Billing remains entirely out of scope for CAP-004, unchanged.
+**Status:** ANALYSIS AND RECOMMENDATION ONLY — no model created, no field added, no migration generated. Billing remains entirely out of scope for CAP-004, unchanged. **This document's own "open question" (below — when a `TariffSnapshot` is captured) was answered 2026-08-03 by [CAP-008_DECISION.md](./CAP-008_DECISION.md) (Option C, snapshot-on-boundary), and this document's Option B recommendation (`ChargingSession → TariffSnapshot → Invoice`) was accepted unmodified — see that document's "What survives from `DEC-018`" section. The debtor question this document did not address at all is answered by [CAP-008_DEBT_OWNERSHIP.md](./CAP-008_DEBT_OWNERSHIP.md) (`BillingAccount`).**
 **Related:** [CAP-004 §16 — Future integration points](./CAP-004_CHARGING_SESSIONS_FOUNDATION.md#16-future-integration-points), Architecture Backlog #24 (Tariffs), #25 (Billing), #26 (Payments)
 
 ## The question

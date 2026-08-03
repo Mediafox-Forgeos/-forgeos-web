@@ -1,7 +1,7 @@
 # CAP-008 — Canonical Debt Ownership
 
 **Generated:** 2026-08-03 (WO-ARGOS-016A)
-**Status:** DOCUMENTATION ONLY. No model is created — `BillingAccount` does not exist in the schema today and this document does not design its fields, migration, or relations. No `Invoice`, `Payment`, or any other billing model is created. Nothing is implemented.
+**Status:** **ACCEPTED** (2026-08-03, WO-ARGOS-016A merge authorization) — `BillingAccount` is confirmed as the canonical debt owner in MOVOS; PR #32 merged to `main` at `2cbd5ddabed54feafa63b229343d7090aa706aab`, tagged `CAP-008_ARCHITECTURE_COMPLETE`. DOCUMENTATION ONLY, unaffected by acceptance: no model is created — `BillingAccount` does not exist in the schema and this document does not design its fields, migration, or relations. No `Invoice`, `Payment`, or any other billing model is created. Nothing is implemented. Building it is CAP-009 (registered in the [Architecture Backlog](../architecture/MOVOS_ARCHITECTURE_BACKLOG_v1.0.md), not started).
 **Directly resolves:** `docs/domain/CAP-008_BILLING_MODEL.md` Objective 1's headline finding ("the entity that generates revenue and the entity that should owe the resulting debt are structurally different, and MOVOS has no schema representation of a paying customer at all") and `docs/domain/CAP-008_DECISION.md`'s open item #4 ("Who the debtor is... not created here"). This document closes that gap by naming the canonical debt-owning concept — it does not build it.
 **Grounding discipline:** every claim about existing entities is verified against the shipped Prisma schema and service code on `main`, consistent with the rest of the CAP-008 document set.
 

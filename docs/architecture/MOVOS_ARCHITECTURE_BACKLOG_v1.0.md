@@ -4,6 +4,7 @@
 **Updated:** 2026-07-31 — WO-ARGOS-009 (CAP-004) updated entries #8 (RFID authorization), #16 (ChargingSession), and #17 (OCPP transaction mapping) to reflect real implementation of the generic credential/session/transaction-mapping infrastructure. See each entry for detail.
 **Updated:** 2026-08-01 — WO-ARGOS-009A opened entry #51 (CAP-005: Authorization & Connectivity) as a post-merge action following PR #25's approval, carrying forward DEC-017's offline-policy recommendation and CAP-004's deferred RFID-specific behavior. No other entry changed.
 **Updated:** 2026-08-02 — WO-ARGOS-010 implemented the connectivity half of entry #51 (DEC-017 approved and built as CAP-005); the RFID half of #51 remains open and untouched — see the entry's own 2026-08-02 update note. No other entry changed.
+**Updated:** 2026-08-03 — WO-ARGOS-016/016A (CAP-008, documentation only, PR #32 merged at `2cbd5ddabed54feafa63b229343d7090aa706aab`, tagged `CAP-008_ARCHITECTURE_COMPLETE`): entries #24 (Tariffs) and #25 (Billing) move from `DISCOVERY`/`UNDEFINED` to `ARCHITECTURE APPROVED` — the full billing domain model, ownership chain, financial-integrity threat model, deployment-shape validation, tariff-timing decision, and canonical debt owner (`BillingAccount`) are all decided; nothing is implemented. Entries #46 (Fleet), #47 (Driver), #48 (Vehicle) each gain an update note recording their evaluation and rejection as debt-owner candidates, without resolving their own open product-scope questions. New entry #52 registers CAP-009 (BillingAccount & TariffSnapshot Foundation) as the next capability.
 **Part of:** [MOVOS Charging Ecosystem Architecture](./MOVOS_CHARGING_ECOSYSTEM_ARCHITECTURE_v0.1.md)
 
 **This is not a task backlog.** It is the official register of every future MOVOS charging-ecosystem capability whose architectural position must not be lost to chat memory or a single work order's report. Nothing registered here is implemented merely by being listed — see each entry's own status fields for what's actually true today. No database model was created solely to make this register look complete; several entries below are intentionally `UNDEFINED` or `DISCOVERY` with no schema at all.
@@ -460,45 +461,49 @@ Every entry's "Evidence source" links to where the real analysis lives — this 
 
 - **Business purpose:** define how a charging session is priced.
 - **Domain boundary:** Commercial.
-- **Related entities:** future `Tariff`, `Site`, `ChargingSession`.
+- **Related entities:** future `Tariff`, `TariffSnapshot`, `Site`, `ChargingSession`.
 - **Related protocols:** none directly; OCPP 1.6J has a limited `Local Auth List`/pricing display extension, OCPP 2.0.1 has native tariff messages, neither in scope.
-- **Architectural status:** DISCOVERY — a mock frontend `Tariff` type already exists (`apps/movos-web/src/types/tariff.ts`, per the M001-A domain recovery), reflecting real prior design thinking, but disconnected from any backend.
-- **Data-model status:** None on the backend.
+- **Architectural status:** ARCHITECTURE APPROVED — CAP-008 (WO-ARGOS-016/016A) decided tariff-timing semantics: a `TariffSnapshot` captured at session start and again at each pricing-relevant boundary crossed (a tariff edit, a scheduled peak/off-peak or day/night transition), degenerating to a single snapshot for any session that crosses none. See the 2026-08-03 update note below.
+- **Data-model status:** None on the backend — CAP-008 is documentation only, no `Tariff`/`TariffSnapshot` model exists.
 - **Interface-contract status:** None.
 - **Implementation status:** None (frontend mock only).
-- **Dependencies:** #16 ChargingSession, #25 Billing.
-- **Decisions already approved:** none.
-- **Decisions still open:** everything — explicitly deferred per CAP-003 Decision 7's "belongs to later Tariff/Billing capabilities" note.
+- **Dependencies:** #16 ChargingSession (done — CAP-004), #25 Billing, #52 CAP-009 (BillingAccount & TariffSnapshot Foundation — the implementation of this decision).
+- **Decisions already approved:** tariff-timing model (Option C, snapshot-on-boundary) — [CAP-008_DECISION.md](../domain/CAP-008_DECISION.md).
+- **Decisions still open:** the exact snapshot-triggering rule (which edits count as "pricing-relevant"), the energy-attribution rule for splitting a session's energy across snapshot boundaries when `MeterValue` telemetry is sparse, and which clock governs pricing (device-reported vs. MOVOS-received) — all explicitly left open by `CAP-008_DECISION.md` for CAP-009 to resolve.
 - **MVP relevance:** Not required for the MVP.
-- **Recommended implementation phase:** After ChargingSession is real.
+- **Recommended implementation phase:** Now unblocked architecturally — CAP-009 is the next capability (see #52).
 - **Risks if ignored:** None immediate.
-- **Evidence source:** [CAP-003 Architecture Decisions — Decision 7](../domain/CAP-003_OCPP_ARCHITECTURE_DECISIONS_v0.1.md#decision-7--chargingsession-boundary), [MOVOS Feature Matrix](../product/MOVOS_FEATURE_MATRIX_v1.0.md).
+- **Evidence source:** [CAP-003 Architecture Decisions — Decision 7](../domain/CAP-003_OCPP_ARCHITECTURE_DECISIONS_v0.1.md#decision-7--chargingsession-boundary), [MOVOS Feature Matrix](../product/MOVOS_FEATURE_MATRIX_v1.0.md), [CAP-008_BILLING_MODEL.md](../domain/CAP-008_BILLING_MODEL.md), [CAP-008_DECISION.md](../domain/CAP-008_DECISION.md).
+
+**2026-08-03 update (WO-ARGOS-016/016A):** see the Cluster F header note and entry #25 below — this entry's architectural status changed as a direct consequence of CAP-008, not an independent update.
 
 ### 25. Billing
 
 - **Business purpose:** convert a completed, tariff-priced session into an invoice or statement.
 - **Domain boundary:** Commercial.
-- **Related entities:** future `Invoice`/billing record, `ChargingSession`, `Tariff`.
+- **Related entities:** future `Invoice`, `BillingAccount`, `ChargingSession`, `TariffSnapshot`.
 - **Related protocols:** none.
-- **Architectural status:** UNDEFINED
-- **Data-model status:** None.
+- **Architectural status:** ARCHITECTURE APPROVED — CAP-008 (WO-ARGOS-016/016A) defined the full billing domain model (billable entities and events, ownership chain, financial-integrity threat model, 5 deployment-shape validations) and named the canonical debt owner. See the 2026-08-03 update note below.
+- **Data-model status:** None — CAP-008 is documentation only; no `Invoice`/`BillingAccount` model exists.
 - **Interface-contract status:** None.
 - **Implementation status:** None.
-- **Dependencies:** #24 Tariffs, #16 ChargingSession.
-- **Decisions already approved:** none.
-- **Decisions still open:** everything.
+- **Dependencies:** #24 Tariffs, #16 ChargingSession (done — CAP-004), #52 CAP-009 (BillingAccount & TariffSnapshot Foundation).
+- **Decisions already approved:** the entity that generates revenue is `ChargingSession`, not a party; the canonical debt owner is `BillingAccount`, a new concept, not `Organization`/`Driver`/`Vehicle`/`Fleet`/`AuthorizationCredential` (all evaluated and rejected) — [CAP-008_BILLING_MODEL.md](../domain/CAP-008_BILLING_MODEL.md), [CAP-008_DEBT_OWNERSHIP.md](../domain/CAP-008_DEBT_OWNERSHIP.md).
+- **Decisions still open:** `BillingAccount`'s schema (fields, `Organization` scoping already established as a principle, not yet as a migration), duplicate-invoice prevention's exact constraint shape, and everything named as open in `CAP-008_DECISION.md`/`CAP-008_DEBT_OWNERSHIP.md`'s own "what this does not resolve" sections.
 - **MVP relevance:** Not required for the MVP.
-- **Recommended implementation phase:** After Tariffs.
+- **Recommended implementation phase:** Now unblocked architecturally — CAP-009 is the next capability (see #52).
 - **Risks if ignored:** None immediate.
-- **Evidence source:** [MOVOS Feature Matrix](../product/MOVOS_FEATURE_MATRIX_v1.0.md) (named as a mock/planned capability elsewhere in the product).
+- **Evidence source:** [MOVOS Feature Matrix](../product/MOVOS_FEATURE_MATRIX_v1.0.md), [CAP-008_BILLING_MODEL.md](../domain/CAP-008_BILLING_MODEL.md), [CAP-008_BILLING_THREAT_MODEL.md](../reviews/CAP-008_BILLING_THREAT_MODEL.md), [CAP-008_SCENARIOS.md](../reviews/CAP-008_SCENARIOS.md), [CAP-008_DECISION.md](../domain/CAP-008_DECISION.md), [CAP-008_DEBT_OWNERSHIP.md](../domain/CAP-008_DEBT_OWNERSHIP.md).
+
+**2026-08-03 update (WO-ARGOS-016/016A):** PR #32 merged to `main` at `2cbd5ddabed54feafa63b229343d7090aa706aab`, tagged `CAP-008_ARCHITECTURE_COMPLETE`. This entry moves from `UNDEFINED` to `ARCHITECTURE APPROVED` — the domain shape, ownership, and canonical debt owner are decided; the schema, migration, and every implementation detail remain entirely unbuilt. See #52 for the registered next capability.
 
 ### 26. Payments
 
 - **Business purpose:** process the actual monetary transaction for a billed session.
 - **Domain boundary:** Commercial.
-- **Related entities:** future payment record, `Invoice`/billing record.
+- **Related entities:** future payment record, `Invoice`, `BillingAccount`.
 - **Related protocols:** none; a payment-provider integration concern.
-- **Architectural status:** UNDEFINED
+- **Architectural status:** UNDEFINED — CAP-008 named `PAYMENT_RECEIVED` in its billing-events vocabulary ([CAP-008_BILLING_MODEL.md](../domain/CAP-008_BILLING_MODEL.md) Objective 4) and Threat #6 (failed payment) in its threat model, both explicitly as placeholders with no design — CAP-008's own work order forbade designing Payments at all ("Do not implement... payments... Stripe"). This entry's status is unchanged.
 - **Data-model status:** None.
 - **Interface-contract status:** None.
 - **Implementation status:** None.
@@ -508,7 +513,7 @@ Every entry's "Evidence source" links to where the real analysis lives — this 
 - **MVP relevance:** Not required for the MVP.
 - **Recommended implementation phase:** After Billing.
 - **Risks if ignored:** None immediate.
-- **Evidence source:** none prior — first captured here.
+- **Evidence source:** [CAP-008_BILLING_MODEL.md](../domain/CAP-008_BILLING_MODEL.md) Objective 4 (named, not designed), [CAP-008_BILLING_THREAT_MODEL.md](../reviews/CAP-008_BILLING_THREAT_MODEL.md) Threat #6.
 
 ### 27. Refunds
 
@@ -516,7 +521,7 @@ Every entry's "Evidence source" links to where the real analysis lives — this 
 - **Domain boundary:** Commercial.
 - **Related entities:** future refund record, payment record.
 - **Related protocols:** none.
-- **Architectural status:** UNDEFINED
+- **Architectural status:** UNDEFINED — CAP-008 named `REFUND_CREATED` in its billing-events vocabulary ([CAP-008_BILLING_MODEL.md](../domain/CAP-008_BILLING_MODEL.md) Objective 4) as a placeholder with no design, consistent with its own explicit scope exclusion. This entry's status is unchanged.
 - **Data-model status:** None.
 - **Interface-contract status:** None.
 - **Implementation status:** None.
@@ -526,7 +531,7 @@ Every entry's "Evidence source" links to where the real analysis lives — this 
 - **MVP relevance:** Not required for the MVP.
 - **Recommended implementation phase:** After Payments.
 - **Risks if ignored:** None immediate.
-- **Evidence source:** none prior — first captured here.
+- **Evidence source:** [CAP-008_BILLING_MODEL.md](../domain/CAP-008_BILLING_MODEL.md) Objective 4 (named, not designed).
 
 ### 28. Roaming / OCPI
 
@@ -886,6 +891,8 @@ Every entry's "Evidence source" links to where the real analysis lives — this 
 - **Risks if ignored:** None immediate.
 - **Evidence source:** [M001-A Ubiquitous Language — Fleet](../domain/M001-A_UBIQUITOUS_LANGUAGE_v0.1.md#fleet).
 
+**2026-08-03 update (WO-ARGOS-016A):** `CAP-008_DEBT_OWNERSHIP.md` evaluated `Fleet` as a canonical-debt-owner candidate and rejected it — a fleet is an operational grouping (a division, a set of vehicles under common management), not itself the legal/financial party; the company that operates the fleet is who actually holds the liability, and would be represented by a `BillingAccount` (entry #25), with `Fleet` (if ever built) as a grouping _within_ that account's scope. This does **not** resolve the open product-scope question above (whether `Fleet` is in scope for MOVOS at all) — it only establishes the relationship `Fleet` would have to Billing _if_ it is ever built.
+
 ### 47. Driver
 
 - **Business purpose:** represent the individual person operating a vehicle and initiating charging sessions.
@@ -904,6 +911,8 @@ Every entry's "Evidence source" links to where the real analysis lives — this 
 - **Risks if ignored:** RFID/authorization architecture (#8) cannot be fully implemented (only drafted) without this being resolved.
 - **Evidence source:** [M001-A Ubiquitous Language — Driver](../domain/M001-A_UBIQUITOUS_LANGUAGE_v0.1.md#driver), [Authorization Architecture](../domain/MOVOS_AUTHORIZATION_ARCHITECTURE_v0.1.md).
 
+**2026-08-03 update (WO-ARGOS-016A):** `CAP-008_DEBT_OWNERSHIP.md` evaluated `Driver` as a canonical-debt-owner candidate and rejected it — it conflates _use_ (who plugged in the car) with _financial responsibility_ (who is contractually liable), which fails for the company-car/fleet-turnover case specifically. A `Driver`, if built, would be at most one of several people authorized to use a `BillingAccount` (entry #25), never the account itself. This does **not** resolve the open product-scope question above (whether `Driver` is in scope for MOVOS at all) — it only establishes the relationship `Driver` would have to Billing _if_ it is ever built.
+
 ### 48. Vehicle
 
 - **Business purpose:** represent the electric vehicle being charged, potentially informing charging profile/rate decisions.
@@ -921,6 +930,8 @@ Every entry's "Evidence source" links to where the real analysis lives — this 
 - **Recommended implementation phase:** Not scoped.
 - **Risks if ignored:** None immediate.
 - **Evidence source:** [M001-A Ubiquitous Language — Vehicle](../domain/M001-A_UBIQUITOUS_LANGUAGE_v0.1.md#vehicle).
+
+**2026-08-03 update (WO-ARGOS-016A):** `CAP-008_DEBT_OWNERSHIP.md` evaluated `Vehicle` as a canonical-debt-owner candidate and rejected it outright, on principle rather than practicality — a vehicle has no legal personhood, cannot enter a contract, and cannot hold a payment method. It fails specifically on resale: tying financial responsibility to the asset would mean a new owner inherits an unrelated debt relationship, or the concept dissolves the moment the asset changes hands. At most a cost-_allocation_ key once built, never a payer; the payer would be a `BillingAccount` (entry #25). Does not resolve the open product-scope question above.
 
 ### 49. ISO 15118 certificates
 
@@ -978,17 +989,35 @@ Every entry's "Evidence source" links to where the real analysis lives — this 
 
 **2026-08-02 update (WO-ARGOS-010):** the two halves of this entry shipped separately, as this entry itself already anticipated ("the connectivity half and the RFID half ... could ship separately"). **The connectivity half is now IMPLEMENTED** — DEC-017 was approved (RECOMMENDATION → ACCEPTED, Option B/3× heartbeat interval, coordinated with the existing stale-sweep, not an independent timer) and built as CAP-005, real-boot/real-Postgres/real-WebSocket validated. `SessionLifecycleService.suspendSession(id, 'OFFLINE')` is now called by production code (`ConnectivityCoordinator`) for the first time — the "never called by any code path other than a direct test call" line above is no longer true for the connectivity half. **The RFID half remains exactly as drafted, untouched** — WO-ARGOS-010's scope was explicitly connectivity-only ("do not begin RFID ... functional work"). See [CAP-005 Connectivity Engine](../domain/CAP-005_CONNECTIVITY_ENGINE.md) for the implemented half; this entry stays open for the RFID half alone. A known limitation from the connectivity implementation: a _clean_ (non-stale) disconnect still does not move a session to `OFFLINE` — see CAP-005 §4.
 
+### 52. CAP-009: BillingAccount & TariffSnapshot Foundation
+
+- **Business purpose:** implement the billing domain CAP-008 architected — the schema, migrations, and services for `BillingAccount` (the canonical debt owner) and `TariffSnapshot` (the tariff-timing mechanism), so a `ChargingSession` can finally be priced and attributed to a payer.
+- **Domain boundary:** Commercial — the implementation half of entries #24 (Tariffs) and #25 (Billing).
+- **Related entities:** new `BillingAccount`, `TariffSnapshot` models; references `Organization` (tenant scope, per DEC-022 precedent) and `ChargingSession`/`AuthorizationCredential` (existing).
+- **Related protocols:** none directly.
+- **Architectural status:** ARCHITECTURE APPROVED — the domain model, ownership, tariff-timing semantics, and canonical debt owner are all decided by CAP-008 ([CAP-008_BILLING_MODEL.md](../domain/CAP-008_BILLING_MODEL.md), [CAP-008_DECISION.md](../domain/CAP-008_DECISION.md), [CAP-008_DEBT_OWNERSHIP.md](../domain/CAP-008_DEBT_OWNERSHIP.md)). No schema, migration, or contract has been drafted yet — this entry is registered, not started.
+- **Data-model status:** None. `BillingAccount`'s fields, its relationship to `AuthorizationCredential` (an `ownerRef`-style link, redirected from the never-built CAP-004-era concept toward this entity), and whether it needs its own status/lifecycle are all undesigned.
+- **Interface-contract status:** None.
+- **Implementation status:** None.
+- **Dependencies:** #16 ChargingSession (done — CAP-004), #24 Tariffs (architecture approved — CAP-008), #25 Billing (architecture approved — CAP-008).
+- **Decisions already approved:** canonical debt owner = `BillingAccount`, scoped to exactly one `Organization` (never spanning tenants, per DEC-022); tariff timing = snapshot-on-boundary, degenerating to a single snapshot when no boundary is crossed.
+- **Decisions still open:** `BillingAccount`'s exact schema; the snapshot-triggering rule; the energy-attribution rule for sparse-telemetry sessions; which clock governs pricing; how an ephemeral/one-off `BillingAccount` (the shopping-mall walk-up case) differs structurally from a durable one; how `Fleet` (if ever built) groups within a `BillingAccount`'s scope. All named explicitly in `CAP-008_DECISION.md`/`CAP-008_DEBT_OWNERSHIP.md`'s own "what this does not resolve" sections — this entry does not need to rediscover them.
+- **MVP relevance:** Not required for the MVP.
+- **Recommended implementation phase:** Next capability — explicitly authorized scope is `BillingAccount`/`TariffSnapshot` foundation only. **Do not implement invoices, payments, taxes, discounts, accounting, Stripe, or UI as part of this entry** — those remain entries #26/#27 and beyond, UNDEFINED, unblocked only once this entry ships. Do not begin RFID (#8's remaining half, tracked under #51), Smart Charging (#20), or OCPP 2.0.1 (#2) as part of this entry either — explicitly out of scope per the same authorization that registered this entry.
+- **Risks if ignored:** None immediate — Billing remains a documented-but-unbuilt capability, exactly as it has been since CAP-003.
+- **Evidence source:** [CAP-008_BILLING_MODEL.md](../domain/CAP-008_BILLING_MODEL.md), [CAP-008_BILLING_THREAT_MODEL.md](../reviews/CAP-008_BILLING_THREAT_MODEL.md), [CAP-008_SCENARIOS.md](../reviews/CAP-008_SCENARIOS.md), [CAP-008_DECISION.md](../domain/CAP-008_DECISION.md), [CAP-008_DEBT_OWNERSHIP.md](../domain/CAP-008_DEBT_OWNERSHIP.md), [CAP-008 Post-Mortem](../postmortems/CAP-008_POST_MORTEM.md).
+
 ---
 
 ## Summary by architectural status
 
-| Status                | Count | Capabilities                                                                             |
-| --------------------- | ----- | ---------------------------------------------------------------------------------------- |
-| ARCHITECTURE APPROVED | 8     | #1, #2, #3, #5, #6, #16, #17, #35                                                        |
-| ARCHITECTURE DRAFTED  | 12    | #4, #8, #15, #32, #33, #34, #36, #37, #38, #39, #42, #51                                 |
-| DISCOVERY             | 13    | #7, #9, #10, #11, #12, #19, #20, #24, #29, #30, #40, #43, #45                            |
-| UNDEFINED             | 18    | #13, #14, #18, #21, #22, #23, #25, #26, #27, #28, #31, #41, #44, #46, #47, #48, #49, #50 |
+| Status                | Count | Capabilities                                                                        |
+| --------------------- | ----- | ----------------------------------------------------------------------------------- |
+| ARCHITECTURE APPROVED | 11    | #1, #2, #3, #5, #6, #16, #17, #24, #25, #35, #52                                    |
+| ARCHITECTURE DRAFTED  | 12    | #4, #8, #15, #32, #33, #34, #36, #37, #38, #39, #42, #51                            |
+| DISCOVERY             | 12    | #7, #9, #10, #11, #12, #19, #20, #29, #30, #40, #43, #45                            |
+| UNDEFINED             | 17    | #13, #14, #18, #21, #22, #23, #26, #27, #28, #31, #41, #44, #46, #47, #48, #49, #50 |
 
-Total: 51 capabilities registered (50 from the original WO-ARGOS-007 register, plus #51 CAP-005: Authorization & Connectivity, opened 2026-08-01 by WO-ARGOS-009A as a post-merge action tracking DEC-017's recommendation and the RFID-specific behavior CAP-004 left generic). This table is a navigation aid — see each individual entry for its precise status and reasoning.
+Total: 52 capabilities registered (50 from the original WO-ARGOS-007 register, #51 CAP-005: Authorization & Connectivity opened 2026-08-01 by WO-ARGOS-009A, and #52 CAP-009: BillingAccount & TariffSnapshot Foundation opened 2026-08-03 by WO-ARGOS-016A as the registered next capability following CAP-008's architecture-complete billing foundation). This table is a navigation aid — see each individual entry for its precise status and reasoning.
 
 Nothing in this register is implemented merely by appearing here. See the CAP-003 (WO-ARGOS-007/008) final reports for exactly what shipped in that vertical slice: BootNotification, Heartbeat, StatusNotification, and the protocol/identity/authentication foundation, `SIMULATOR_VALIDATED`. See the CAP-004 (WO-ARGOS-009) final report for what shipped on top of it: `ChargingSession`/`AuthorizationCredential`/`AuthorizationAttempt`/`MeterValue` models, a validated session-lifecycle state machine, and `Authorize`/`StartTransaction`/`MeterValues`/`StopTransaction` handling for 1.6J — unit-tested only, not yet runtime-validated. Entries #8, #16, and #17 above reflect this CAP-004 progress at the field level (Data-model/Interface-contract/Implementation status); their top-level Architectural status is unchanged, so the table above still counts them correctly.

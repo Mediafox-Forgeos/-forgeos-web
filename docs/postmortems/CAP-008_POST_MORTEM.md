@@ -1,0 +1,61 @@
+# CAP-008 Post-Mortem — Billing Foundation (Architecture Only)
+
+**Generated:** 2026-08-03
+**Work orders:** WO-ARGOS-016 (domain model, threat model, scenarios, tariff decision), WO-ARGOS-016A (canonical debt ownership, requested by ARGOS ahead of merge)
+**PR:** [#32](https://github.com/Mediafox-Forgeos/-forgeos-web/pull/32), merged as `2cbd5ddabed54feafa63b229343d7090aa706aab`
+**Tag:** `CAP-008_ARCHITECTURE_COMPLETE`
+**Related:** [CAP-008_BILLING_MODEL.md](../domain/CAP-008_BILLING_MODEL.md), [CAP-008_BILLING_THREAT_MODEL.md](../reviews/CAP-008_BILLING_THREAT_MODEL.md), [CAP-008_SCENARIOS.md](../reviews/CAP-008_SCENARIOS.md), [CAP-008_DECISION.md](../domain/CAP-008_DECISION.md), [CAP-008_DEBT_OWNERSHIP.md](../domain/CAP-008_DEBT_OWNERSHIP.md), [DEC-018 Billing Boundary Analysis](../domain/DEC-018_BILLING_BOUNDARY_ANALYSIS.md)
+
+## What this capability answers
+
+Before CAP-008, Billing was the one commercial capability with genuinely zero artifact of any kind in this repository — not even a frontend mock, unlike Tariffs/Alerts/Reporting. `DEC-018` (WO-ARGOS-009A) had already recommended a `ChargingSession → TariffSnapshot → Invoice` shape but explicitly left its central question open: _when_ is a `TariffSnapshot` captured? CAP-008 closes that question, and the one `DEC-018` never asked at all — _who_ owes the resulting money. Six questions, restated from the work order: what is billable, when does billing begin, when is pricing frozen, can pricing change mid-session, who owns the debt, what must be persisted forever. All six are now answered. **None of it is implemented** — this is the one capability in this codebase's history so far that is fully architected before a single line of schema exists, rather than the reverse.
+
+## What shipped
+
+- **`CAP-008_BILLING_MODEL.md`** — evaluated 6 entities (`ChargingSession`, `AuthorizationCredential`, `Organization`, `Vehicle`, `Driver`, `Connector`) as billable-role candidates; found the entity that generates revenue and the entity that should owe the resulting debt are structurally different, and only the first exists in the schema. Evaluated 3 tariff-timing options against mid-session changes, midnight, and peak pricing without recommending. Verified, by grepping the actual schema for `onDelete` (finding none), that organization hard-deletion isn't possible today at all. Walked all 7 named billing events against what's actually audited today (confirmed, by checking `SessionLifecycleService`'s imports, that none of them are).
+- **`CAP-008_BILLING_THREAT_MODEL.md`** — classified 7 financial-integrity threats (tariff changes mid-session, duplicate invoices, negative balances, clock drift, replayed `StopTransaction`, failed payment, station offline) as SAFE/RISK/UNSAFE, reusing `DEC-022_THREAT_MODEL`'s classification key. Found this codebase already has directly reusable, proven patterns for 2 of the 7 (the idempotency unique-constraint already on `ChargingSession`, the two-layer service+DB-`CHECK` guard already on `energyWh`).
+- **`CAP-008_SCENARIOS.md`** — validated 5 deployment shapes (residential, shopping mall, fleet operator, condominium, utility company) and 2 session-timing edge cases (midnight-spanning, tariff-change-spanning) against the model and threat findings.
+- **`CAP-008_DECISION.md`** — recommended, and ARGOS accepted, Option C (tariff snapshot) engineered to degenerate exactly to Option A's simplicity whenever a session crosses no pricing-relevant boundary. Rejected Option B outright — not merely ranked last — as structurally equivalent to the bare live-tariff-reference design `DEC-018` already found unsafe.
+- **`CAP-008_DEBT_OWNERSHIP.md`** (WO-ARGOS-016A, requested by ARGOS before authorizing merge) — evaluated 6 debt-owner candidates (`Organization`, `Driver`, `Vehicle`, `Fleet`, `BillingAccount`, `AuthorizationCredential`) against 7 questions and chose `BillingAccount` — a concept not named anywhere in this codebase before this document — as the canonical debt owner. Every rejected candidate was disqualified by a specific question, not by default: `Vehicle` has no legal personhood and fails outright on resale; `AuthorizationCredential` is the least stable identity of the six and fails hardest on credential replacement; `Driver` conflates use with liability and fails for fleet/company-car turnover; `Fleet` is an operational grouping, not a legal party, and doesn't generalize past one scenario; `Organization` is the seller in the ordinary case, disqualified from representing individual customers by this codebase's own tenant-isolation model (DEC-022).
+- 2 commits on `feat/cap-008-billing-foundation`, merged via a standard merge commit, matching this repository's established convention.
+
+## What ARGOS's review found
+
+Unlike CAP-004's WO-ARGOS-009A (a validation gate demanding runtime evidence for code already written), CAP-008 had no code to validate — the review gate here was architectural completeness. ARGOS's one substantive finding, delivered as WO-ARGOS-016A rather than a merge rejection: **the original WO-016 mandate evaluated billable _roles_ (which entity generates revenue, receives charges, owns the invoice) but never forced a single, named, canonical answer to "who owes the money."** `CAP-008_BILLING_MODEL.md` Objective 1 had surfaced this as its own headline finding rather than resolving it, and `CAP-008_DECISION.md` had correctly listed it as an open item rather than pretending the tariff-timing decision made it moot. ARGOS's WO-016A closed exactly that gap, with a sharper, seven-question test (legal ownership, invoice recipient, and survival across four specific kinds of real-world churn — organization archival, vehicle resale, driver turnover, credential replacement) than WO-016's original three-question framing (generates/receives/owns) had used. This produced a materially better answer: `BillingAccount`, chosen because it is the only candidate that survives all four churn tests by construction, not merely the least-bad of six imperfect options.
+
+## What's explicitly deferred (by design, not oversight)
+
+Every item below was named as out of scope by WO-ARGOS-016's own constraints, reaffirmed by WO-ARGOS-016A's, and has a registered Architecture Backlog entry:
+
+- `Invoice`, `Payment`, `Refund`, `Tax`, `Discount` models — named only as vocabulary (`INVOICE_CREATED`/`PAYMENT_RECEIVED`/`REFUND_CREATED` in the billing-events walkthrough, Threat #6 for failed payment), never designed.
+- Any Stripe or accounting integration.
+- Any UI.
+- `BillingAccount`/`TariffSnapshot` schema, migrations, or services — the architecture is decided; nothing is built. This is CAP-009's entire mandate, registered but not started.
+- `OCPP`, `ChargingSession` — untouched, as required. Neither gained a field, and none of CAP-008's findings required either to change.
+- RFID, Smart Charging, OCPP 2.0.1 functional work — unrelated to billing, explicitly named as out of scope by WO-ARGOS-016A specifically to prevent scope drift into adjacent, already-registered backlog entries (#8, #20, #2).
+
+## What we'd do differently
+
+- **The original WO-016 mandate's three-question framing (generates revenue / receives charges / owns the invoice) was necessary but not sufficient** — it correctly surfaced that the schema has no debtor concept, but "who receives charges" is answerable in the abstract (a customer) without forcing a single, named, concrete entity choice the way "which entity survives vehicle resale" does. The four churn-survival questions WO-016A introduced (organization archival, vehicle resale, driver turnover, credential replacement) are a sharper test than the original three, and are the kind of question that should have been asked in the original WO-016 mandate, not added as a follow-up. Worth carrying forward: for any future "name the canonical X" architecture question, test candidates against _specific operational churn scenarios_ the candidate must survive, not just "does it play the right abstract role."
+- **`DEC-018` (2026-08-01) sat with one explicit open question for over two work-order cycles before CAP-008 answered it.** Not a process failure — `DEC-018` was correctly scoped as analysis-only at the time, with nothing to attach the answer to until `ChargingSession`/`AuthorizationCredential` had matured further — but it's a reminder that an explicitly-flagged open question in an accepted decision document is a standing invitation for a future work order, and this repository's own discipline of never letting such flags go silently stale (restated, cross-linked, and finally answered rather than quietly superseded) is worth continuing deliberately, not just as a happy accident of this particular chain.
+
+## Metrics
+
+|                                                         |                                                                                                                                               |
+| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Commits merged                                          | 2                                                                                                                                             |
+| Documents created                                       | 5 (`CAP-008_BILLING_MODEL.md`, `CAP-008_BILLING_THREAT_MODEL.md`, `CAP-008_SCENARIOS.md`, `CAP-008_DECISION.md`, `CAP-008_DEBT_OWNERSHIP.md`) |
+| Prior documents updated/closed out                      | 1 (`DEC-018` — its open question answered, cross-linked)                                                                                      |
+| Entities evaluated as billable-role candidates (WO-016) | 6 (`ChargingSession`, `AuthorizationCredential`, `Organization`, `Vehicle`, `Driver`, `Connector`)                                            |
+| Entities evaluated as debt-owner candidates (WO-016A)   | 6 (`Organization`, `Driver`, `Vehicle`, `Fleet`, `BillingAccount`, `AuthorizationCredential`)                                                 |
+| Tariff-timing options evaluated                         | 3 (fixed-at-start, continuous, hybrid-snapshot) — 1 accepted, 1 rejected outright, 1 rejected as the general case                             |
+| Threats classified                                      | 7 (0 UNSAFE in the model as designed; 1 UNSAFE baseline named as the rejected alternative being measured against)                             |
+| Deployment scenarios validated                          | 5 + 2 timing edge cases                                                                                                                       |
+| Lines of production code changed                        | 0                                                                                                                                             |
+| Database models created                                 | 0                                                                                                                                             |
+| Defects found by ARGOS's review                         | 0                                                                                                                                             |
+| Real gaps found by ARGOS's review                       | 1 (no canonical debt owner named — closed same review cycle by WO-ARGOS-016A, not deferred)                                                   |
+
+## Next
+
+CAP-009 — BillingAccount & TariffSnapshot Foundation — registered in the [Architecture Backlog](../architecture/MOVOS_ARCHITECTURE_BACKLOG_v1.0.md) (entry #52) as the next capability, authorized to build the schema and services `CAP-008_DECISION.md` and `CAP-008_DEBT_OWNERSHIP.md` describe. Explicitly not authorized as part of that work: invoices, payments, taxes, discounts, accounting, Stripe, or UI — those remain Architecture Backlog entries #26/#27 and beyond, unblocked only once CAP-009 ships. RFID (#51's remaining half), Smart Charging (#20), and OCPP 2.0.1 (#2) remain unrelated, unstarted, and explicitly out of scope for CAP-009.

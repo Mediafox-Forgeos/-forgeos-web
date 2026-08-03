@@ -1,7 +1,7 @@
 # CAP-008 — Billing Foundation: Decision
 
 **Generated:** 2026-08-03 (WO-ARGOS-016, Objective 7)
-**Status:** RECOMMENDATION — awaiting ARGOS decision, same posture as `DEC-018` before it was ruled on. Nothing in this document is implemented. No `Tariff`, `TariffSnapshot`, `Invoice`, `Payment`, or `Discount` model is created; `OCPP`/`ChargingSession` are untouched.
+**Status:** **ACCEPTED** (2026-08-03, WO-ARGOS-016A merge authorization) — see "ARGOS Approval Record" below. Originally: RECOMMENDATION — awaiting ARGOS decision. Nothing in this document is implemented. No `Tariff`, `TariffSnapshot`, `Invoice`, `Payment`, or `Discount` model is created; `OCPP`/`ChargingSession` are untouched.
 **Evidence base:** [CAP-008_BILLING_MODEL.md](./CAP-008_BILLING_MODEL.md) (Objectives 1–4: entities, tariff-option mechanics, ownership, events), [CAP-008_BILLING_THREAT_MODEL.md](../reviews/CAP-008_BILLING_THREAT_MODEL.md) (Objective 5), [CAP-008_SCENARIOS.md](../reviews/CAP-008_SCENARIOS.md) (Objective 6). All three are preserved as-written — this document is where the recommendation is made, not a retroactive edit of the evaluation that preceded it.
 **Directly extends:** [DEC-018 — Billing Ownership Boundary Analysis](./DEC-018_BILLING_BOUNDARY_ANALYSIS.md), which already recommended a `ChargingSession → TariffSnapshot → Invoice` shape and explicitly left open the one question this document answers: _when_ is a `TariffSnapshot` captured?
 
@@ -58,3 +58,15 @@ Consistent with `DEC-018`'s own discipline of naming what remains open rather th
 ## What survives from `DEC-018`, unmodified
 
 The ownership shape (`Organization → Site → ChargingSession → TariffSnapshot → Invoice`), the multi-tenant `organizationId` denormalization precedent, and the roaming case (a session may be priced from a different organization's tariff than the one operating the station) are all reaffirmed exactly as `DEC-018` stated them. This document adds _when_ a snapshot is captured; it does not revisit _whether_ one should exist, or how it's owned.
+
+---
+
+## ARGOS Approval Record (2026-08-03, WO-ARGOS-016A)
+
+Everything above is preserved unedited as the original recommendation and analysis. ARGOS reviewed and accepted this decision — Option C (tariff snapshot, degenerating to Option A's behavior when no boundary is crossed) is confirmed as MOVOS's tariff-timing model. PR #32 merged to `main` at `2cbd5ddabed54feafa63b229343d7090aa706aab`, tagged `CAP-008_ARCHITECTURE_COMPLETE`.
+
+**Open item #4 ("who the debtor is") was resolved separately, same review cycle:** `CAP-008_DEBT_OWNERSHIP.md` (WO-ARGOS-016A) evaluated `Organization`/`Driver`/`Vehicle`/`Fleet`/`BillingAccount`/`AuthorizationCredential` against seven questions and named `BillingAccount` — a new concept, not previously named anywhere in this codebase — as the canonical debt owner. This does not modify anything decided above; it closes the one item this document explicitly left open rather than attempting to answer.
+
+**What remains open, unchanged by this approval:** the snapshot-triggering rule, the energy-attribution rule for sparse telemetry, and which clock governs pricing (open items #1–#3 above) are not resolved by this approval and are not resolved by `CAP-008_DEBT_OWNERSHIP.md` either. `Invoice`/`Payment`/`Refund` design remains entirely out of scope.
+
+**Consequence of this approval:** CAP-009 — BillingAccount & TariffSnapshot Foundation — is registered in the [Architecture Backlog](../architecture/MOVOS_ARCHITECTURE_BACKLOG_v1.0.md) (entry #52) as the next capability, authorized to build the schema and services this decision and `CAP-008_DEBT_OWNERSHIP.md` describe. Invoices, payments, taxes, discounts, accounting, Stripe integration, and UI remain unauthorized by this approval — as does RFID, Smart Charging, and OCPP 2.0.1 functional work, all unrelated to and unblocked by this decision.
