@@ -200,12 +200,17 @@ export interface ApiAuthorizationAttempt {
 
 export interface LoginResponse {
   accessToken: string;
+  /** DEC-022: the organization the access token is bound to, or `null` for
+   * a "pre-selection" token (0 or >1 active memberships). */
+  organizationId: string | null;
   user: ApiUser;
   organizations: ApiOrganization[];
   memberships: ApiMembership[];
 }
 
 export interface MeResponse {
+  /** DEC-022: the organization the *current* access token is bound to. */
+  organizationId: string | null;
   user: ApiUser;
   organizations: ApiOrganization[];
   memberships: ApiMembership[];
@@ -213,6 +218,10 @@ export interface MeResponse {
 
 export interface RefreshResponse {
   accessToken: string;
+  /** DEC-022: the organization the newly-issued token is bound to. `null`
+   * if none was requested, or if the requested one is no longer a valid
+   * ACTIVE membership (see AuthService.refresh). */
+  organizationId: string | null;
 }
 
 export interface HealthResponse {
