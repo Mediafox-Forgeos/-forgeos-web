@@ -398,6 +398,16 @@ model RefreshSession {
   userAgent String?
   ipAddress String?
 
+  // DEC-022 (WO-ARGOS-015): points to the session that replaced this one,
+  // set at the moment of rotation. Lets AuthService.refresh() resolve a
+  // near-simultaneous duplicate refresh (e.g. two browser tabs racing on
+  // the same shared refresh cookie) as a safe, short-grace-window reuse
+  // instead of a hard 401 — see docs/domain/DEC-022_MIGRATION.md. This is
+  // purely about tolerating a benign refresh-token rotation race; it does
+  // not affect membership revocation, which remains re-checked fresh on
+  // every request regardless of this field.
+  replacedByTokenHash String?
+
   user User @relation(fields: [userId], references: [id])
 }
 

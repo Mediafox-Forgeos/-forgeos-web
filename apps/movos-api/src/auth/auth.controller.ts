@@ -16,6 +16,7 @@ import type { Request, Response } from 'express';
 
 import { AuthService, type IssuedRefresh } from './auth.service';
 import { LoginDto } from './dto/login.dto';
+import { RefreshDto } from './dto/refresh.dto';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
@@ -61,6 +62,7 @@ export class AuthController {
 
     return {
       accessToken: result.accessToken,
+      organizationId: result.organizationId,
       user: toApiUser(result.user),
       organizations: result.organizations.map(toApiOrganization),
       memberships: result.memberships.map(toApiMembership),
@@ -70,21 +72,30 @@ export class AuthController {
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Rotate refresh token and issue a new access token',
+    summary:
+      'Rotate refresh token and issue a new access token, optionally re-scoped to the given organization',
   })
   async refresh(
+    @Body() dto: RefreshDto,
     @Req() req: RequestWithContext,
     @Res({ passthrough: true }) res: Response,
   ) {
     const presented = this.readRefreshCookie(req);
-    const result = await this.authService.refresh(presented, {
-      userAgent: req.headers['user-agent'],
-      ipAddress: req.ip,
-    });
+    const result = await this.authService.refresh(
+      presented,
+      {
+        userAgent: req.headers['user-agent'],
+        ipAddress: req.ip,
+      },
+      dto.organizationId,
+    );
 
     this.setRefreshCookies(res, result.refresh);
 
-    return { accessToken: result.accessToken };
+    return {
+      accessToken: result.accessToken,
+      organizationId: result.organizationId,
+    };
   }
 
   @Post('logout')
@@ -108,6 +119,7 @@ export class AuthController {
   async me(@CurrentUser() user: AuthenticatedUser) {
     const profile = await this.authService.getProfile(user.id);
     return {
+      organizationId: user.orgId ?? null,
       user: toApiUser(profile.user),
       organizations: profile.organizations.map(toApiOrganization),
       memberships: profile.memberships.map(toApiMembership),

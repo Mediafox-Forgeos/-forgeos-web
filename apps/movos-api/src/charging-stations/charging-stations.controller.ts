@@ -9,7 +9,7 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { ApiOperation, ApiTags, ApiHeader } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { MemberRole, type Membership } from '@prisma/client';
 
 import { ChargingStationsService } from './charging-stations.service';
@@ -25,11 +25,6 @@ import { toApiChargingStation } from '../auth/presenters';
 import type { AuthenticatedUser } from '../common/request-context';
 
 @ApiTags('charging-stations')
-@ApiHeader({
-  name: 'X-Organization-Id',
-  description: 'Active organization id',
-  required: false,
-})
 @Controller()
 @UseGuards(JwtAuthGuard, OrgContextGuard, RolesGuard)
 export class ChargingStationsController {
