@@ -1,5 +1,5 @@
 import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
-import { ApiHeader, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Membership } from '@prisma/client';
 
 import { SessionsService } from './sessions.service';
@@ -11,11 +11,6 @@ import { OrgContext } from '../common/decorators/org-context.decorator';
 import { toApiChargingSession, toApiMeterValue } from '../auth/presenters';
 
 @ApiTags('sessions')
-@ApiHeader({
-  name: 'X-Organization-Id',
-  description: 'Active organization id',
-  required: false,
-})
 @Controller('sessions')
 @UseGuards(JwtAuthGuard, OrgContextGuard, RolesGuard)
 export class SessionsController {

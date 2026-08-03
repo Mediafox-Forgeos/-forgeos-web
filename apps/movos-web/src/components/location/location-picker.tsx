@@ -107,7 +107,6 @@ export function LocationPicker({
     try {
       const results = await apiClient.get<LocationSuggestion[]>(
         `/locations/autocomplete?input=${encodeURIComponent(input)}&sessionToken=${sessionToken}`,
-        { skipOrgHeader: true },
       );
       setSuggestions(results);
       setShowSuggestions(results.length > 0);
@@ -125,7 +124,6 @@ export function LocationPicker({
     try {
       const resolved = await apiClient.get<ResolvedLocation>(
         `/locations/place/${encodeURIComponent(s.placeId)}?sessionToken=${sessionToken}`,
-        { skipOrgHeader: true },
       );
       setSessionToken(generateSessionToken());
       if (resolved) {

@@ -9,7 +9,7 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { ApiOperation, ApiTags, ApiHeader } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { MemberRole, type Membership } from '@prisma/client';
 
 import { SitesService } from './sites.service';
@@ -25,11 +25,6 @@ import { toApiSite } from '../auth/presenters';
 import type { AuthenticatedUser } from '../common/request-context';
 
 @ApiTags('sites')
-@ApiHeader({
-  name: 'X-Organization-Id',
-  description: 'Active organization id',
-  required: false,
-})
 @Controller('sites')
 @UseGuards(JwtAuthGuard, OrgContextGuard, RolesGuard)
 export class SitesController {

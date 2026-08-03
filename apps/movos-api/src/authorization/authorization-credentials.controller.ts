@@ -9,7 +9,7 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { ApiHeader, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { MemberRole, type Membership } from '@prisma/client';
 
 import { AuthorizationCredentialsService } from './authorization-credentials.service';
@@ -24,11 +24,6 @@ import { toApiAuthorizationCredential } from '../auth/presenters';
 import type { AuthenticatedUser } from '../common/request-context';
 
 @ApiTags('credentials')
-@ApiHeader({
-  name: 'X-Organization-Id',
-  description: 'Active organization id',
-  required: false,
-})
 @Controller('credentials')
 @UseGuards(JwtAuthGuard, OrgContextGuard, RolesGuard)
 export class AuthorizationCredentialsController {

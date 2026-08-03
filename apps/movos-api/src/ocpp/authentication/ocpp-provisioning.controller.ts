@@ -6,7 +6,7 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { ApiOperation, ApiTags, ApiHeader } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { MemberRole, type Membership } from '@prisma/client';
 
 import { OcppProvisioningService } from './ocpp-provisioning.service';
@@ -27,11 +27,6 @@ import type { AuthenticatedUser } from '../../common/request-context';
  * anywhere — see docs/engineering/OCPP_DEVICE_PROVISIONING_GUIDE.md.
  */
 @ApiTags('ocpp-provisioning')
-@ApiHeader({
-  name: 'X-Organization-Id',
-  description: 'Active organization id',
-  required: false,
-})
 @Controller()
 @UseGuards(JwtAuthGuard, OrgContextGuard, RolesGuard)
 export class OcppProvisioningController {

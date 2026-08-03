@@ -25,6 +25,7 @@ import * as React from 'react';
 
 import { tenant } from '@/config/tenant';
 import { Button } from '@/components/ui/button';
+import { OrganizationSwitcher } from '@/components/organizations/organization-switcher';
 import { useAuth } from '@/context/auth-context';
 import { cn } from '@/lib/utils';
 
@@ -46,10 +47,9 @@ const navigation: NavItem[] = [
 
 export function MovosSidebar() {
   const pathname = usePathname();
-  const { currentUser, currentOrg, logout } = useAuth();
+  const { currentUser, logout } = useAuth();
   const [isOpen, setIsOpen] = React.useState(false);
 
-  const orgName = currentOrg?.name ?? tenant.orgName;
   const userName = currentUser?.displayName ?? 'Operador';
 
   return (
@@ -93,12 +93,10 @@ export function MovosSidebar() {
           </Button>
         </div>
 
-        <div className="border-border mx-1 mb-4 rounded-lg border px-3 py-2">
-          <p className="text-foreground text-sm font-medium">{orgName}</p>
-          <span className="border-movos-blue/40 bg-movos-blue/10 text-movos-blue mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide">
-            {tenant.orgDescription}
-          </span>
-        </div>
+        <OrganizationSwitcher />
+        <span className="border-movos-blue/40 bg-movos-blue/10 text-movos-blue mx-2 -mt-2 mb-4 inline-flex w-fit rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide">
+          {tenant.orgDescription}
+        </span>
 
         <nav
           className="space-y-1 overflow-y-auto"

@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import * as bcrypt from 'bcrypt';
 import { PrismaClient } from '@prisma/client';
+import { ThrottlerStorage } from '@nestjs/throttler';
 
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
@@ -48,7 +49,24 @@ export async function createTestApp(): Promise<INestApplication> {
   ensureTestEnv();
   const moduleRef = await Test.createTestingModule({
     imports: [AppModule],
-  }).compile();
+  })
+    // Rate limiting (e.g. login's 5/min) is a production concern, not
+    // something e2e specs sharing one process/IP should have to budget
+    // requests around. Overriding the APP_GUARD provider itself doesn't
+    // reliably take effect for Nest's global-enhancer resolution, so
+    // instead the storage backing ThrottlerGuard is replaced with one
+    // that never reports a request as blocked. Disabled here only, not
+    // in the real app.
+    .overrideProvider(ThrottlerStorage)
+    .useValue({
+      increment: async () => ({
+        totalHits: 0,
+        timeToExpire: 0,
+        isBlocked: false,
+        timeToBlockExpire: 0,
+      }),
+    })
+    .compile();
 
   const app = moduleRef.createNestApplication();
   app.setGlobalPrefix('api/v1');
@@ -66,8 +84,19 @@ export async function createTestApp(): Promise<INestApplication> {
 }
 
 export async function resetDatabase(prisma: PrismaService): Promise<void> {
+  // Deleted in FK dependency order (children before parents) so leftover
+  // data from other e2e specs sharing this database doesn't block cleanup
+  // with a foreign key violation.
   await prisma.auditEvent.deleteMany();
   await prisma.refreshSession.deleteMany();
+  await prisma.meterValue.deleteMany();
+  await prisma.chargingSession.deleteMany();
+  await prisma.authorizationAttempt.deleteMany();
+  await prisma.ocppProtocolEvent.deleteMany();
+  await prisma.connector.deleteMany();
+  await prisma.evse.deleteMany();
+  await prisma.chargingStation.deleteMany();
+  await prisma.authorizationCredential.deleteMany();
   await prisma.site.deleteMany();
   await prisma.membership.deleteMany();
   await prisma.organization.deleteMany();

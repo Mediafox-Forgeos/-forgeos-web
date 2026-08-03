@@ -1,5 +1,5 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
-import { ApiHeader, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Membership } from '@prisma/client';
 
 import { AuthorizationAttemptsService } from './authorization-attempts.service';
@@ -11,11 +11,6 @@ import { OrgContext } from '../common/decorators/org-context.decorator';
 import { toApiAuthorizationAttempt } from '../auth/presenters';
 
 @ApiTags('authorization-attempts')
-@ApiHeader({
-  name: 'X-Organization-Id',
-  description: 'Active organization id',
-  required: false,
-})
 @Controller('authorization-attempts')
 @UseGuards(JwtAuthGuard, OrgContextGuard, RolesGuard)
 export class AuthorizationAttemptsController {
