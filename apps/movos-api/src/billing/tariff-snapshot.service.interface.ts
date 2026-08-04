@@ -1,16 +1,18 @@
 import type { TariffSnapshot } from '@prisma/client';
 
 /**
- * CAP-009 (WO-ARGOS-017) — the domain-service contract for TariffSnapshot,
- * materializing docs/domain/CAP-008_DECISION.md's tariff-timing choice
- * (Option C: a snapshot captured at session start and again at each
- * pricing-relevant boundary crossed).
+ * CAP-009 (WO-ARGOS-017, hardened by WO-ARGOS-017A) — the domain-service
+ * contract for TariffSnapshot, materializing
+ * docs/domain/CAP-008_DECISION.md's tariff-timing choice (Option C: a
+ * snapshot captured at session start and again at each pricing-relevant
+ * boundary crossed).
  *
  * Interface only, per this work order's explicit scope: no implementing
  * class exists yet, and no method here may calculate a session's total
  * cost or a running balance — that remains Architecture Backlog #24
  * (Tariffs) / #25 (Billing), not this foundation. See
- * docs/domain/CAP-009_TARIFF_SNAPSHOT_MODEL.md.
+ * docs/domain/CAP-009_TARIFF_SNAPSHOT_MODEL.md and
+ * docs/domain/CAP-009_INVARIANTS.md.
  */
 
 export interface CaptureTariffSnapshotInput {
@@ -37,6 +39,18 @@ export interface TariffSnapshotService {
    * Captures a new, immutable TariffSnapshot. There is deliberately no
    * `update`/`delete` method on this interface — snapshots are
    * append-only by construction.
+   *
+   * CAP-009 (WO-ARGOS-017A): once the first TariffSnapshot for a
+   * ChargingSession exists, that session's currency is immutable — every
+   * later snapshot for the same session must use the same currency. This
+   * is enforced by a database trigger
+   * (`trg_tariff_snapshot_currency_consistency`, added in migration
+   * `20260804024403_add_tariff_snapshot_currency_consistency_trigger`),
+   * not by this method's future implementation — a mismatched `currency`
+   * will cause the underlying insert to reject with a Postgres
+   * `check_violation` (23514), which a concrete implementation should
+   * catch and translate into a domain-appropriate error, not re-validate
+   * itself. See docs/domain/CAP-009_INVARIANTS.md.
    */
   capture(input: CaptureTariffSnapshotInput): Promise<TariffSnapshot>;
 
