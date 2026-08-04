@@ -16,6 +16,10 @@ type PrismaMock = {
     create: jest.Mock;
     update: jest.Mock;
   };
+  billingAccount: {
+    findFirst: jest.Mock;
+    create: jest.Mock;
+  };
 };
 
 function createPrismaMock(): PrismaMock {
@@ -25,6 +29,10 @@ function createPrismaMock(): PrismaMock {
       findUnique: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+    },
+    billingAccount: {
+      findFirst: jest.fn(),
+      create: jest.fn(),
     },
   };
 }
@@ -92,6 +100,9 @@ describe('SessionLifecycleService', () => {
   describe('createSession', () => {
     it('creates a new ACTIVE session with a generated protocolTransactionId', async () => {
       prisma.chargingSession.findFirst.mockResolvedValue(null);
+      prisma.billingAccount.findFirst.mockResolvedValue({
+        id: 'billing-account-default-org-1',
+      });
 
       const session = await service.createSession({
         organizationId: 'org-1',
@@ -110,6 +121,41 @@ describe('SessionLifecycleService', () => {
       expect(session.energyWh).toBe(0);
       expect(typeof session.protocolTransactionId).toBe('string');
       expect(session.protocolTransactionId.length).toBeGreaterThan(0);
+      // CAP-009 (WO-ARGOS-017A): every session now resolves a
+      // BillingAccount — here, the organization's pre-existing
+      // SYSTEM_DEFAULT one.
+      expect(session.billingAccountId).toBe('billing-account-default-org-1');
+      expect(prisma.billingAccount.create).not.toHaveBeenCalled();
+    });
+
+    it("creates the organization's SYSTEM_DEFAULT BillingAccount on that organization's first-ever session", async () => {
+      prisma.chargingSession.findFirst.mockResolvedValue(null);
+      prisma.billingAccount.findFirst.mockResolvedValue(null);
+      prisma.billingAccount.create.mockResolvedValue({
+        id: 'billing-account-new-default',
+      });
+
+      const session = await service.createSession({
+        organizationId: 'org-1',
+        siteId: 'site-1',
+        chargingStationId: 'cs1',
+        evseId: 'evse-1',
+        connectorId: 'connector-1',
+        authorizationCredentialId: 'cred-1',
+        protocolVersion: 'OCPP1_6J',
+        meterStart: 1000,
+        startedAt: new Date('2026-07-31T00:00:00.000Z'),
+      });
+
+      expect(prisma.billingAccount.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            organizationId: 'org-1',
+            type: 'SYSTEM_DEFAULT',
+          }),
+        }),
+      );
+      expect(session.billingAccountId).toBe('billing-account-new-default');
     });
 
     it('is idempotent by connector: returns the existing non-terminal session instead of creating a duplicate', async () => {
