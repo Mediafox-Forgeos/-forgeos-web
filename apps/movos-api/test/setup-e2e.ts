@@ -66,8 +66,22 @@ export async function createTestApp(): Promise<INestApplication> {
 }
 
 export async function resetDatabase(prisma: PrismaService): Promise<void> {
+  // Deleted in FK dependency order (children before parents) — every
+  // relevant relation in this schema is RESTRICT-on-delete (CAP-009,
+  // WO-ARGOS-017A), so a parent-before-child delete fails outright rather
+  // than silently cascading.
   await prisma.auditEvent.deleteMany();
   await prisma.refreshSession.deleteMany();
+  await prisma.meterValue.deleteMany();
+  await prisma.tariffSnapshot.deleteMany();
+  await prisma.chargingSession.deleteMany();
+  await prisma.authorizationAttempt.deleteMany();
+  await prisma.ocppProtocolEvent.deleteMany();
+  await prisma.connector.deleteMany();
+  await prisma.evse.deleteMany();
+  await prisma.chargingStation.deleteMany();
+  await prisma.authorizationCredential.deleteMany();
+  await prisma.billingAccount.deleteMany();
   await prisma.site.deleteMany();
   await prisma.membership.deleteMany();
   await prisma.organization.deleteMany();
