@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
   ChargingSessionStatus,
+  Prisma,
   type ChargingSession,
   type ChargingSessionTerminationReason,
   type OcppProtocolVersion,
@@ -143,6 +144,17 @@ export class SessionLifecycleService {
       return existing;
     }
 
+    // CAP-009 (WO-ARGOS-017A): every ChargingSession now requires a
+    // BillingAccount (Objective 1, Option A). This handler has no concept
+    // of billing/debt ownership — it only knows which organization the
+    // session belongs to — so it resolves (or, on an organization's very
+    // first session, creates) that organization's SYSTEM_DEFAULT
+    // placeholder account. A real BillingAccount can be assigned later by
+    // a future capability; nothing here forecloses that.
+    const billingAccountId = await this.resolveSystemDefaultBillingAccountId(
+      input.organizationId,
+    );
+
     // The PENDING -> AUTHORIZED -> STARTING -> ACTIVE walk (§8) collapses
     // into a single insert here: 1.6J's StartTransaction already implies a
     // validated, physically-connecting device, and no other process ever
@@ -164,8 +176,59 @@ export class SessionLifecycleService {
         meterStart: input.meterStart,
         energyWh: 0,
         startedAt: input.startedAt,
+        billingAccountId,
       },
     });
+  }
+
+  /**
+   * Finds the organization's SYSTEM_DEFAULT BillingAccount, creating it on
+   * first use. Optimistic-create-then-fallback, not a SELECT-then-INSERT:
+   * two concurrent first-ever sessions for the same brand-new organization
+   * could otherwise both observe "none exists yet" and both attempt to
+   * create one. The partial unique index
+   * `BillingAccount_one_system_default_per_org` (one per organizationId,
+   * scoped to type=SYSTEM_DEFAULT only) turns the loser's attempt into a
+   * detectable P2002 conflict instead of a silent duplicate row — the same
+   * create-then-catch-P2002 pattern already used by
+   * SitesService/ConnectorsService/EvsesService for their own natural-key
+   * races.
+   */
+  private async resolveSystemDefaultBillingAccountId(
+    organizationId: string,
+  ): Promise<string> {
+    const existing = await this.prisma.billingAccount.findFirst({
+      where: { organizationId, type: 'SYSTEM_DEFAULT' },
+    });
+    if (existing) {
+      return existing.id;
+    }
+
+    try {
+      const created = await this.prisma.billingAccount.create({
+        data: {
+          organizationId,
+          type: 'SYSTEM_DEFAULT',
+          displayName: 'Default Billing Account (system-created)',
+          status: 'ACTIVE',
+          currency: 'USD',
+        },
+      });
+      return created.id;
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        const winner = await this.prisma.billingAccount.findFirst({
+          where: { organizationId, type: 'SYSTEM_DEFAULT' },
+        });
+        if (winner) {
+          return winner.id;
+        }
+      }
+      throw error;
+    }
   }
 
   /** STARTING -> ACTIVE. Not used by the synchronous 1.6J StartTransaction

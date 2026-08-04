@@ -625,20 +625,18 @@ model ChargingSession {
 
   authorizationCredentialId String
 
-  // CAP-009 (WO-ARGOS-017) — nullable, deliberately. Not every session
-  // resolves to a debtor at creation time (CAP-008_BILLING_MODEL.md's own
-  // headline finding: several real deployment shapes, e.g. an anonymous
-  // shopping-mall walk-up, may never have a persisted BillingAccount at
-  // all), and no historical session in this database could be
-  // retroactively backfilled with a fabricated one. This is a considered
-  // exception to the standing "ChargingSession does not grow
-  // pricing/invoice/payment fields" constraint (CAP-004 §16, DEC-018,
-  // MOVOS_CHARGING_SESSION_ARCHITECTURE) — a debtor *reference* is an
-  // ownership fact, not a price or invoice field, and CAP-008's own
-  // ownership chain (Organization -> Site -> ChargingSession ->
-  // TariffSnapshot -> Invoice) requires this link to exist somewhere. See
-  // docs/domain/CAP-009_INVARIANTS.md.
-  billingAccountId String?
+  // CAP-009 (WO-ARGOS-017A) — required, per the approved invariant "every
+  // ChargingSession has exactly one BillingAccount" (Objective 1, Option
+  // A). Originally nullable (WO-ARGOS-017); hardened here after ARGOS
+  // review found that mismatched the approved invariant. Every
+  // pre-existing session was backfilled with a per-organization
+  // SYSTEM_DEFAULT BillingAccount before this column became NOT NULL — see
+  // the migration and docs/domain/CAP-009_BILLING_ACCOUNT_MODEL.md's
+  // "System/default account" section. A debtor *reference* remains an
+  // ownership fact, not a price or invoice field — the same reasoning that
+  // justified this column's existence in the first place (CAP-004 §16,
+  // DEC-018) is unaffected by the nullable-to-required change.
+  billingAccountId String
 
   protocolVersion       OcppProtocolVersion
   // MOVOS-assigned (1.6J) or device-assigned (2.0.1, not implemented)
@@ -679,8 +677,19 @@ model ChargingSession {
   connector               Connector               @relation(fields: [connectorId], references: [id])
   authorizationCredential AuthorizationCredential @relation(fields: [authorizationCredentialId], references: [id])
   meterValues             MeterValue[]
-  billingAccount          BillingAccount?         @relation(fields: [billingAccountId], references: [id])
   tariffSnapshots         TariffSnapshot[]
+
+  // CAP-009 (WO-ARGOS-017A) — a composite FK, deliberately, not a plain
+  // [billingAccountId] -> [id] reference. Pairing organizationId alongside
+  // billingAccountId means Postgres itself rejects any attempt to assign a
+  // BillingAccount belonging to a *different* organization than the
+  // session's own — a real tenant-isolation gap the original, single-column
+  // FK left open (nothing prevented a cross-tenant assignment at the
+  // database level). References BillingAccount's [organizationId, id]
+  // unique constraint, below. onDelete: Restrict — see
+  // docs/domain/CAP-009_ARCHIVAL_POLICY.md for why SET NULL (the original,
+  // Prisma-default behavior) was replaced.
+  billingAccount BillingAccount @relation(fields: [organizationId, billingAccountId], references: [organizationId, id], onDelete: Restrict)
 
   // "protocolTransactionId is unique per charging station" (WO rule) plus
   // the idempotency requirement in §13: a retransmitted StartTransaction
@@ -730,6 +739,12 @@ enum BillingAccountType {
   FLEET
   HOA_CONDOMINIUM
   ROAMING_PARTNER
+  // CAP-009 (WO-ARGOS-017A) — the placeholder account type the backfill
+  // migration creates, one per organization, to satisfy "every
+  // ChargingSession has exactly one BillingAccount" for sessions that
+  // predate this concept entirely. Never created by ordinary application
+  // flow. See docs/domain/CAP-009_BILLING_ACCOUNT_MODEL.md.
+  SYSTEM_DEFAULT
 }
 
 // Deliberately two values, not the ACTIVE/INACTIVE/ARCHIVED pattern used
@@ -760,10 +775,19 @@ model BillingAccount {
   organization     Organization      @relation(fields: [organizationId], references: [id])
   chargingSessions ChargingSession[]
 
-  // No @@unique constraint: evaluated and deliberately not added — see
-  // docs/domain/CAP-009_BILLING_ACCOUNT_MODEL.md's "Uniqueness
-  // constraints" section for why no natural key exists at this
-  // deliberately minimal field set.
+  // No natural-key @@unique constraint: evaluated and deliberately not
+  // added — see docs/domain/CAP-009_BILLING_ACCOUNT_MODEL.md's
+  // "Uniqueness constraints" section for why no natural key exists at
+  // this deliberately minimal field set. That finding is unchanged.
+  //
+  // The @@unique below is a *structural* constraint, not a natural-key
+  // one: it exists purely so ChargingSession's composite tenant-isolation
+  // foreign key (see ChargingSession.billingAccount) has a matching
+  // target to reference. `id` alone is already unique (it's the primary
+  // key) — this adds organizationId alongside it so Postgres can enforce
+  // "the referenced BillingAccount belongs to the same organization as
+  // the referencing ChargingSession" declaratively, with no trigger.
+  @@unique([organizationId, id])
   @@index([organizationId, status])
 }
 
