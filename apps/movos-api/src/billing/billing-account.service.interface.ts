@@ -1,14 +1,17 @@
 import type { BillingAccount, BillingAccountType } from '@prisma/client';
 
 /**
- * CAP-009 (WO-ARGOS-017) — the domain-service contract for BillingAccount,
- * the canonical debt owner named by docs/domain/CAP-008_DEBT_OWNERSHIP.md.
+ * CAP-009 (WO-ARGOS-017, hardened by WO-ARGOS-017A) — the domain-service
+ * contract for BillingAccount, the canonical debt owner named by
+ * docs/domain/CAP-008_DEBT_OWNERSHIP.md.
  *
  * Interface only, per this work order's explicit scope: no implementing
  * class exists yet, and none of these methods may ever calculate a
  * balance, generate an invoice, or process a payment — that remains
  * Architecture Backlog #25 (Billing) / #26 (Payments), not this
- * foundation. See docs/domain/CAP-009_BILLING_ACCOUNT_MODEL.md.
+ * foundation. See docs/domain/CAP-009_BILLING_ACCOUNT_MODEL.md,
+ * docs/domain/CAP-009_INVARIANTS.md, and
+ * docs/domain/CAP-009_ARCHIVAL_POLICY.md.
  */
 
 export interface CreateBillingAccountInput {
