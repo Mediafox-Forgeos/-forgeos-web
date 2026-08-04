@@ -342,3 +342,54 @@ erDiagram
 **Next capability:** CAP-009 — `BillingAccount` & `TariffSnapshot` Foundation, registered in the [Architecture Backlog](../architecture/MOVOS_ARCHITECTURE_BACKLOG_v1.0.md), not started.
 
 **Validation level:** N/A — no code exists to validate. See [CAP-008_BILLING_MODEL.md](./CAP-008_BILLING_MODEL.md), [CAP-008_DECISION.md](./CAP-008_DECISION.md), [CAP-008_DEBT_OWNERSHIP.md](./CAP-008_DEBT_OWNERSHIP.md), [CAP-008_BILLING_THREAT_MODEL.md](../reviews/CAP-008_BILLING_THREAT_MODEL.md), and [CAP-008_SCENARIOS.md](../reviews/CAP-008_SCENARIOS.md).
+
+---
+
+## 2026-08-04 update (WO-ARGOS-017/017A / CAP-009): `BillingAccount` and `TariffSnapshot` are now real schema
+
+This section is new — it does not edit any diagram above, including the "PROPOSED, not implemented" ER diagram in the CAP-008 section immediately above, which is left exactly as originally written per this document's append-only discipline even though it is now partially stale (`BILLINGACCOUNT` and `TARIFFSNAPSHOT` are no longer proposals). This section is the correction, and supersedes those two nodes' status specifically.
+
+```mermaid
+erDiagram
+    ORGANIZATION ||--o{ BILLINGACCOUNT : "scopes (tenant-owned, composite FK)"
+    CHARGINGSESSION }o--|| BILLINGACCOUNT : "owes (required FK, RESTRICT on delete)"
+    CHARGINGSESSION ||--o{ TARIFFSNAPSHOT : "prices (append-only)"
+    BILLINGACCOUNT ||--o{ INVOICE : "would owe"
+    TARIFFSNAPSHOT }o--|| INVOICE : "would back"
+    AUTHORIZATIONCREDENTIAL }o--o| BILLINGACCOUNT : "would authorize use of (method, not debtor) — still not implemented"
+
+    BILLINGACCOUNT {
+        string id PK
+        string organizationId FK "composite unique (organizationId, id)"
+        enum type "INDIVIDUAL, COMPANY, FLEET, HOA_CONDOMINIUM, ROAMING_PARTNER, SYSTEM_DEFAULT"
+        string displayName
+        enum status "ACTIVE, ARCHIVED"
+        string currency
+        string note "REAL — CAP-009, PR #34. SYSTEM_DEFAULT added during WO-ARGOS-017A hardening: one per organization, auto-resolved by SessionLifecycleService for every session that has no explicit debtor"
+    }
+    TARIFFSNAPSHOT {
+        string id PK
+        string chargingSessionId FK
+        string organizationId FK
+        decimal energyPricePerKwh "Decimal(12,6), never Float"
+        decimal pricePerMinute "Decimal(12,6), never Float"
+        decimal fixedFee "Decimal(12,2), never Float"
+        string currency "cross-snapshot consistency enforced by a database trigger, per ChargingSession"
+        string timezone
+        datetime effectiveAt
+        string note "REAL — CAP-009, PR #34. Immutable/append-only by construction: no updatedAt, no update/delete service method"
+    }
+    INVOICE {
+        string note "still PROPOSED, not implemented — DEC-018's original naming, unchanged"
+    }
+```
+
+**What is real:** `BillingAccount` and `TariffSnapshot` as Prisma models, migrated onto `main` (5 migrations total). `ChargingSession.billingAccountId` is a required column with a composite tenant-isolation foreign key to `BillingAccount.(organizationId, id)` — every pre-existing session was backfilled, none is nullable anymore. Cross-`TariffSnapshot` currency consistency for one `ChargingSession` is enforced by a `BEFORE INSERT` database trigger — the first trigger in this schema. `BillingAccount` deletion is `RESTRICT` (a referenced account cannot be deleted), correcting Prisma's originally-shipped, unexamined `SET NULL` default. `BillingAccountService`/`TariffSnapshotService` exist as TypeScript interfaces (`apps/movos-api/src/billing/`) — no implementing class, no controller, no route. `SessionLifecycleService.createSession()` gained one narrow, necessary piece of billing-adjacent logic: resolving or creating an organization's `SYSTEM_DEFAULT` `BillingAccount` so the new required FK can always be satisfied; it does not implement `BillingAccountService` and contains no pricing/invoice/balance logic.
+
+**Explicitly still out of scope, still not implemented:** `Invoice`, `Payment`, `Refund`, `Tax`, `Discount`, any Stripe or accounting integration, and any UI. The snapshot-triggering rule, sparse-`MeterValue` energy attribution, and which clock governs pricing remain exactly as open as `CAP-008_DECISION.md` left them — CAP-009 closed _structural_ invariant gaps (ownership, tenant isolation, currency consistency, deletion policy), not the pricing-calculation questions CAP-008 already deferred. `Driver`/`Vehicle`/`Fleet` remain exactly as classified in every prior section of this map (named, unimplemented).
+
+**Residual, honestly-stated gap:** a never-referenced `BillingAccount` (no `ChargingSession` ever pointed at it) remains deletable via raw Prisma/SQL access — `RESTRICT` only blocks deletion while a dependent row exists. Closing this fully requires a database-permission change (revoking `DELETE`), not a schema change, and is out of CAP-009's scope.
+
+**Next capability:** CAP-010 — Invoice & Ledger Architecture, registered in the [Architecture Backlog](../architecture/MOVOS_ARCHITECTURE_BACKLOG_v1.0.md), documentation-only scope, not started.
+
+**Validation level:** real-Postgres validated — 5 migrations applied via `prisma migrate deploy` against both a scratch database seeded with synthetic legacy data and the shared `movos_dev`, 9 e2e tests (including a real concurrent-request race test proving exactly one `SYSTEM_DEFAULT` account is created per organization under simultaneous first-session creation), 2 unit tests, and a live `information_schema.referential_constraints` query confirming all 6 relevant foreign keys are `RESTRICT`. See [CAP-009_BILLING_ACCOUNT_MODEL.md](./CAP-009_BILLING_ACCOUNT_MODEL.md), [CAP-009_TARIFF_SNAPSHOT_MODEL.md](./CAP-009_TARIFF_SNAPSHOT_MODEL.md), [CAP-009_INVARIANTS.md](./CAP-009_INVARIANTS.md), [CAP-009_ARCHIVAL_POLICY.md](./CAP-009_ARCHIVAL_POLICY.md), and the [CAP-009 Post-Mortem](../postmortems/CAP-009_POST_MORTEM.md).
