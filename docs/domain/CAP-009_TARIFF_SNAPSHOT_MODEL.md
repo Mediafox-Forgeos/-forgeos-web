@@ -1,7 +1,7 @@
 # CAP-009 — TariffSnapshot Model & Relationships
 
-**Generated:** 2026-08-03 (WO-ARGOS-017, Objectives 2 and 3)
-**Status:** IMPLEMENTED (schema + interface only). `TariffSnapshot` exists as a real Prisma model, migrated onto `movos_dev` (`prisma/migrations/20260803213813_add_billing_account_and_tariff_snapshot`). `TariffSnapshotService` exists as a TypeScript interface only — no implementing class, no NestJS wiring, no cost/invoice/balance calculation. See "Not implemented" at the end.
+**Generated:** 2026-08-03 (WO-ARGOS-017, Objectives 2 and 3); hardened 2026-08-04 (WO-ARGOS-017A) — see "Currency consistency" and the relationship table below.
+**Status:** IMPLEMENTED (schema + interface only). `TariffSnapshot` exists as a real Prisma model, migrated onto `movos_dev`. `TariffSnapshotService` exists as a TypeScript interface only — no implementing class, no NestJS wiring, no cost/invoice/balance calculation. See "Not implemented" at the end.
 **Materializes:** [CAP-008_DECISION.md](./CAP-008_DECISION.md)'s tariff-timing choice (Option C — a snapshot captured at session start and again at each pricing-relevant boundary crossed, degenerating to a single snapshot for a session that crosses none).
 **Grounding discipline:** every field, constraint, and relation described below is quoted directly from `apps/movos-api/prisma/schema.prisma` and `apps/movos-api/src/billing/tariff-snapshot.service.interface.ts` on this branch.
 
@@ -53,35 +53,75 @@ The work order requires all three. Here is exactly how each is achieved in this 
 - **Append-only.** `TariffSnapshotService` has no `delete` method either. A snapshot, once captured, exists for as long as the database row does — and per the same no-cascade finding `CAP-008_BILLING_MODEL.md` Objective 3 already established, nothing in this schema can delete it as a side effect of deleting anything else (its foreign keys to `ChargingSession` and `Organization` are both the default `RESTRICT`-on-delete behavior for required relations).
 - **Auditable.** Every snapshot carries `effectiveAt` (the business-meaningful moment its terms began applying) _and_ `createdAt` (when the row was physically written) as two distinct fields — deliberately not collapsed into one, so a snapshot captured retroactively (e.g. a backfill or correction workflow, should one ever be built) remains distinguishable from one captured live. Combined with `chargingSessionId`/`organizationId`, any snapshot can be traced to exactly the session and tenant it applied to, and — because nothing can update or delete it — a query made against it today will return the same answer years from now, which is the literal property `DEC-018`'s regulatory-audit finding requires.
 
-**What is honestly not enforced:** none of the three guarantees above is backed by a database trigger or a `REVOKE UPDATE`-style permission lock — Postgres offers both, but building either is application/infrastructure logic beyond "design the entity" and "create interfaces only," the explicit boundaries this work order set for Objectives 2 and 4. Immutability here is an _application-level contract_ (no method exists to violate it) and a _schema-level absence_ (no `updatedAt` to update), not a database-level impossibility. This is the same honest boundary `CAP-008_BILLING_THREAT_MODEL.md` already drew for `AuditEvent`'s own append-only convention — stated here explicitly rather than implied.
+**What is honestly not enforced:** none of the three guarantees above is backed by a database trigger or a `REVOKE UPDATE`-style permission lock. Immutability here is an _application-level contract_ (no method exists to violate it) and a _schema-level absence_ (no `updatedAt` to update), not a database-level impossibility. This is the same honest boundary `CAP-008_BILLING_THREAT_MODEL.md` already drew for `AuditEvent`'s own append-only convention. This finding is unchanged by WO-ARGOS-017A — that work order added database-level enforcement for the cross-row _currency-consistency_ rule specifically (below), not for update/delete prevention generally, which remains exactly as described here.
+
+## Currency consistency (WO-ARGOS-017A)
+
+**Domain rule:** once the first `TariffSnapshot` is created for a `ChargingSession`, that session's currency is immutable — every later snapshot for the same session must use the same currency.
+
+**Enforcement: a database trigger, evaluated against three alternatives and chosen as the smallest mechanism that actually closes the gap.**
+
+| Option                                                                                                | Verdict                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Application service validation                                                                        | Rejected as the _sole_ mechanism — it only holds for callers going through `TariffSnapshotService`'s (still nonexistent) concrete implementation; a raw Prisma call anywhere else in the codebase would bypass it entirely, same as every other application-contract-only guarantee in this document.                                                                                                                                          |
+| Plain `CHECK` constraint                                                                              | Not viable at all — a `CHECK` constraint evaluates one row in isolation; it cannot compare a new row against sibling rows for the same `chargingSessionId`.                                                                                                                                                                                                                                                                                    |
+| Denormalized `ChargingSession.currency` + composite FK (mirroring Objective 1's tenant-isolation fix) | Evaluated and rejected: this would require `ChargingSession.currency` to already hold the correct value _before_ the first snapshot is inserted, which nothing in this interfaces-only foundation has a way to orchestrate — unlike Objective 1's composite FK, where both sides of the pair are already known at `ChargingSession` creation time, here there is a genuine bootstrapping problem a purely declarative constraint cannot solve. |
+| **Trigger** (chosen)                                                                                  | A single `BEFORE INSERT` trigger on `TariffSnapshot` that looks up any existing sibling row for the same `chargingSessionId` and rejects the insert (`RAISE EXCEPTION`, `check_violation`/`23514`) if the currency differs. Self-contained — touches only `TariffSnapshot`, no `ChargingSession` schema change needed. The first trigger in this schema; deliberately scoped to exactly this one rule.                                         |
+
+```sql
+CREATE OR REPLACE FUNCTION enforce_tariff_snapshot_currency_consistency()
+RETURNS TRIGGER AS $$
+DECLARE
+  existing_currency TEXT;
+BEGIN
+  SELECT "currency" INTO existing_currency
+  FROM "TariffSnapshot"
+  WHERE "chargingSessionId" = NEW."chargingSessionId"
+  LIMIT 1;
+
+  IF existing_currency IS NOT NULL AND existing_currency <> NEW."currency" THEN
+    RAISE EXCEPTION
+      'TariffSnapshot currency mismatch: ChargingSession % already has snapshots in %, cannot add one in %',
+      NEW."chargingSessionId", existing_currency, NEW."currency"
+      USING ERRCODE = '23514';
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_tariff_snapshot_currency_consistency
+BEFORE INSERT ON "TariffSnapshot"
+FOR EACH ROW
+EXECUTE FUNCTION enforce_tariff_snapshot_currency_consistency();
+```
+
+Migration `20260804024403_add_tariff_snapshot_currency_consistency_trigger`. Verified live against real Postgres: two same-currency snapshots for one session succeed; a third, mismatched-currency snapshot for that same session is rejected with the exact error above; two _different_ sessions may independently use two different currencies from each other without conflict (see `test/billing-foundation.e2e-spec.ts`).
+
+**A known, accepted limitation of a raw-SQL-only trigger in a Prisma project, stated honestly:** `schema.prisma` has no representation of triggers at all — this trigger exists only in the migration's SQL, invisible to `schema.prisma` and to `prisma validate`. It survives ordinary `prisma migrate deploy`/`migrate status` correctly (both replay tracked migration history verbatim, so the trigger is created exactly as any other tracked schema change would be), but it would **not** be reconstructed if the database were ever built by any process other than replaying this migration history — for example, `prisma db push` (which diffs directly against `schema.prisma`, not migration history) — and it would **not** appear if someone ran `prisma db pull` to reverse-engineer a schema from the live database, since Prisma's introspection doesn't model triggers either. Documented here so this doesn't become an undiscoverable surprise for a future maintainer.
 
 ## Objective 3 — Relationships and cardinality
 
 ```
 Organization
     ↓
-BillingAccount ⇢ ⇢ ⇢ ⇢ ⇢ ⇢ ⇢ ⇢ ⇢ ⇢ ⇢ ⇢ ⇢ ⇢ ⇢ ⇢ ⇢ ⇢ ⇢ ⇢ ⇢ ⇢ (0..1 per session, nullable)
+BillingAccount ──────────────────────────────────────── (exactly 1 per session, same tenant)
     ↓                                                        ↓
     └──────────────────────────────────────────────► ChargingSession
                                                                ↓ (1..N)
                                                        TariffSnapshot
 ```
 
-| Relationship                         | Cardinality                                                    | Enforced by                                                                                    |
-| ------------------------------------ | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `Organization` → `BillingAccount`    | one-to-many                                                    | `BillingAccount.organizationId` required FK, `RESTRICT` on delete                              |
-| `BillingAccount` → `ChargingSession` | one-to-many, **optional on the session side**                  | `ChargingSession.billingAccountId` nullable FK, `SET NULL` on delete                           |
-| `ChargingSession` → `TariffSnapshot` | one-to-many                                                    | `TariffSnapshot.chargingSessionId` required FK, `RESTRICT` on delete                           |
-| `Organization` → `TariffSnapshot`    | one-to-many, **independent of the session's own organization** | `TariffSnapshot.organizationId` required FK, `RESTRICT` on delete — see the roaming note above |
+| Relationship                         | Cardinality                                                     | Enforced by                                                                                                                                                                                                  |
+| ------------------------------------ | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Organization` → `BillingAccount`    | one-to-many                                                     | `BillingAccount.organizationId` required FK, `RESTRICT` on delete                                                                                                                                            |
+| `BillingAccount` → `ChargingSession` | one-to-many, **required on the session side, same tenant only** | `ChargingSession.(organizationId, billingAccountId)` required composite FK → `BillingAccount.(organizationId, id)`, `RESTRICT` on delete. Hardened by WO-ARGOS-017A — see below and `CAP-009_INVARIANTS.md`. |
+| `ChargingSession` → `TariffSnapshot` | one-to-many                                                     | `TariffSnapshot.chargingSessionId` required FK, `RESTRICT` on delete                                                                                                                                         |
+| `Organization` → `TariffSnapshot`    | one-to-many, **independent of the session's own organization**  | `TariffSnapshot.organizationId` required FK, `RESTRICT` on delete — see the roaming note above                                                                                                               |
 
-### "One session has exactly one BillingAccount" — the honest gap between the target invariant and what's enforced today
+### "One session has exactly one BillingAccount" — now enforced, hardened by WO-ARGOS-017A
 
-The work order states this as a rule to document. As implemented, `ChargingSession.billingAccountId` is **nullable** — a session can have zero or one `BillingAccount`, not exactly one, enforced. This is a deliberate, documented deviation, not an oversight, for two independently sufficient reasons:
-
-1. **No historical session can be retroactively assigned one.** Every `ChargingSession` row that existed in `movos_dev` before this migration has no `BillingAccount` to reference and cannot be fabricated one.
-2. **`CAP-008_BILLING_MODEL.md`'s own headline finding says some sessions never will.** A shopping-mall walk-up session (`CAP-008_SCENARIOS.md` §2) may be paid for and completed without ever creating a durable `BillingAccount` at all.
-
-The rule "exactly one" is therefore recorded here as the **target invariant for a session that has been fully billed**, not as a database-level guarantee for every session unconditionally — the distinction is stated precisely in `docs/domain/CAP-009_INVARIANTS.md`, which is the authoritative statement of exactly what is and isn't enforced today.
+Originally implemented with a nullable `billingAccountId` (WO-ARGOS-017), documented at the time as a deliberate deviation from the literal "exactly one" wording. ARGOS's review of PR #34 found this mismatched the already-approved invariant and directed Option A: backfill every pre-existing session with a per-organization `SYSTEM_DEFAULT` `BillingAccount`, then make the column required. **`ChargingSession.billingAccountId` is now `String`, not `String?`** — every session has exactly one `BillingAccount`, database-enforced, no exceptions, including the deployment shapes (`CAP-008_SCENARIOS.md` §2's anonymous shopping-mall walk-up) that have no _real_ debtor: those sessions are attached to their organization's `SYSTEM_DEFAULT` placeholder rather than left `NULL`. See `CAP-009_BILLING_ACCOUNT_MODEL.md`'s "Hardening record" and `CAP-009_ARCHIVAL_POLICY.md` for the full backfill mechanics and evidence.
 
 ### "One session can have multiple TariffSnapshots" — fully enforced
 
@@ -120,4 +160,4 @@ Three methods only: `capture` (the sole write path — there is no `update`/`del
 
 ## Not implemented
 
-No implementing class for `TariffSnapshotService` exists; no cost-calculation logic (summing snapshots against a session's energy/duration to produce a total); no `Invoice` linkage; no UI; no wiring into `app.module.ts`. The snapshot-triggering rule (which specific events cause a new capture), the energy-attribution rule for splitting a session's energy across snapshot boundaries when `MeterValue` telemetry is sparse, and which clock governs pricing all remain exactly as open as `CAP-008_DECISION.md` left them — this foundation provides the entity and the contract to eventually resolve them against, not the resolution itself.
+No implementing class for `TariffSnapshotService` exists; no cost-calculation logic (summing snapshots against a session's energy/duration to produce a total); no `Invoice` linkage; no UI; no wiring into `app.module.ts`. The snapshot-triggering rule (which specific events cause a new capture), the energy-attribution rule for splitting a session's energy across snapshot boundaries when `MeterValue` telemetry is sparse, and which clock governs pricing all remain exactly as open as `CAP-008_DECISION.md` left them — this foundation provides the entity and the contract to eventually resolve them against, not the resolution itself. Cross-snapshot currency consistency (above) is the one rule from this list that _is_ now enforced, by WO-ARGOS-017A — everything else in this paragraph remains open.
