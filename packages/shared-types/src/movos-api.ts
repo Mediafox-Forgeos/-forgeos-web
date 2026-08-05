@@ -220,3 +220,85 @@ export interface HealthResponse {
   timestamp: string;
   version: string;
 }
+
+// CAP-X — Operator Control Center, Sprint 1 (WO-ARGOS-022). Read-only
+// aggregation surface over ChargingStation/Evse/Connector/ChargingSession —
+// see docs/domain/CAP-X_STATION_HEALTH.md and
+// docs/implementation/CAPX_SPRINT_1_TECHNICAL_NOTES.md. StationHealthStatus
+// is deliberately 4 values, not the 5 named in the full architecture —
+// `maintenance` requires MaintenanceTicket, which does not exist yet
+// (out of scope for Sprint 1, see the restrictions in WO-ARGOS-022).
+
+export type StationHealthStatus =
+  'healthy' | 'degraded' | 'offline' | 'unknown';
+
+export interface ApiStationHealth {
+  stationId: string;
+  status: StationHealthStatus;
+  reason: string;
+}
+
+export interface ApiStationHealthSummary {
+  organizationId: string;
+  siteId: string | null;
+  totalStations: number;
+  healthy: number;
+  degraded: number;
+  offline: number;
+  unknown: number;
+}
+
+export interface ApiConnectivitySummary {
+  organizationId: string;
+  siteId: string | null;
+  totalStations: number;
+  online: number;
+  offline: number;
+  unknown: number;
+}
+
+export interface ApiConnectorStatusCounts {
+  AVAILABLE: number;
+  CHARGING: number;
+  OCCUPIED: number;
+  RESERVED: number;
+  UNAVAILABLE: number;
+  FAULTED: number;
+  OFFLINE: number;
+}
+
+export interface ApiOccupancySummary {
+  organizationId: string;
+  siteId: string | null;
+  totalConnectors: number;
+  connectorStatusCounts: ApiConnectorStatusCounts;
+  occupiedCount: number;
+  eligibleCount: number;
+  occupancyRate: number | null;
+}
+
+export interface ApiSiteHealthSummary {
+  siteId: string;
+  siteName: string;
+  latitude: number | null;
+  longitude: number | null;
+  totalStations: number;
+  worstStatus: StationHealthStatus;
+  healthy: number;
+  degraded: number;
+  offline: number;
+  unknown: number;
+}
+
+export interface ApiActiveSession {
+  id: string;
+  organizationId: string;
+  siteId: string;
+  siteName: string;
+  chargingStationId: string;
+  chargingStationName: string;
+  connectorId: string;
+  status: string;
+  energyWh: number;
+  startedAt: string;
+}

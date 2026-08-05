@@ -38,6 +38,24 @@ export class SessionsService {
     });
   }
 
+  /**
+   * CAP-X Operator Control Center, Sprint 1 (WO-ARGOS-022) — the
+   * ACTIVE_SESSIONS widget's data source. Includes the site/station name
+   * (a read-only join, not a schema change) because an operational list is
+   * read by a human deciding where to look next, not by code that already
+   * knows the id — see docs/product/CAPX_MVP_SCREENS.md.
+   */
+  async listActive(organizationId: string) {
+    return this.prisma.chargingSession.findMany({
+      where: { organizationId, status: { in: ['ACTIVE', 'SUSPENDED'] } },
+      include: {
+        site: { select: { name: true } },
+        chargingStation: { select: { name: true } },
+      },
+      orderBy: { startedAt: 'desc' },
+    });
+  }
+
   async getById(organizationId: string, id: string): Promise<ChargingSession> {
     const session = await this.prisma.chargingSession.findFirst({
       where: { id, organizationId },
