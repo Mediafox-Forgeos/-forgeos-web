@@ -23,6 +23,7 @@ import type {
   ApiMeterValue,
   ApiAuthorizationCredential,
   ApiAuthorizationAttempt,
+  ApiActiveSession,
 } from '@mediafox/shared-types';
 
 /**
@@ -160,6 +161,27 @@ export function toApiChargingSession(
     endedAt: session.endedAt?.toISOString() ?? null,
     createdAt: session.createdAt.toISOString(),
     updatedAt: session.updatedAt.toISOString(),
+  };
+}
+
+// CAP-X Operator Control Center, Sprint 1 (WO-ARGOS-022).
+export function toApiActiveSession(
+  session: ChargingSession & {
+    site: { name: string };
+    chargingStation: { name: string };
+  },
+): ApiActiveSession {
+  return {
+    id: session.id,
+    organizationId: session.organizationId,
+    siteId: session.siteId,
+    siteName: session.site.name,
+    chargingStationId: session.chargingStationId,
+    chargingStationName: session.chargingStation.name,
+    connectorId: session.connectorId,
+    status: session.status,
+    energyWh: session.energyWh,
+    startedAt: session.startedAt.toISOString(),
   };
 }
 

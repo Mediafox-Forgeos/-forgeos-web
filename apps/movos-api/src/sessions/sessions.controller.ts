@@ -8,7 +8,11 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { OrgContextGuard } from '../guards/org-context.guard';
 import { RolesGuard } from '../guards/roles.guard';
 import { OrgContext } from '../common/decorators/org-context.decorator';
-import { toApiChargingSession, toApiMeterValue } from '../auth/presenters';
+import {
+  toApiActiveSession,
+  toApiChargingSession,
+  toApiMeterValue,
+} from '../auth/presenters';
 
 @ApiTags('sessions')
 @ApiHeader({
@@ -31,6 +35,16 @@ export class SessionsController {
   ) {
     const sessions = await this.sessions.list(membership.organizationId, query);
     return sessions.map(toApiChargingSession);
+  }
+
+  @Get('active')
+  @ApiOperation({
+    summary:
+      'List ACTIVE/SUSPENDED charging sessions for the active organization (CAP-X Operator Control Center)',
+  })
+  async listActive(@OrgContext() membership: Membership) {
+    const sessions = await this.sessions.listActive(membership.organizationId);
+    return sessions.map(toApiActiveSession);
   }
 
   @Get(':id')
