@@ -296,3 +296,31 @@ export interface ApiSiteHealthSummary {
   offline: number;
   unknown: number;
 }
+
+// Operational Intelligence MVP (WO-ARGOS-025). Read-only, computed insights
+// over ChargingSession/AuthorizationAttempt/MeterValue — see
+// docs/product/RECOMMENDATION_CATALOG.md (WO-ARGOS-024) for the discovery
+// this implements, and docs/implementation/OPERATIONAL_INTELLIGENCE_
+// TECHNICAL_NOTES.md for the exact algorithms. Exactly 5 recommendation
+// types, each surfacing at most its single worst current instance — never
+// persisted, recomputed on every request.
+export type RecommendationType =
+  | 'ENERGY_ANOMALY'
+  | 'AUTH_FAILURE_SPIKE'
+  | 'IDLE_CONNECTOR'
+  | 'COMPARATIVE_UNDERPERFORMANCE'
+  | 'EFFICIENCY_DRIFT';
+
+export type RecommendationSeverity = 'high' | 'medium';
+
+export interface ApiRecommendation {
+  type: RecommendationType;
+  title: string;
+  severity: RecommendationSeverity;
+  explanation: string;
+  evidence: string[];
+  recommendedAction: string;
+  stationId: string | null;
+  stationName: string | null;
+  generatedAt: string;
+}
