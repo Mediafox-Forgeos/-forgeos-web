@@ -4,6 +4,23 @@ import type { ChargingSession, MeterValue } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { ListSessionsQueryDto } from './dto/list-sessions-query.dto';
 
+// Shared by every read method below — a session shown to a human always
+// carries its site/station name alongside it, never just the bare ids.
+// WO-ARGOS-023 (Operational Consistency Hardening) unified what was
+// previously three call sites (list/getById/listActive) computing this
+// join inconsistently — only listActive did, which is what let the real
+// session list/detail pages keep showing raw ids (or, before this WO,
+// not exist at all and fall back to fictional fixture data).
+const SESSION_WITH_NAMES_INCLUDE = {
+  site: { select: { name: true } },
+  chargingStation: { select: { name: true } },
+} as const;
+
+export type ChargingSessionWithNames = ChargingSession & {
+  site: { name: string };
+  chargingStation: { name: string };
+};
+
 /**
  * Read-only query surface over ChargingSession — the write path
  * (creation, transitions) belongs entirely to SessionLifecycleService,
@@ -23,7 +40,7 @@ export class SessionsService {
   async list(
     organizationId: string,
     query: ListSessionsQueryDto,
-  ): Promise<ChargingSession[]> {
+  ): Promise<ChargingSessionWithNames[]> {
     return this.prisma.chargingSession.findMany({
       where: {
         organizationId,
@@ -33,6 +50,7 @@ export class SessionsService {
           : {}),
         ...(query.status ? { status: query.status } : {}),
       },
+      include: SESSION_WITH_NAMES_INCLUDE,
       orderBy: { startedAt: 'desc' },
       take: query.limit ?? 50,
     });
@@ -40,25 +58,25 @@ export class SessionsService {
 
   /**
    * CAP-X Operator Control Center, Sprint 1 (WO-ARGOS-022) — the
-   * ACTIVE_SESSIONS widget's data source. Includes the site/station name
-   * (a read-only join, not a schema change) because an operational list is
-   * read by a human deciding where to look next, not by code that already
-   * knows the id — see docs/product/CAPX_MVP_SCREENS.md.
+   * ACTIVE_SESSIONS widget's data source.
    */
-  async listActive(organizationId: string) {
+  async listActive(
+    organizationId: string,
+  ): Promise<ChargingSessionWithNames[]> {
     return this.prisma.chargingSession.findMany({
       where: { organizationId, status: { in: ['ACTIVE', 'SUSPENDED'] } },
-      include: {
-        site: { select: { name: true } },
-        chargingStation: { select: { name: true } },
-      },
+      include: SESSION_WITH_NAMES_INCLUDE,
       orderBy: { startedAt: 'desc' },
     });
   }
 
-  async getById(organizationId: string, id: string): Promise<ChargingSession> {
+  async getById(
+    organizationId: string,
+    id: string,
+  ): Promise<ChargingSessionWithNames> {
     const session = await this.prisma.chargingSession.findFirst({
       where: { id, organizationId },
+      include: SESSION_WITH_NAMES_INCLUDE,
     });
     if (!session) {
       throw new NotFoundException('Sesión de carga no encontrada');

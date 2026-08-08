@@ -61,17 +61,66 @@ export function ApiConnectorStatusBadge({ status }: { status: string }) {
 // deliberately distinct from ChargingStationStatus above (administrative)
 // and from Evse/Connector operational status (charging-session state). See
 // docs/domain/CAP-005_CONNECTIVITY_ENGINE.md.
+//
+// Exported (not module-private) as of WO-ARGOS-023 (Operational Consistency
+// Hardening, see docs/product/OPERATIONAL_VOCABULARY.md) — this is the one
+// canonical wording for ConnectivityStatus in the whole app. Before that
+// hardening pass, the CAP-X operator dashboard's ConnectivityWidget
+// independently hardcoded "Fuera de línea" for the same OFFLINE value this
+// map already called "Desconectado," so the same station could read two
+// different things on two different screens. Reuse this constant rather
+// than restating the words.
+export const CONNECTIVITY_STATUS_LABELS: Record<string, string> = {
+  ONLINE: 'En línea',
+  OFFLINE: 'Desconectado',
+  UNKNOWN: 'Desconocido',
+};
+
 const connectivityStatusMap: Record<
   string,
   { label: string; tone: BadgeTone }
 > = {
-  ONLINE: { label: 'En línea', tone: 'success' },
-  OFFLINE: { label: 'Desconectado', tone: 'danger' },
-  UNKNOWN: { label: 'Desconocido', tone: 'neutral' },
+  ONLINE: { label: CONNECTIVITY_STATUS_LABELS.ONLINE, tone: 'success' },
+  OFFLINE: { label: CONNECTIVITY_STATUS_LABELS.OFFLINE, tone: 'danger' },
+  UNKNOWN: { label: CONNECTIVITY_STATUS_LABELS.UNKNOWN, tone: 'neutral' },
 };
 
 export function ApiConnectivityStatusBadge({ status }: { status: string }) {
   const descriptor = connectivityStatusMap[status] ?? {
+    label: status,
+    tone: 'neutral' as const,
+  };
+  return <Badge tone={descriptor.tone}>{descriptor.label}</Badge>;
+}
+
+// CAP-004 — real ChargingSession lifecycle (10 values), distinct from the
+// legacy mock SessionStatusBadge in status-badge.tsx, which maps a
+// 5-value fictional enum (STARTING/ACTIVE/COMPLETED/FAILED/STOPPED) that
+// doesn't even match the real ChargingSessionStatus enum. Added by
+// WO-ARGOS-023 once the real /sessions list and detail pages needed a
+// status badge that could render every value the real API returns.
+const chargingSessionStatusMap: Record<
+  string,
+  { label: string; tone: BadgeTone }
+> = {
+  PENDING: { label: 'Pendiente', tone: 'neutral' },
+  AUTHORIZED: { label: 'Autorizada', tone: 'neutral' },
+  STARTING: { label: 'Iniciando', tone: 'info' },
+  ACTIVE: { label: 'Activa', tone: 'info' },
+  SUSPENDED: { label: 'Suspendida', tone: 'warning' },
+  // CAP-005 — a verified-stale connection during a session, not a normal
+  // termination. Danger, not warning: this is the stuck-session state the
+  // whole Operator Control Center discovery treated as the single
+  // sharpest operator anxiety (docs/product/OPERATOR_DAILY_WORKFLOW.md).
+  OFFLINE: { label: 'Sin conexión', tone: 'danger' },
+  STOPPING: { label: 'Deteniendo', tone: 'warning' },
+  COMPLETED: { label: 'Completada', tone: 'success' },
+  FAILED: { label: 'Fallida', tone: 'danger' },
+  CANCELLED: { label: 'Cancelada', tone: 'muted' },
+};
+
+export function ApiChargingSessionStatusBadge({ status }: { status: string }) {
+  const descriptor = chargingSessionStatusMap[status] ?? {
     label: status,
     tone: 'neutral' as const,
   };

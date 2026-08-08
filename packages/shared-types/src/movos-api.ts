@@ -140,7 +140,14 @@ export interface ApiChargingSession {
   id: string;
   organizationId: string;
   siteId: string;
+  // Denormalized display names — WO-ARGOS-023 (Operational Consistency
+  // Hardening) unified this onto the one session type every real screen
+  // uses (list, detail, and the operator dashboard's active-sessions
+  // widget), replacing what was previously a separate ApiActiveSession
+  // type with the same two fields duplicated under a different name.
+  siteName: string;
   chargingStationId: string;
+  chargingStationName: string;
   evseId: string;
   connectorId: string;
   authorizationCredentialId: string;
@@ -288,17 +295,4 @@ export interface ApiSiteHealthSummary {
   degraded: number;
   offline: number;
   unknown: number;
-}
-
-export interface ApiActiveSession {
-  id: string;
-  organizationId: string;
-  siteId: string;
-  siteName: string;
-  chargingStationId: string;
-  chargingStationName: string;
-  connectorId: string;
-  status: string;
-  energyWh: number;
-  startedAt: string;
 }

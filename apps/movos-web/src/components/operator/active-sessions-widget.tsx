@@ -2,21 +2,23 @@
 
 import Link from 'next/link';
 
-import type { ApiActiveSession } from '@mediafox/shared-types';
+import type { ApiChargingSession } from '@mediafox/shared-types';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { ApiChargingSessionStatusBadge } from '@/components/movos/api-charging-status-badges';
 import { formatRelative } from '@/lib/format';
 import { usePolledResource } from './use-polled-resource';
 
 /**
  * CAP-X Operator Control Center, Sprint 1 (WO-ARGOS-022) — the
  * ACTIVE_SESSIONS widget. Real ChargingSession data (CAP-004), no new
- * schema — see docs/implementation/CAPX_DATA_DEPENDENCIES.md.
+ * schema — see docs/implementation/CAPX_DATA_DEPENDENCIES.md. Each row
+ * links to a now-real session detail page (WO-ARGOS-023 fixed the 404
+ * this used to hit — see docs/product/OPERATIONAL_VOCABULARY.md).
  */
 export function ActiveSessionsWidget() {
   const { data, loading, error } =
-    usePolledResource<ApiActiveSession[]>('/sessions/active');
+    usePolledResource<ApiChargingSession[]>('/sessions/active');
 
   return (
     <Card>
@@ -50,9 +52,7 @@ export function ActiveSessionsWidget() {
                 · iniciada {formatRelative(session.startedAt)}
               </p>
             </div>
-            <Badge tone={session.status === 'ACTIVE' ? 'info' : 'warning'}>
-              {session.status === 'ACTIVE' ? 'Activa' : 'Suspendida'}
-            </Badge>
+            <ApiChargingSessionStatusBadge status={session.status} />
           </Link>
         ))}
       </CardContent>

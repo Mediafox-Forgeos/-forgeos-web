@@ -8,11 +8,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { OrgContextGuard } from '../guards/org-context.guard';
 import { RolesGuard } from '../guards/roles.guard';
 import { OrgContext } from '../common/decorators/org-context.decorator';
-import {
-  toApiActiveSession,
-  toApiChargingSession,
-  toApiMeterValue,
-} from '../auth/presenters';
+import { toApiChargingSession, toApiMeterValue } from '../auth/presenters';
 
 @ApiTags('sessions')
 @ApiHeader({
@@ -44,7 +40,7 @@ export class SessionsController {
   })
   async listActive(@OrgContext() membership: Membership) {
     const sessions = await this.sessions.listActive(membership.organizationId);
-    return sessions.map(toApiActiveSession);
+    return sessions.map(toApiChargingSession);
   }
 
   @Get(':id')
