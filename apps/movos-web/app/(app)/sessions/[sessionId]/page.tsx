@@ -1,53 +1,113 @@
-import { notFound } from 'next/navigation';
-import Link from 'next/link';
+'use client';
+
+import { useParams } from 'next/navigation';
+import * as React from 'react';
+
+import type { ApiChargingSession, ApiMeterValue } from '@mediafox/shared-types';
 
 import { PageContainer } from '@/components/layout/page-container';
 import { PageHeader } from '@/components/layout/page-header';
-import { SessionStatusBadge } from '@/components/movos/status-badge';
+import { EmptyState } from '@/components/movos/empty-state';
+import { ApiChargingSessionStatusBadge } from '@/components/movos/api-charging-status-badges';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { getSessionById, sessions } from '@/data/sessions';
-import { getChargerById } from '@/data/chargers';
-import { getConnectorById } from '@/data/connectors';
-import { getSiteById } from '@/data/sites';
-import { getTariffById } from '@/data/tariffs';
-import { users } from '@/data/users';
-import { formatCurrency, formatDateTime } from '@/lib/format';
+import { apiClient, ApiError } from '@/lib/api-client';
+import { formatDateTime } from '@/lib/format';
 
-export function generateStaticParams() {
-  return sessions.map((session) => ({ sessionId: session.id }));
-}
+type LoadState = 'loading' | 'ready' | 'notfound' | 'error';
 
-export default async function SessionDetailPage({
-  params,
-}: {
-  params: Promise<{ sessionId: string }>;
-}) {
-  const { sessionId } = await params;
-  const session = getSessionById(sessionId);
-  if (!session) notFound();
+/**
+ * WO-ARGOS-023 (Operational Consistency Hardening). Replaces the previous
+ * fixture-backed page (data/sessions.ts) — its fictional "events" timeline
+ * is replaced by a real one built from GET /sessions/:id/meter-values,
+ * rather than simply deleted, since a real timeline was available and
+ * more useful than none. Fixes the 404 the active-sessions widget hit
+ * every time (docs/product/OPERATOR_USABILITY_REVIEW.md, confusion
+ * finding #2) — that widget always linked to a real session id; this page
+ * just never recognized one.
+ */
+export default function SessionDetailPage() {
+  const { sessionId } = useParams<{ sessionId: string }>();
+  const [session, setSession] = React.useState<ApiChargingSession | null>(null);
+  const [meterValues, setMeterValues] = React.useState<ApiMeterValue[]>([]);
+  const [state, setState] = React.useState<LoadState>('loading');
 
-  const site = getSiteById(session.siteId);
-  const charger = getChargerById(session.chargerId);
-  const connector = getConnectorById(session.connectorId);
-  const tariff = getTariffById(session.tariffId);
-  const user = users.find((u) => u.id === session.userId);
+  React.useEffect(() => {
+    let cancelled = false;
+
+    async function load(): Promise<void> {
+      setState('loading');
+      try {
+        const data = await apiClient.get<ApiChargingSession>(
+          `/sessions/${sessionId}`,
+        );
+        if (cancelled) return;
+        setSession(data);
+        try {
+          const values = await apiClient.get<ApiMeterValue[]>(
+            `/sessions/${sessionId}/meter-values`,
+          );
+          if (!cancelled) setMeterValues(values);
+        } catch {
+          // Telemetry is optional (DEC-016) — a session with no MeterValue
+          // rows is still a fully valid, resolvable session.
+        }
+        setState('ready');
+      } catch (err) {
+        if (!cancelled) {
+          setState(
+            err instanceof ApiError && err.status === 404
+              ? 'notfound'
+              : 'error',
+          );
+        }
+      }
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId]);
+
+  if (state === 'loading') {
+    return (
+      <PageContainer>
+        <div className="bg-muted h-8 w-48 animate-pulse rounded" />
+        <div className="bg-muted mt-4 h-40 animate-pulse rounded" />
+      </PageContainer>
+    );
+  }
+
+  if (state === 'notfound') {
+    return (
+      <PageContainer>
+        <EmptyState title="Sesión de carga no encontrada." />
+      </PageContainer>
+    );
+  }
+
+  if (state === 'error' || !session) {
+    return (
+      <PageContainer>
+        <EmptyState title="No fue posible cargar la sesión de carga." />
+      </PageContainer>
+    );
+  }
 
   const summary: Array<[string, string]> = [
-    ['Energía entregada', `${session.energyKwh} kWh`],
-    ['Duración', `${session.durationMinutes} min`],
+    ['Energía entregada', `${(session.energyWh / 1000).toFixed(2)} kWh`],
     ['Inicio', formatDateTime(session.startedAt)],
     ['Fin', session.endedAt ? formatDateTime(session.endedAt) : 'En curso'],
-    ['Costo estimado', formatCurrency(session.estimatedCost, session.currency)],
-    ['Tarifa', tariff?.name ?? session.tariffId],
-    ['Sitio', site?.name ?? session.siteId],
-    ['Cargador', charger?.name ?? session.chargerId],
-    [
-      'Conector',
-      connector
-        ? `${connector.label} · ${connector.type}`
-        : session.connectorId,
-    ],
-    ['Operador', user?.name ?? session.userId],
+    ['Sitio', session.siteName],
+    ['Estación', session.chargingStationName],
+    ['Conector', session.connectorId],
+    ['Protocolo', session.protocolVersion],
+    ['ID de transacción', session.protocolTransactionId],
+    ...(session.terminationReason
+      ? ([['Motivo de finalización', session.terminationReason]] as Array<
+          [string, string]
+        >)
+      : []),
   ];
 
   return (
@@ -58,8 +118,8 @@ export default async function SessionDetailPage({
           { label: session.id },
         ]}
         title={`Sesión ${session.id}`}
-        description={`${charger?.name ?? session.chargerId} · ${site?.name ?? session.siteId}`}
-        actions={<SessionStatusBadge status={session.status} />}
+        description={`${session.chargingStationName} · ${session.siteName}`}
+        actions={<ApiChargingSessionStatusBadge status={session.status} />}
       />
 
       <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
@@ -79,43 +139,38 @@ export default async function SessionDetailPage({
 
         <Card>
           <CardHeader>
-            <CardTitle>Línea de tiempo</CardTitle>
+            <CardTitle>Telemetría (MeterValues)</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {session.events.map((event, index) => (
-              <div key={index} className="flex gap-3">
-                <div className="flex flex-col items-center">
-                  <span className="bg-movos-blue mt-1.5 size-2 rounded-full" />
-                  {index < session.events.length - 1 && (
-                    <span className="bg-border w-px flex-1" />
-                  )}
-                </div>
-                <div className="pb-2">
-                  <p className="text-sm font-medium">{event.label}</p>
-                  <p className="text-muted-foreground text-xs">
-                    {event.detail}
-                  </p>
-                  <p className="text-muted-foreground mt-0.5 text-[11px]">
-                    {formatDateTime(event.timestamp)}
-                  </p>
-                </div>
+          <CardContent>
+            {meterValues.length === 0 ? (
+              <p className="text-muted-foreground text-sm">
+                Esta sesión no tiene lecturas de telemetría registradas — el
+                total de energía se calcula igualmente a partir de la lectura
+                inicial y final del medidor.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {meterValues.map((mv) => (
+                  <div key={mv.id} className="flex gap-3">
+                    <div className="flex flex-col items-center">
+                      <span className="bg-movos-blue mt-1.5 size-2 rounded-full" />
+                    </div>
+                    <div className="pb-2">
+                      <p className="text-sm font-medium">
+                        {(mv.energyWh / 1000).toFixed(2)} kWh
+                        {mv.powerW !== null ? ` · ${mv.powerW} W` : ''}
+                      </p>
+                      <p className="text-muted-foreground mt-0.5 text-[11px]">
+                        {formatDateTime(mv.timestamp)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
           </CardContent>
         </Card>
       </div>
-
-      {charger && (
-        <p className="text-muted-foreground mt-6 text-xs">
-          Punto de carga:{' '}
-          <Link
-            href={`/chargers/${charger.id}`}
-            className="hover:text-movos-blue"
-          >
-            {charger.name}
-          </Link>
-        </p>
-      )}
     </PageContainer>
   );
 }

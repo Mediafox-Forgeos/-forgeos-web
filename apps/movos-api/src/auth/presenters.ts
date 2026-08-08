@@ -6,7 +6,6 @@ import type {
   ChargingStation,
   Evse,
   Connector,
-  ChargingSession,
   MeterValue,
   AuthorizationCredential,
   AuthorizationAttempt,
@@ -23,8 +22,8 @@ import type {
   ApiMeterValue,
   ApiAuthorizationCredential,
   ApiAuthorizationAttempt,
-  ApiActiveSession,
 } from '@mediafox/shared-types';
+import type { ChargingSessionWithNames } from '../sessions/sessions.service';
 
 /**
  * Explicit projections from Prisma models to public API contracts. These are
@@ -138,15 +137,21 @@ export function toApiConnector(connector: Connector): ApiConnector {
 }
 
 // CAP-004 — Charging Sessions & Authorization Foundation (WO-ARGOS-009).
-
+// The `site`/`chargingStation` name fields were unified onto this single
+// presenter by WO-ARGOS-023 (Operational Consistency Hardening) — every
+// real session a human can see (list, detail, or the dashboard's active-
+// sessions widget) now goes through this one function, not three
+// separately-maintained projections.
 export function toApiChargingSession(
-  session: ChargingSession,
+  session: ChargingSessionWithNames,
 ): ApiChargingSession {
   return {
     id: session.id,
     organizationId: session.organizationId,
     siteId: session.siteId,
+    siteName: session.site.name,
     chargingStationId: session.chargingStationId,
+    chargingStationName: session.chargingStation.name,
     evseId: session.evseId,
     connectorId: session.connectorId,
     authorizationCredentialId: session.authorizationCredentialId,
@@ -161,27 +166,6 @@ export function toApiChargingSession(
     endedAt: session.endedAt?.toISOString() ?? null,
     createdAt: session.createdAt.toISOString(),
     updatedAt: session.updatedAt.toISOString(),
-  };
-}
-
-// CAP-X Operator Control Center, Sprint 1 (WO-ARGOS-022).
-export function toApiActiveSession(
-  session: ChargingSession & {
-    site: { name: string };
-    chargingStation: { name: string };
-  },
-): ApiActiveSession {
-  return {
-    id: session.id,
-    organizationId: session.organizationId,
-    siteId: session.siteId,
-    siteName: session.site.name,
-    chargingStationId: session.chargingStationId,
-    chargingStationName: session.chargingStation.name,
-    connectorId: session.connectorId,
-    status: session.status,
-    energyWh: session.energyWh,
-    startedAt: session.startedAt.toISOString(),
   };
 }
 
