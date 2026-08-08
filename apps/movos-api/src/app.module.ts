@@ -17,6 +17,7 @@ import { SessionsModule } from './sessions/sessions.module';
 import { AuthorizationModule } from './authorization/authorization.module';
 import { OcppModule } from './ocpp/ocpp.module';
 import { OperatorModule } from './operator/operator.module';
+import { RecommendationModule } from './recommendations/recommendation.module';
 import { HealthController } from './health.controller';
 import { RequestLoggerMiddleware } from './common/middleware/request-logger.middleware';
 
@@ -41,6 +42,7 @@ import { RequestLoggerMiddleware } from './common/middleware/request-logger.midd
     AuthorizationModule,
     OcppModule,
     OperatorModule,
+    RecommendationModule,
   ],
   controllers: [HealthController],
   providers: [

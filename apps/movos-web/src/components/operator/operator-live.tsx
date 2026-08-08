@@ -5,14 +5,16 @@ import { StationStatusWidget } from './station-status-widget';
 import { ConnectivityWidget } from './connectivity-widget';
 import { OccupancyWidget } from './occupancy-widget';
 import { ActiveSessionsWidget } from './active-sessions-widget';
+import { OperationalIntelligenceWidget } from './operational-intelligence-widget';
 
 /**
  * CAP-X Operator Control Center, Sprint 1 (WO-ARGOS-022) — Objective 3:
  * "crear la vista operacional principal." Composes the map, station
  * status, connectivity, occupancy, and active-sessions widgets over real
- * data (CAP-002 through CAP-009). No alert/incident/maintenance UI is
- * rendered here — that is Sprint 2, explicitly out of scope for this
- * work order. See docs/implementation/CAPX_SPRINT_1_TECHNICAL_NOTES.md.
+ * data (CAP-002 through CAP-009), plus the Operational Intelligence
+ * widget (WO-ARGOS-025). No Alert/Incident/MaintenanceTicket UI is
+ * rendered here. See docs/implementation/CAPX_SPRINT_1_TECHNICAL_NOTES.md
+ * and docs/implementation/OPERATIONAL_INTELLIGENCE_TECHNICAL_NOTES.md.
  */
 export function OperatorLive() {
   return (
@@ -38,6 +40,8 @@ export function OperatorLive() {
         <ActiveSessionsWidget />
         <OccupancyWidget />
       </div>
+
+      <OperationalIntelligenceWidget />
     </section>
   );
 }
