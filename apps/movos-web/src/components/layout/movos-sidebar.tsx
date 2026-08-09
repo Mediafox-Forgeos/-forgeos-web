@@ -3,20 +3,17 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  Cable,
+  BarChart3,
+  ClipboardList,
   CircleGauge,
-  FileBarChart,
   LayoutDashboard,
   LogOut,
   Menu,
-  MapPin,
-  Plug,
   Settings,
-  Receipt,
   ServerCog,
-  TriangleAlert,
   UserRound,
-  Users,
+  UsersRound,
+  Waypoints,
   X,
   Zap,
 } from 'lucide-react';
@@ -30,17 +27,26 @@ import { cn } from '@/lib/utils';
 
 type NavItem = { label: string; href: string; icon: LucideIcon };
 
-const navigation: NavItem[] = [
-  { label: 'Resumen', href: '/dashboard', icon: LayoutDashboard },
-  { label: 'Sitios', href: '/sites', icon: MapPin },
+// Kylum Console (WO-ARGOS-030/031) — primary command destinations, one per
+// screen an operator actually checks daily. Deliberately exactly 4: adding a
+// 5th without a 5th real operator question to answer would repeat the
+// "accretion, not architecture" problem this nav redesign exists to fix —
+// see docs/product/KYLUM_CONSOLE_NAVIGATION.md.
+const primaryNavigation: NavItem[] = [
+  { label: 'Centro de mando', href: '/command-center', icon: LayoutDashboard },
+  { label: 'Red', href: '/network', icon: Waypoints },
+  { label: 'Operaciones', href: '/operations', icon: ClipboardList },
+  { label: 'Analítica', href: '/analytics', icon: BarChart3 },
+];
+
+// Secondary — reference/administrative screens, reached deliberately and
+// rarely, not daily. /stations intentionally still redirects to /sites per
+// the standing WO-ARGOS-005 ruling (no org-wide station-list endpoint) —
+// this nav item's href is unchanged from that decision.
+const secondaryNavigation: NavItem[] = [
   { label: 'Estaciones', href: '/stations', icon: ServerCog },
-  { label: 'Cargadores', href: '/chargers', icon: Plug },
-  { label: 'Conectores', href: '/connectors', icon: Cable },
   { label: 'Sesiones', href: '/sessions', icon: CircleGauge },
-  { label: 'Usuarios', href: '/users', icon: Users },
-  { label: 'Tarifas', href: '/tariffs', icon: Receipt },
-  { label: 'Alertas', href: '/alerts', icon: TriangleAlert },
-  { label: 'Reportes', href: '/reports', icon: FileBarChart },
+  { label: 'Equipo', href: '/users', icon: UsersRound },
   { label: 'Configuración', href: '/settings', icon: Settings },
 ];
 
@@ -104,7 +110,7 @@ export function MovosSidebar() {
           className="space-y-1 overflow-y-auto"
           aria-label="Navegación principal"
         >
-          {navigation.map((item) => {
+          {primaryNavigation.map((item) => {
             const Icon = item.icon;
             const active = pathname.startsWith(item.href);
             return (
@@ -114,6 +120,31 @@ export function MovosSidebar() {
                 onClick={() => setIsOpen(false)}
                 className={cn(
                   'text-muted-foreground hover:bg-accent hover:text-foreground group flex h-10 items-center gap-3 rounded-lg px-3 text-sm transition-colors',
+                  active && 'bg-accent text-foreground',
+                )}
+              >
+                <Icon className="size-4" aria-hidden="true" />
+                <span className="flex-1">{item.label}</span>
+              </Link>
+            );
+          })}
+
+          <div
+            className="border-border my-3 border-t"
+            role="separator"
+            aria-hidden="true"
+          />
+
+          {secondaryNavigation.map((item) => {
+            const Icon = item.icon;
+            const active = pathname.startsWith(item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setIsOpen(false)}
+                className={cn(
+                  'text-muted-foreground hover:bg-accent hover:text-foreground group flex h-9 items-center gap-3 rounded-lg px-3 text-sm transition-colors',
                   active && 'bg-accent text-foreground',
                 )}
               >
@@ -155,7 +186,7 @@ export function MovosSidebar() {
 function Brand() {
   return (
     <Link
-      href="/dashboard"
+      href="/command-center"
       className="flex items-center gap-2 text-sm font-semibold tracking-tight"
     >
       <span className="bg-movos-blue text-movos-blue-foreground grid size-7 place-items-center rounded-md">
