@@ -50,7 +50,7 @@ describe('RecommendationService', () => {
 
       const result = await service.getEnergyAnomaly('org-1');
       expect(result?.type).toBe('ENERGY_ANOMALY');
-      expect(result?.severity).toBe('high'); // 41000/150000 ≈ 27% < 30%
+      expect(result?.severity).toBe('HIGH'); // 41000/150000 ≈ 27% < 30%
       expect(result?.stationName).toBe('Station 1');
     });
 
@@ -112,7 +112,7 @@ describe('RecommendationService', () => {
 
       const result = await service.getAuthFailureSpike('org-1');
       expect(result?.type).toBe('AUTH_FAILURE_SPIKE');
-      expect(result?.severity).toBe('high'); // 4/5 = 80%
+      expect(result?.severity).toBe('HIGH'); // 4/5 = 80%
     });
 
     it('does not fire below the minimum attempt count', async () => {
@@ -152,7 +152,7 @@ describe('RecommendationService', () => {
       ]);
       const result = await service.getIdleConnector('org-1');
       expect(result?.type).toBe('IDLE_CONNECTOR');
-      expect(result?.severity).toBe('high'); // >60 min
+      expect(result?.severity).toBe('HIGH'); // >60 min
     });
 
     it('does not fire when the connector already returned to AVAILABLE', async () => {
@@ -258,7 +258,7 @@ describe('RecommendationService', () => {
 
       const result = await service.getEfficiencyDrift('org-1');
       expect(result?.type).toBe('EFFICIENCY_DRIFT');
-      expect(result?.severity).toBe('high'); // 40% drop > 30%
+      expect(result?.severity).toBe('HIGH'); // 40% drop > 30%
     });
 
     it('does not fire with fewer than 4 completed sessions', async () => {

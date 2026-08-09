@@ -22,8 +22,10 @@ import type {
   ApiMeterValue,
   ApiAuthorizationCredential,
   ApiAuthorizationAttempt,
+  ApiAction,
 } from '@mediafox/shared-types';
 import type { ChargingSessionWithNames } from '../sessions/sessions.service';
+import type { ActionWithNames } from '../recommendations/action.service';
 
 /**
  * Explicit projections from Prisma models to public API contracts. These are
@@ -217,5 +219,29 @@ export function toApiAuthorizationAttempt(
     attemptedAt: attempt.attemptedAt.toISOString(),
     result: attempt.result,
     reason: attempt.reason,
+  };
+}
+
+// Operational Execution Layer (WO-ARGOS-026).
+export function toApiAction(action: ActionWithNames): ApiAction {
+  return {
+    id: action.id,
+    organizationId: action.organizationId,
+    chargingStationId: action.chargingStationId,
+    chargingStationName: action.chargingStation.name,
+    recommendationType: action.recommendationType,
+    title: action.title,
+    severity: action.severity,
+    explanation: action.explanation,
+    evidence: action.evidence as string[],
+    recommendedAction: action.recommendedAction,
+    status: action.status,
+    assignedToUserId: action.assignedToUserId,
+    assignedToUserName: action.assignedTo?.displayName ?? null,
+    snoozedUntil: action.snoozedUntil?.toISOString() ?? null,
+    notes: action.notes,
+    createdAt: action.createdAt.toISOString(),
+    updatedAt: action.updatedAt.toISOString(),
+    resolvedAt: action.resolvedAt?.toISOString() ?? null,
   };
 }

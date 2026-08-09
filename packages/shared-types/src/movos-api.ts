@@ -311,7 +311,12 @@ export type RecommendationType =
   | 'COMPARATIVE_UNDERPERFORMANCE'
   | 'EFFICIENCY_DRIFT';
 
-export type RecommendationSeverity = 'high' | 'medium';
+// Uppercase — WO-ARGOS-026 corrected this from the Operational Intelligence
+// MVP's original lowercase 'high'/'medium', the one status-vocabulary value
+// in this API that didn't match every other status enum's UPPER_CASE
+// convention (docs/product/OPERATIONAL_VOCABULARY.md). Now mirrors the
+// real Prisma RecommendationSeverity enum exactly.
+export type RecommendationSeverity = 'HIGH' | 'MEDIUM';
 
 export interface ApiRecommendation {
   type: RecommendationType;
@@ -323,4 +328,58 @@ export interface ApiRecommendation {
   stationId: string | null;
   stationName: string | null;
   generatedAt: string;
+  // WO-ARGOS-026 — the currently-relevant Action for this recommendation,
+  // if an operator has already interacted with it (non-terminal, or
+  // terminal and still within its cooldown window). Null means: no action
+  // has been taken yet, or enough time has passed since the last one that
+  // this reads as a fresh occurrence again. See ActionService.findRelevant.
+  action?: ApiAction | null;
+}
+
+// Operational Execution Layer (WO-ARGOS-026). The persisted, actionable
+// counterpart to ApiRecommendation above — see
+// docs/implementation/OPERATIONAL_EXECUTION_LAYER_TECHNICAL_NOTES.md for
+// the full state diagram. Deliberately not Alert/Incident/MaintenanceTicket
+// — a narrower entity scoped only to RecommendationService's own output.
+export type ActionStatus =
+  'OPEN' | 'ACKNOWLEDGED' | 'ASSIGNED' | 'RESOLVED' | 'DISMISSED';
+
+export interface ApiAction {
+  id: string;
+  organizationId: string;
+  chargingStationId: string;
+  chargingStationName: string;
+  recommendationType: RecommendationType;
+  title: string;
+  severity: RecommendationSeverity;
+  explanation: string;
+  evidence: string[];
+  recommendedAction: string;
+  status: ActionStatus;
+  assignedToUserId: string | null;
+  assignedToUserName: string | null;
+  snoozedUntil: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt: string | null;
+}
+
+export type ActionTransition =
+  'acknowledge' | 'assign' | 'snooze' | 'resolve' | 'dismiss';
+
+export interface CreateActionRequest {
+  recommendationType: RecommendationType;
+  stationId: string;
+  transition: ActionTransition;
+  assignedToUserId?: string;
+  notes?: string;
+  snoozeMinutes?: number;
+}
+
+export interface TransitionActionRequest {
+  transition: ActionTransition;
+  assignedToUserId?: string;
+  notes?: string;
+  snoozeMinutes?: number;
 }

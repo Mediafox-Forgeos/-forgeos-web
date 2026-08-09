@@ -16,10 +16,14 @@ import { apiClient } from '@/lib/api-client';
 export function usePolledResource<T>(
   path: string,
   intervalMs = 15_000,
-): { data: T | null; loading: boolean; error: boolean } {
+): { data: T | null; loading: boolean; error: boolean; refetch: () => void } {
   const [data, setData] = React.useState<T | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState(false);
+  // WO-ARGOS-026 — bumped after a write (an Action transition) to trigger
+  // an immediate reload instead of waiting for the next poll tick, without
+  // needing a second data-fetching mechanism alongside polling.
+  const [refetchToken, setRefetchToken] = React.useState(0);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -44,7 +48,9 @@ export function usePolledResource<T>(
       cancelled = true;
       clearInterval(timer);
     };
-  }, [path, intervalMs]);
+  }, [path, intervalMs, refetchToken]);
 
-  return { data, loading, error };
+  const refetch = React.useCallback(() => setRefetchToken((n) => n + 1), []);
+
+  return { data, loading, error, refetch };
 }

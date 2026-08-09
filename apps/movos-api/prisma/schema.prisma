@@ -176,6 +176,9 @@ model User {
   refreshSessions RefreshSession[]
   auditEvents     AuditEvent[]     @relation("ActorAuditEvents")
   createdSites    Site[]
+
+  // WO-ARGOS-026 — Operational Execution Layer.
+  assignedActions Action[]
 }
 
 model Organization {
@@ -204,6 +207,9 @@ model Organization {
   // roaming note on TariffSnapshot itself.
   billingAccounts BillingAccount[]
   tariffSnapshots TariffSnapshot[]
+
+  // WO-ARGOS-026 — Operational Execution Layer.
+  actions Action[]
 }
 
 model Membership {
@@ -335,6 +341,9 @@ model ChargingStation {
   // CAP-004
   chargingSessions      ChargingSession[]
   authorizationAttempts AuthorizationAttempt[]
+
+  // WO-ARGOS-026 — Operational Execution Layer.
+  actions Action[]
 
   // Nullable-safe: Postgres treats multiple NULLs as distinct, so stations
   // without a business code never collide with each other.
@@ -837,4 +846,105 @@ model TariffSnapshot {
   organization    Organization    @relation(fields: [organizationId], references: [id])
 
   @@index([chargingSessionId, effectiveAt])
+}
+
+// ============================================================================
+// WO-ARGOS-026 — Operational Execution Layer. The minimal persistence layer
+// the Operational Intelligence MVP (WO-ARGOS-025) was explicitly built
+// without — see docs/implementation/OPERATIONAL_INTELLIGENCE_TECHNICAL_
+// NOTES.md's "no acknowledge/dismiss action" limitation and
+// docs/product/RECOMMENDATION_STRATEGY.md's recommendation that any action
+// surface here stay smaller than Incident's four-stage lifecycle. This is
+// deliberately not Alert/Incident/MaintenanceTicket (CAP-X_INCIDENT_FLOW.md)
+// — a distinct, narrower entity scoped only to RecommendationService's
+// output, not to raw device/connectivity faults. See
+// docs/implementation/OPERATIONAL_EXECUTION_LAYER_TECHNICAL_NOTES.md.
+// ============================================================================
+
+// Mirrors packages/shared-types/src/movos-api.ts's RecommendationType and
+// RecommendationSeverity exactly — the same 5 recommendation types and 2
+// severities the Operational Intelligence MVP already computes. Kept as
+// real Prisma enums (not a plain String) for the same reason every other
+// fixed, small, real-domain value set in this schema is a Prisma enum, not
+// because this WO grows the recommendation catalog itself — it doesn't.
+enum RecommendationType {
+  ENERGY_ANOMALY
+  AUTH_FAILURE_SPIKE
+  IDLE_CONNECTOR
+  COMPARATIVE_UNDERPERFORMANCE
+  EFFICIENCY_DRIFT
+}
+
+// Uppercase, matching every other status enum in this schema
+// (ChargingSessionStatus, ConnectivityStatus, etc.) — the Operational
+// Intelligence MVP's own ApiRecommendation.severity shipped as lowercase
+// 'high'/'medium', the one inconsistency with this API's own established
+// vocabulary convention (docs/product/OPERATIONAL_VOCABULARY.md,
+// WO-ARGOS-023). Corrected here rather than compounded: this enum is
+// authoritative, and RecommendationService/the frontend were updated to
+// match it, not the other way around.
+enum RecommendationSeverity {
+  HIGH
+  MEDIUM
+}
+
+// Objective 3's five states. Note this is 5 states behind 5 operator
+// actions, not 4 — Objective 1 named acknowledge/assign/snooze/resolve,
+// but DISMISSED (Objective 3) has no reachable trigger among those four.
+// A `dismiss` action was added to close that gap — see
+// OPERATIONAL_EXECUTION_LAYER_TECHNICAL_NOTES.md's "the fifth action" note.
+// `OPEN` is never actually written to a row by this implementation — see
+// the same document's "why OPEN is never persisted" note; kept in the enum
+// for schema completeness and any future explicit-reopen action.
+enum ActionStatus {
+  OPEN
+  ACKNOWLEDGED
+  ASSIGNED
+  RESOLVED
+  DISMISSED
+}
+
+// The lightweight Action Center's one entity. Created only on an operator's
+// first real interaction with a still-live, still-computed recommendation
+// — never pre-created for every recommendation RecommendationService
+// returns, which would turn every dashboard load into a write. Snapshots
+// the recommendation's content (title/severity/explanation/evidence/
+// recommendedAction) at that moment, per Objective 5 — explainability must
+// survive even after the live condition clears and RecommendationService
+// stops returning it.
+model Action {
+  id                 String             @id @default(cuid())
+  organizationId     String
+  chargingStationId  String
+  recommendationType RecommendationType
+
+  // Snapshot, immutable after creation — the exact recommendation an
+  // operator saw and acted on, not a live reference that could drift.
+  title             String
+  severity          RecommendationSeverity
+  explanation       String
+  evidence          Json
+  recommendedAction String
+
+  status           ActionStatus @default(OPEN)
+  assignedToUserId String?
+  // Set by the `snooze` action — suppresses this Action from the "pending"
+  // grouping until the timestamp passes, without inventing a 6th status.
+  snoozedUntil     DateTime?
+  // Holds the operator's own words at whichever terminal transition
+  // happened — resolution notes for RESOLVED, a reason for DISMISSED.
+  // One field, not two, since exactly one of the two terminal states can
+  // ever apply to a given row.
+  notes            String?
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  resolvedAt DateTime?
+
+  organization    Organization    @relation(fields: [organizationId], references: [id])
+  chargingStation ChargingStation @relation(fields: [chargingStationId], references: [id])
+  assignedTo      User?           @relation(fields: [assignedToUserId], references: [id])
+
+  @@index([organizationId, status])
+  @@index([chargingStationId, recommendationType])
 }

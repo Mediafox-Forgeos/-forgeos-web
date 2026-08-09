@@ -105,7 +105,7 @@ export class RecommendationService {
     if (!worst) return null;
 
     const severity: RecommendationSeverity =
-      worst.ratio < 0.3 ? 'high' : 'medium';
+      worst.ratio < 0.3 ? 'HIGH' : 'MEDIUM';
     return {
       type: 'ENERGY_ANOMALY',
       title: 'Anomalía de energía',
@@ -184,7 +184,7 @@ export class RecommendationService {
     if (!worst) return null;
 
     const severity: RecommendationSeverity =
-      worst.share > 0.6 ? 'high' : 'medium';
+      worst.share > 0.6 ? 'HIGH' : 'MEDIUM';
     return {
       type: 'AUTH_FAILURE_SPIKE',
       title: 'Pico de fallos de autenticación',
@@ -252,7 +252,7 @@ export class RecommendationService {
     if (!worst) return null;
 
     const severity: RecommendationSeverity =
-      worst.minutesSince > 60 ? 'high' : 'medium';
+      worst.minutesSince > 60 ? 'HIGH' : 'MEDIUM';
     return {
       type: 'IDLE_CONNECTOR',
       title: 'Conector inactivo tras finalizar sesión',
@@ -343,7 +343,7 @@ export class RecommendationService {
     return {
       type: 'COMPARATIVE_UNDERPERFORMANCE',
       title: 'Bajo rendimiento comparado con estaciones pares',
-      severity: 'medium',
+      severity: 'MEDIUM',
       explanation: `${worst.stationName} ha entregado ${(worst.ownEnergy / 1000).toFixed(1)} kWh en total, frente a un promedio de ${(worst.peerAvg / 1000).toFixed(1)} kWh en sus estaciones pares del mismo sitio.`,
       evidence: [
         `Energía total de esta estación: ${(worst.ownEnergy / 1000).toFixed(1)} kWh`,
@@ -427,7 +427,7 @@ export class RecommendationService {
     if (!worst) return null;
 
     const severity: RecommendationSeverity =
-      worst.dropRatio > 0.3 ? 'high' : 'medium';
+      worst.dropRatio > 0.3 ? 'HIGH' : 'MEDIUM';
     return {
       type: 'EFFICIENCY_DRIFT',
       title: 'Degradación de eficiencia',
