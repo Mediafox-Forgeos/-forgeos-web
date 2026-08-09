@@ -25,7 +25,7 @@ export default function LoginPage() {
     setIsSubmitting(true);
     try {
       await login(email, password);
-      router.replace('/dashboard');
+      router.replace('/command-center');
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         setError('Credenciales incorrectas');
