@@ -6,6 +6,7 @@ import { ConnectivityWidget } from './connectivity-widget';
 import { OccupancyWidget } from './occupancy-widget';
 import { ActiveSessionsWidget } from './active-sessions-widget';
 import { OperationalIntelligenceWidget } from './operational-intelligence-widget';
+import { OperationalActionsSection } from './operational-actions-section';
 
 /**
  * CAP-X Operator Control Center, Sprint 1 (WO-ARGOS-022) — Objective 3:
@@ -42,6 +43,7 @@ export function OperatorLive() {
       </div>
 
       <OperationalIntelligenceWidget />
+      <OperationalActionsSection />
     </section>
   );
 }

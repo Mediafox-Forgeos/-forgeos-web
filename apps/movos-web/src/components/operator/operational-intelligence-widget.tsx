@@ -7,15 +7,18 @@ import type { ApiRecommendation } from '@mediafox/shared-types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge, type BadgeTone } from '@/components/ui/badge';
 import { usePolledResource } from './use-polled-resource';
+import { ActionButtons } from './action-buttons';
 
-const severityLabel: Record<ApiRecommendation['severity'], string> = {
-  high: 'Alta',
-  medium: 'Media',
+// Exported for reuse by the Operational Actions section (WO-ARGOS-026) —
+// one canonical severity vocabulary, not a second copy of these two maps.
+export const severityLabel: Record<ApiRecommendation['severity'], string> = {
+  HIGH: 'Alta',
+  MEDIUM: 'Media',
 };
 
-const severityTone: Record<ApiRecommendation['severity'], BadgeTone> = {
-  high: 'danger',
-  medium: 'warning',
+export const severityTone: Record<ApiRecommendation['severity'], BadgeTone> = {
+  HIGH: 'danger',
+  MEDIUM: 'warning',
 };
 
 /**
@@ -26,16 +29,16 @@ const severityTone: Record<ApiRecommendation['severity'], BadgeTone> = {
  * this component never needs to truncate a longer list itself — the
  * "maximum five cards" constraint holds by construction on the server.
  *
- * Read-only: no acknowledge/dismiss/assign action exists here, matching
- * this work order's explicit scope (no Alert/Incident/MaintenanceTicket).
- * A recommendation that stops appearing means the underlying condition
- * cleared, not that someone resolved it.
+ * Each card now also carries acknowledge/assign/snooze/resolve/dismiss
+ * controls (WO-ARGOS-026's Operational Execution Layer) — still no
+ * Alert/Incident/MaintenanceTicket, and a recommendation whose Action was
+ * never touched still disappears the moment its underlying condition
+ * clears, exactly as it always did.
  */
 export function OperationalIntelligenceWidget() {
-  const { data, loading, error } = usePolledResource<ApiRecommendation[]>(
-    '/recommendations',
-    30_000,
-  );
+  const { data, loading, error, refetch } = usePolledResource<
+    ApiRecommendation[]
+  >('/recommendations', 30_000);
 
   return (
     <Card>
@@ -90,10 +93,19 @@ export function OperationalIntelligenceWidget() {
               ))}
             </ul>
 
-            <p className="border-border mt-3 border-t pt-2 text-xs">
+            <p className="mt-3 text-xs">
               <span className="font-medium">Acción sugerida: </span>
               {rec.recommendedAction}
             </p>
+
+            {rec.stationId && (
+              <ActionButtons
+                recommendationType={rec.type}
+                stationId={rec.stationId}
+                action={rec.action}
+                onChanged={refetch}
+              />
+            )}
           </div>
         ))}
       </CardContent>

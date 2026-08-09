@@ -77,6 +77,10 @@ export async function resetDatabase(prisma: PrismaService): Promise<void> {
   await prisma.chargingSession.deleteMany();
   await prisma.authorizationAttempt.deleteMany();
   await prisma.ocppProtocolEvent.deleteMany();
+  // WO-ARGOS-026 — Action references ChargingStation/Organization/User,
+  // all RESTRICT-on-delete except assignedTo (SET NULL); deleted before
+  // any of them regardless.
+  await prisma.action.deleteMany();
   await prisma.connector.deleteMany();
   await prisma.evse.deleteMany();
   await prisma.chargingStation.deleteMany();
