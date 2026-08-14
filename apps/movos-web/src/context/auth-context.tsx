@@ -32,7 +32,10 @@ interface AuthContextValue {
   membership: ApiMembership | null;
   organizations: ApiOrganization[];
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  // Returns the raw response (not just void) so a caller can decide where
+  // to route immediately — reading it back from context state would race
+  // React's render cycle right after this resolves.
+  login: (email: string, password: string) => Promise<LoginResponse>;
   logout: () => Promise<void>;
 }
 
@@ -108,7 +111,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [applySession, resetSession]);
 
   const login = React.useCallback(
-    async (email: string, password: string): Promise<void> => {
+    async (email: string, password: string): Promise<LoginResponse> => {
       const data = await apiClient.post<LoginResponse>(
         '/auth/login',
         { email, password },
@@ -117,6 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setAccessToken(data.accessToken);
       setSessionCookie();
       applySession(data);
+      return data;
     },
     [applySession],
   );

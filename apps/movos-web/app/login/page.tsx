@@ -24,8 +24,18 @@ export default function LoginPage() {
     setError(null);
     setIsSubmitting(true);
     try {
-      await login(email, password);
-      router.replace('/dashboard');
+      const session = await login(email, password);
+      // WO-ARGOS-037 — a TECHNICIAN has no access to any operator-facing
+      // route (see WorkOrderController's @Roles() exclusion), so /dashboard
+      // would just be a wall of failed loads for this role. Route them
+      // straight to the one surface they can actually use.
+      const activeOrgId = session.organizations[0]?.id;
+      const activeMembership = session.memberships.find(
+        (m) => m.organizationId === activeOrgId,
+      );
+      router.replace(
+        activeMembership?.role === 'TECHNICIAN' ? '/my-work' : '/dashboard',
+      );
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         setError('Credenciales incorrectas');
