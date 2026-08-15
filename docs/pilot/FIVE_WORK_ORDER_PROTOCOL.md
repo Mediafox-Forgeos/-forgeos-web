@@ -1,6 +1,7 @@
 # Five-Work-Order Pilot Protocol
 
 **Work order:** WO-ARGOS-041
+**Progress: 1 / 5 completed.** PILOT-WO-01 (Kylum Energy, Centro Comercial Calima, Calima - Estación 01) resolved 2026-08-15 — full evidence in `docs/pilot/PILOT_WO_01_EVIDENCE.md`. PILOT-WO-02 through PILOT-WO-05 not started.
 **The success unit:** 5 real, resolved `WorkOrder`s — not five calendar days, not five clicks. A quiet pilot org might take longer to produce them; a busy one might produce them in a day. Duration follows the evidence, not the other way around (`docs/pilot/OPERATIONAL_PILOT_V1.md`).
 
 **Rule:** only real or legitimate controlled operational cases count. Nothing here is a script to follow — it's a record to fill in as real things actually happen. If a `WorkOrder` fails, gets confused, or exposes friction, that's exactly the evidence this pilot exists to collect — do not paper over it, and do not manufacture failures that wouldn't have happened otherwise.
