@@ -1,9 +1,24 @@
 # Pilot WorkOrder #2 Evidence
 
-**Work order:** WO-ARGOS-046 (evidence capture only — read-only against production, nothing modified)
-**Pilot progress:** 2 / 5
+**Work order:** WO-ARGOS-046 (evidence capture only — read-only against production, nothing modified); classification corrected by WO-ARGOS-047
+**Pilot progress:** 2 / 5 (`PRODUCT_SIMULATION_PILOT` phase)
 **Participants:** Álvaro Pino (operator), Javier Cabal Jr. (technician), Kylum Energy, Centro Comercial Calima, Calima - Estación 02
-**Scenario:** authorized truthful fallback — structured operational-conformity check, no abnormal condition reported before creation
+**Scenario:** a simulated operational scenario exercised through the real product — see classification below
+
+> ## ⚠ Classification correction (WO-ARGOS-047)
+>
+> **`SCENARIO_CLASSIFICATION: SIMULATED_OPERATIONAL_SCENARIO`.** ARGOS/business has confirmed Centro Comercial Calima has not yet been physically provisioned with the pilot charging stations — Javier Cabal Jr. did **not** physically visit or inspect Calima - Estación 02. "Reacondicionamiento de conector" was part of the simulated workflow, entered while exercising MOVOS — **it does not represent a discovered physical condition or a real maintenance intervention.**
+>
+> | Fact                      | Status |
+> | ------------------------- | ------ |
+> | `REAL_USERS`              | YES    |
+> | `REAL_PRODUCTION_SYSTEM`  | YES    |
+> | `REAL_WORKFLOW_EXECUTION` | YES    |
+> | `REAL_PHYSICAL_STATION`   | **NO** |
+> | `REAL_FIELD_INTERVENTION` | **NO** |
+> | `REAL_OCPP_CONNECTION`    | **NO** |
+>
+> What remains valid: real login, real role/authorization boundaries, real `WorkOrder` creation and assignment, real `/my-work` interaction, real persisted `WorkOrderEvent` timeline and timing, and the real human usability observation. What is **not** valid: any claim below that a technician "attended," "inspected," or "reconditioned" a real component. See `docs/pilot/OPERATIONAL_PILOT_V1.md`'s Phase A/B/C model.
 
 ## 1. WorkOrder identity
 
@@ -52,7 +67,7 @@ No `COMMENTED` event this time (WO-01 had one) — 8 total events, vs. WO-01's 9
 - **Comments:** none
 - **Resolution:** "OK"
 
-**On "Reacondicionamiento de conector" specifically:** the persisted diagnosis text names only the screen/display ("los datos en pantalla se ven OK") — it does not, on its face, state that a connector condition was found. The intervention that follows names the connector specifically. **This document draws no conclusion about why** — that is explicitly a human-only question (section 7).
+**On "Reacondicionamiento de conector" specifically:** the persisted diagnosis text names only the screen/display ("los datos en pantalla se ven OK") — it does not, on its face, state that a connector condition was found. The intervention that follows names the connector specifically. **⚠ Resolved by the WO-ARGOS-047 correction above:** ARGOS/business has confirmed this was simulated scenario input, not a real discovered condition or a real intervention — the apparent gap between diagnosis and intervention text is a simulation-authoring choice, not evidence of an undocumented real finding.
 
 ## 4. Timing measurements
 
@@ -69,19 +84,19 @@ No `COMMENTED` event this time (WO-01 had one) — 8 total events, vs. WO-01's 9
 
 ## 5. WO-01 vs WO-02 comparison (facts only, causation not inferred)
 
-| Dimension                           | WO-01                                                                   | WO-02                                                                                                                                                                           |
-| ----------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A. Event ordering                   | Checklist, then `COMMENTED`, then `STARTED`, then `RESOLVED`            | `STARTED` immediately after assignment, then checklist, then `RESOLVED` — no comment                                                                                            |
-| B. START/checklist                  | `CHECKLIST_BEFORE_START_CONFIRMED`                                      | `START_BEFORE_CHECKLIST`                                                                                                                                                        |
-| C. Diagnosis                        | "Todo funcionando OK" — one blanket line, not tied to any specific item | "los datos en pantalla se ven OK" — names one specific checklist category (screen/data)                                                                                         |
-| D. Intervention                     | "Mantenimiento General" — generic category, no named component          | "Reacondicionamiento de conector" — names a specific physical component                                                                                                         |
-| E. Validation                       | "Validacion OK" — bare, no reference to what was validated              | "Despues del reacondiionamiento todo funciona OK" — explicitly references the preceding intervention                                                                            |
-| F. Resolution                       | "OK"                                                                    | "OK" — **identical closing text in both cases**                                                                                                                                 |
-| G. Total cycle time                 | 4 min 40.4 s                                                            | 1 min 55.3 s                                                                                                                                                                    |
-| H. Event count                      | 9                                                                       | 8                                                                                                                                                                               |
-| I. Operator-recoverable information | Inspection occurred, no fault, general maintenance, validated, closed   | Inspection occurred against a structured objective, screen specifically checked, a named component (connector) was worked on, validation explicitly tied to that action, closed |
+| Dimension                                         | WO-01                                                                   | WO-02                                                                                                                                                                          |
+| ------------------------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| A. Event ordering                                 | Checklist, then `COMMENTED`, then `STARTED`, then `RESOLVED`            | `STARTED` immediately after assignment, then checklist, then `RESOLVED` — no comment                                                                                           |
+| B. START/checklist                                | `CHECKLIST_BEFORE_START_CONFIRMED`                                      | `START_BEFORE_CHECKLIST`                                                                                                                                                       |
+| C. Diagnosis                                      | "Todo funcionando OK" — one blanket line, not tied to any specific item | "los datos en pantalla se ven OK" — names one specific checklist category (screen/data)                                                                                        |
+| D. Intervention                                   | "Mantenimiento General" — generic category, no named component          | "Reacondicionamiento de conector" — names a specific physical component                                                                                                        |
+| E. Validation                                     | "Validacion OK" — bare, no reference to what was validated              | "Despues del reacondiionamiento todo funciona OK" — explicitly references the preceding intervention                                                                           |
+| F. Resolution                                     | "OK"                                                                    | "OK" — **identical closing text in both cases**                                                                                                                                |
+| G. Total cycle time                               | 4 min 40.4 s                                                            | 1 min 55.3 s                                                                                                                                                                   |
+| H. Event count                                    | 9                                                                       | 8                                                                                                                                                                              |
+| I. What the digital record would tell an operator | Inspection occurred, no fault, general maintenance, validated, closed   | Checked against a structured objective, screen specifically named, a named component (connector) referenced as reconditioned, validation explicitly tied to that entry, closed |
 
-Row I is reported as a fact about what each record contains, not a claim that one workflow is better — WO-02's record happens to name more specific nouns; that is the observation, not a verdict.
+Row I is reported as a fact about what each record _contains as text_, not a claim that one workflow is better, and — per the WO-ARGOS-047 correction — not a claim that either narrative reflects a real physical event in this pilot phase. WO-02's record happens to name more specific nouns; that is the textual observation, nothing more.
 
 ## 6. Cross-WorkOrder observations
 
@@ -89,13 +104,13 @@ Row I is reported as a fact about what each record contains, not a claim that on
 
 **`RESOLUTION_DETAIL_PATTERN`:** confirmed, 2 of 2. Both `WorkOrder`s closed with the literal, three-character resolution note "OK," despite each having richer, more specific content earlier in its own timeline (WO-01's checklist text; WO-02's checklist text, which is itself more specific than WO-01's). The final resolution note does not appear to reflect the specificity available earlier in either case.
 
-**`STRUCTURED_INSTRUCTION_EFFECT`:** evidence only, no causation claimed from 2 data points. WO-02's task description explicitly named six checklist categories (pantalla, cable/conector, señalización, acceso, gabinete, iluminación); its diagnosis text names one of them directly ("pantalla"), which WO-01's unstructured, open-ended task did not do. This is a real correlation worth continuing to watch across the remaining `WorkOrder`s — it is not, on two data points, established as a causal effect of the structured description, and it does not explain the diagnosis/intervention content gap noted in section 3.
+**`STRUCTURED_INSTRUCTION_EFFECT`:** evidence only, no causation claimed from 2 data points. WO-02's task description explicitly named six checklist categories (pantalla, cable/conector, señalización, acceso, gabinete, iluminación); its diagnosis text names one of them directly ("pantalla"), which WO-01's unstructured, open-ended task did not do. This is a real correlation worth continuing to watch across the remaining `WorkOrder`s — it is not, on two data points, established as a causal effect of the structured description. The diagnosis/intervention content gap noted in section 3 is now explained by the WO-ARGOS-047 classification correction (simulated input), not by anything about the structured-vs-unstructured task design.
 
-## 7. Human-only questions — explicitly `PENDING_HUMAN_CONFIRMATION`, not inferred from the database
+## 7. Human-only questions
 
-- Why was "Reacondicionamiento de conector" performed? `PENDING_HUMAN_CONFIRMATION`
-- Was a condition discovered during Javier's inspection? `PENDING_HUMAN_CONFIRMATION`
-- Was external communication required? `PENDING_HUMAN_CONFIRMATION`
+- Why was "Reacondicionamiento de conector" performed? **Answered by WO-ARGOS-047:** it was simulated scenario input entered while exercising MOVOS — not a real physical intervention.
+- Was a condition discovered during Javier's inspection? **Answered by WO-ARGOS-047:** no physical inspection occurred in this pilot phase — `REAL_PHYSICAL_STATION: NO`.
+- Was external communication required? `PENDING_HUMAN_CONFIRMATION` (and, per the narrow reading in `PILOT_WO_01_EVIDENCE.md`, only ever answerable for the _digital workflow_, not a real field incident, until Phase B)
 - Did Álvaro understand the completed outcome from MOVOS alone? `PENDING_HUMAN_CONFIRMATION`
 - Did either participant want photographic/file evidence? `PENDING_HUMAN_CONFIRMATION`
 - Was the experience still easy and intuitive? `PENDING_HUMAN_CONFIRMATION`

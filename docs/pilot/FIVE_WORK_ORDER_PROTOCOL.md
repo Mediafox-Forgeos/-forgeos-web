@@ -4,6 +4,10 @@
 **Progress: 2 / 5 completed.** PILOT-WO-01 (Calima - Estación 01) resolved 2026-08-15 — `docs/pilot/PILOT_WO_01_EVIDENCE.md`. PILOT-WO-02 (Calima - Estación 02) resolved 2026-08-15 — `docs/pilot/PILOT_WO_02_EVIDENCE.md`. PILOT-WO-03 through PILOT-WO-05 not started.
 **The success unit:** 5 real, resolved `WorkOrder`s — not five calendar days, not five clicks. A quiet pilot org might take longer to produce them; a busy one might produce them in a day. Duration follows the evidence, not the other way around (`docs/pilot/OPERATIONAL_PILOT_V1.md`).
 
+> ## ⚠ Classification correction (WO-ARGOS-047)
+>
+> Both `WorkOrder`s counted toward the 2/5 above (`PILOT-WO-01`, `PILOT-WO-02`) belong to **`PRODUCT_SIMULATION_PILOT`** — real users, real production MOVOS, real workflow execution, but a **simulated** operational scenario, because Centro Comercial Calima has not yet been physically provisioned with the pilot charging stations. Progress toward 5 continues to count real `WorkOrder`s completed through the real product; it is not, on its own, evidence of 5 real field interventions. See each evidence document's own classification block, and `docs/pilot/OPERATIONAL_PILOT_V1.md`'s Phase A/B/C model, before treating this count as proof of physical operational readiness.
+
 **Rule:** only real or legitimate controlled operational cases count. Nothing here is a script to follow — it's a record to fill in as real things actually happen. If a `WorkOrder` fails, gets confused, or exposes friction, that's exactly the evidence this pilot exists to collect — do not paper over it, and do not manufacture failures that wouldn't have happened otherwise.
 
 ## The record, per WorkOrder

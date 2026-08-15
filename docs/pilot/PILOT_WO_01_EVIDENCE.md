@@ -1,9 +1,24 @@
 # Pilot WorkOrder #1 Evidence
 
-**Work order:** WO-ARGOS-044 (evidence capture only — read-only against production, nothing modified)
-**Pilot progress:** 1 / 5
+**Work order:** WO-ARGOS-044 (evidence capture only — read-only against production, nothing modified); classification corrected by WO-ARGOS-047
+**Pilot progress:** 1 / 5 (`PRODUCT_SIMULATION_PILOT` phase)
 **Participants:** Álvaro Pino (operator), Javier Cabal Jr. (technician), Kylum Energy, Centro Comercial Calima, Calima - Estación 01
-**Scenario:** controlled-real initial physical inspection — no fault fabricated
+**Scenario:** a simulated operational scenario exercised through the real product — see classification below
+
+> ## ⚠ Classification correction (WO-ARGOS-047)
+>
+> **`SCENARIO_CLASSIFICATION: SIMULATED_OPERATIONAL_SCENARIO`.** ARGOS/business has confirmed Centro Comercial Calima has not yet been physically provisioned with the pilot charging stations — Javier Cabal Jr. did **not** physically visit or inspect Calima - Estación 01. Every physical/field claim in this document (arrival, diagnosis, intervention, validation) is **simulated scenario input entered while exercising MOVOS**, not evidence that a physical inspection or "Mantenimiento General" occurred. This correction does not delete or alter the original system-derived record below — it corrects how it must be read.
+>
+> | Fact                      | Status |
+> | ------------------------- | ------ |
+> | `REAL_USERS`              | YES    |
+> | `REAL_PRODUCTION_SYSTEM`  | YES    |
+> | `REAL_WORKFLOW_EXECUTION` | YES    |
+> | `REAL_PHYSICAL_STATION`   | **NO** |
+> | `REAL_FIELD_INTERVENTION` | **NO** |
+> | `REAL_OCPP_CONNECTION`    | **NO** |
+>
+> What remains valid: the real login, real role/authorization boundaries, real `WorkOrder` creation and assignment, real `/my-work` interaction, real persisted `WorkOrderEvent` timeline and timing, and the real human usability observation (section 6a). What is **not** valid: any claim below that a technician "physically attended," "inspected," or "performed maintenance" at a real station. See `docs/pilot/OPERATIONAL_PILOT_V1.md`'s Phase A/B/C model for what this pilot phase does and doesn't prove.
 
 ## 1. WorkOrder identity
 
@@ -75,13 +90,15 @@ These are measurements, not targets — recorded for the eventual 5-`WorkOrder` 
 
 **C. Station metadata remained `UNKNOWN` throughout.** Confirmed: both server-computed station snapshots (diagnosis and validation) show `connectivityStatus: UNKNOWN`, `connectorStatuses: []` — exactly as expected, since Calima - Estación 01 has no live OCPP connection (never part of this pilot's scope). This is the system honestly reporting what it doesn't know, not a fault.
 
-**D. Operator-recoverable knowledge from MOVOS alone.** An operator reading this `WorkOrder` after the fact can learn: a real technician physically attended the station, found no fault ("Todo funcionando OK"), performed general maintenance ("Mantenimiento General" — a real but non-granular description, not itemized), confirmed the result ("Validacion OK"), and closed it as working correctly. What the operator **cannot** recover from MOVOS alone: exactly what "Mantenimiento General" specifically involved, any visual confirmation (no photo capability exists), or precisely how long Javier was physically on site (only `STARTED`→`RESOLVED` is measured, 12 seconds — clearly not the real physical inspection duration, since the checklist work preceding it took over a minute and a half).
+**D. Operator-recoverable knowledge from MOVOS alone.** ⚠ Re-read after the WO-ARGOS-047 correction: this is now an assessment of what the _digital record_ communicates, not a claim that a physical visit occurred. An operator reading this `WorkOrder` after the fact would be told: a technician attended the station, found no fault ("Todo funcionando OK"), performed general maintenance ("Mantenimiento General" — a non-granular description, not itemized), confirmed the result ("Validacion OK"), and closed it as working correctly. In this simulation phase, none of that physical narrative is real — it is simulated scenario input, and MOVOS itself has no way to distinguish a simulated entry from a real one (there is no field for that). This is itself a real, evidence-supported observation to carry forward: **the product cannot currently tell an operator whether a checklist entry reflects a real physical event.**
 
 ## 6. External communication
 
 `EXTERNAL_COMMUNICATION: NOT_REQUIRED`
 
 **HUMAN_REPORTED** — confirmed by ARGOS/business after completion, not derived from any database record (no field in this schema tracks external communication at all; see `docs/pilot/PILOT_MEASUREMENT_PLAN.md`). Recorded here as a human statement, not system evidence.
+
+**Read narrowly, per WO-ARGOS-047:** this means no external communication was required for Álvaro and Javier to understand and complete the _digital MOVOS workflow_ — creating, assigning, and executing a simulated scenario. It is **not** evidence that a real field incident could be diagnosed and resolved without a phone call or WhatsApp message — that question is untested until Phase B (real physical stations).
 
 ## 6a. Human usability assessment
 
