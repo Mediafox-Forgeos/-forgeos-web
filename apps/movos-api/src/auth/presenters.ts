@@ -25,12 +25,14 @@ import type {
   ApiAction,
   ApiWorkOrder,
   ApiWorkOrderEvent,
+  ApiAssignableTechnician,
 } from '@mediafox/shared-types';
 import type { ChargingSessionWithNames } from '../sessions/sessions.service';
 import type { ActionWithNames } from '../recommendations/action.service';
 import type {
   WorkOrderWithNames,
   WorkOrderEventWithActor,
+  AssignableTechnician,
 } from '../work-orders/work-order.service';
 
 /**
@@ -285,5 +287,14 @@ export function toApiWorkOrderEvent(
     actorName: event.actor?.displayName ?? null,
     payload: (event.payload as Record<string, unknown> | null) ?? null,
     createdAt: event.createdAt.toISOString(),
+  };
+}
+
+export function toApiAssignableTechnician(
+  technician: AssignableTechnician,
+): ApiAssignableTechnician {
+  return {
+    userId: technician.userId,
+    displayName: technician.displayName,
   };
 }

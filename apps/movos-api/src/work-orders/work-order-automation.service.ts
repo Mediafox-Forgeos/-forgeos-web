@@ -52,6 +52,7 @@ export class WorkOrderAutomationService implements OnModuleDestroy {
       select: {
         id: true,
         name: true,
+        lastDisconnectedAt: true,
         site: { select: { organizationId: true } },
       },
     });
@@ -73,17 +74,34 @@ export class WorkOrderAutomationService implements OnModuleDestroy {
 
   private async createIfNotDuplicate(
     organizationId: string,
-    station: { id: string; name: string },
+    station: { id: string; name: string; lastDisconnectedAt: Date | null },
   ): Promise<void> {
-    const existing = await this.prisma.workOrder.findFirst({
+    // Idempotency boundary (WO-ARGOS-038): one continuous offline episode
+    // must produce exactly one CONNECTIVITY_LOSS WorkOrder, however that
+    // WorkOrder's own status later changes. `lastDisconnectedAt` is written
+    // in exactly one place in this codebase (ConnectivityCoordinator.
+    // handleConnectionClosed) and only on a genuine OFFLINE transition —
+    // never re-stamped while a station stays offline, and reconnecting
+    // (handleConnectionEstablished) never touches it either. So a
+    // CONNECTIVITY_LOSS WorkOrder created at or after the station's
+    // current lastDisconnectedAt already covers this exact episode,
+    // regardless of whether it has since been resolved/cancelled — status
+    // alone (the previous check) can't distinguish "still the same outage"
+    // from "a genuinely new one," but this timestamp comparison can. Only
+    // once the station reconnects (bumping lastConnectedAt, not this
+    // field) and then disconnects again (bumping lastDisconnectedAt past
+    // the existing WorkOrder's createdAt) does a new one become eligible.
+    const existingForThisEpisode = await this.prisma.workOrder.findFirst({
       where: {
         organizationId,
         stationId: station.id,
         source: 'CONNECTIVITY_LOSS',
-        status: { in: ['OPEN', 'ASSIGNED', 'IN_PROGRESS'] },
+        ...(station.lastDisconnectedAt
+          ? { createdAt: { gte: station.lastDisconnectedAt } }
+          : {}),
       },
     });
-    if (existing) return;
+    if (existingForThisEpisode) return;
 
     await this.workOrders.create(organizationId, {
       title: `Estación sin conexión: ${station.name}`,

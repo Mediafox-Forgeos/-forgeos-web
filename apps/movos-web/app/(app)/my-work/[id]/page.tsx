@@ -26,23 +26,11 @@ import {
   WorkOrderStatusBadge,
   WorkOrderPriorityBadge,
 } from '@/components/work-orders/work-order-badges';
+import { WorkOrderEventTimeline } from '@/components/work-orders/work-order-event-timeline';
 import { apiClient, ApiError } from '@/lib/api-client';
 import { formatRelative } from '@/lib/format';
 
 type LoadState = 'loading' | 'ready' | 'notfound' | 'error';
-
-const EVENT_LABEL: Record<string, string> = {
-  CREATED: 'Creada',
-  ASSIGNED: 'Asignada',
-  STARTED: 'Iniciada',
-  COMMENTED: 'Comentario',
-  RESOLVED: 'Resuelta',
-  CANCELLED: 'Cancelada',
-  ARRIVAL_CONFIRMED: 'Llegada confirmada',
-  DIAGNOSIS_RECORDED: 'Diagnóstico registrado',
-  INTERVENTION_RECORDED: 'Intervención registrada',
-  VALIDATION_RECORDED: 'Validación registrada',
-};
 
 const CHECKLIST_STAGES: { type: ChecklistEventType; label: string }[] = [
   { type: 'ARRIVAL_CONFIRMED', label: '1. Confirmar llegada' },
@@ -324,54 +312,8 @@ export default function MyWorkDetailPage() {
         <CardHeader>
           <CardTitle>Línea de tiempo</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-2">
-          {events.length === 0 && (
-            <p className="text-muted-foreground text-sm">Sin actividad.</p>
-          )}
-          {events.map((event) => (
-            <div key={event.id} className="flex items-start gap-3 text-sm">
-              <span className="bg-movos-blue mt-1.5 size-1.5 shrink-0 rounded-full" />
-              <div className="flex-1">
-                <p>
-                  <span className="font-medium">
-                    {EVENT_LABEL[event.type] ?? event.type}
-                  </span>
-                  {event.actorName && (
-                    <span className="text-muted-foreground">
-                      {' '}
-                      · {event.actorName}
-                    </span>
-                  )}
-                  {!event.actorName && (
-                    <span className="text-muted-foreground"> · automático</span>
-                  )}
-                </p>
-                {event.payload?.comment != null && (
-                  <p className="text-muted-foreground text-xs">
-                    {String(event.payload.comment)}
-                  </p>
-                )}
-                {event.payload?.finding != null && (
-                  <p className="text-muted-foreground text-xs">
-                    {String(event.payload.finding)}
-                  </p>
-                )}
-                {event.payload?.description != null && (
-                  <p className="text-muted-foreground text-xs">
-                    {String(event.payload.description)}
-                  </p>
-                )}
-                {event.payload?.outcomeNote != null && (
-                  <p className="text-muted-foreground text-xs">
-                    {String(event.payload.outcomeNote)}
-                  </p>
-                )}
-              </div>
-              <span className="text-muted-foreground text-xs">
-                {formatRelative(event.createdAt)}
-              </span>
-            </div>
-          ))}
+        <CardContent>
+          <WorkOrderEventTimeline events={events} />
         </CardContent>
       </Card>
     </PageContainer>

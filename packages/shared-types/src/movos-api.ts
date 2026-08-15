@@ -397,6 +397,14 @@ export type WorkOrderPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
 export type WorkOrderSource = 'CONNECTIVITY_LOSS' | 'RECOMMENDATION' | 'MANUAL';
 
+// WO-ARGOS-038 — the operator's assignee picker on /work-orders/[id]. A
+// projection of User, scoped server-side to ACTIVE MemberRole.TECHNICIAN
+// memberships in the caller's own organization only.
+export interface ApiAssignableTechnician {
+  userId: string;
+  displayName: string;
+}
+
 // WO-ARGOS-037 — the last 4 values are the field checklist
 // (docs/operations/WORK_ORDER_CHECKLISTS.md), written only through
 // MyWorkController's checklist-events endpoint.

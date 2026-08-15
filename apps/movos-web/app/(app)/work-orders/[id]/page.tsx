@@ -6,6 +6,7 @@ import * as React from 'react';
 import { ArrowLeft } from 'lucide-react';
 
 import type {
+  ApiAssignableTechnician,
   ApiChargingStation,
   ApiWorkOrder,
   ApiWorkOrderEvent,
@@ -26,20 +27,15 @@ import {
   WorkOrderPriorityBadge,
   WorkOrderSourceLabel,
 } from '@/components/work-orders/work-order-badges';
+import {
+  WORK_ORDER_EVENT_LABEL,
+  WorkOrderEventTimeline,
+} from '@/components/work-orders/work-order-event-timeline';
 import { apiClient, ApiError } from '@/lib/api-client';
 import { useAuth } from '@/context/auth-context';
-import { formatDateTime, formatRelative } from '@/lib/format';
+import { formatDateTime } from '@/lib/format';
 
 type LoadState = 'loading' | 'ready' | 'notfound' | 'error';
-
-const EVENT_LABEL: Record<string, string> = {
-  CREATED: 'Creada',
-  ASSIGNED: 'Asignada',
-  STARTED: 'Iniciada',
-  COMMENTED: 'Comentario',
-  RESOLVED: 'Resuelta',
-  CANCELLED: 'Cancelada',
-};
 
 const STATUS_EVENT_TYPES = new Set([
   'CREATED',
@@ -61,6 +57,10 @@ export default function WorkOrderDetailPage() {
   const [workOrder, setWorkOrder] = React.useState<ApiWorkOrder | null>(null);
   const [events, setEvents] = React.useState<ApiWorkOrderEvent[]>([]);
   const [station, setStation] = React.useState<ApiChargingStation | null>(null);
+  const [technicians, setTechnicians] = React.useState<
+    ApiAssignableTechnician[]
+  >([]);
+  const [selectedTechnicianId, setSelectedTechnicianId] = React.useState('');
   const [state, setState] = React.useState<LoadState>('loading');
   const [pending, setPending] = React.useState(false);
   const [commentDraft, setCommentDraft] = React.useState('');
@@ -73,14 +73,18 @@ export default function WorkOrderDetailPage() {
     try {
       const wo = await apiClient.get<ApiWorkOrder>(`/work-orders/${id}`);
       setWorkOrder(wo);
-      const [evts, stationDetail] = await Promise.all([
+      const [evts, stationDetail, eligibleTechnicians] = await Promise.all([
         apiClient.get<ApiWorkOrderEvent[]>(`/work-orders/${id}/events`),
         apiClient
           .get<ApiChargingStation>(`/charging-stations/${wo.stationId}`)
           .catch(() => null),
+        apiClient
+          .get<ApiAssignableTechnician[]>('/work-orders/assignable-technicians')
+          .catch(() => []),
       ]);
       setEvents(evts);
       setStation(stationDetail);
+      setTechnicians(eligibleTechnicians);
       setState('ready');
     } catch (err) {
       setState(
@@ -103,6 +107,7 @@ export default function WorkOrderDetailPage() {
       setCommentDraft('');
       setCloseMode(null);
       setCloseNote('');
+      setSelectedTechnicianId('');
       await load();
     } finally {
       setPending(false);
@@ -238,6 +243,39 @@ export default function WorkOrderDetailPage() {
         <CardContent className="space-y-3 text-sm">
           <p>{workOrder.assignedMemberName ?? 'Sin asignar'}</p>
 
+          {!isTerminal && canAssign && (
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={selectedTechnicianId}
+                onChange={(e) => setSelectedTechnicianId(e.target.value)}
+                disabled={pending}
+                className="border-border bg-background h-8 rounded-md border px-2 text-xs"
+              >
+                <option value="">
+                  {technicians.length === 0
+                    ? 'Sin técnicos disponibles'
+                    : 'Seleccionar técnico…'}
+                </option>
+                {technicians.map((tech) => (
+                  <option key={tech.userId} value={tech.userId}>
+                    {tech.displayName}
+                  </option>
+                ))}
+              </select>
+              <Button
+                size="sm"
+                disabled={pending || !selectedTechnicianId}
+                onClick={() =>
+                  void send('assign', {
+                    assignedMemberId: selectedTechnicianId,
+                  })
+                }
+              >
+                Asignar técnico
+              </Button>
+            </div>
+          )}
+
           {!isTerminal && (
             <div className="flex flex-wrap gap-2">
               {canAssign && currentUser && (
@@ -353,39 +391,8 @@ export default function WorkOrderDetailPage() {
         <CardHeader>
           <CardTitle>Línea de tiempo</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-2">
-          {events.length === 0 && (
-            <p className="text-muted-foreground text-sm">Sin actividad.</p>
-          )}
-          {events.map((event) => (
-            <div key={event.id} className="flex items-start gap-3 text-sm">
-              <span className="bg-movos-blue mt-1.5 size-1.5 shrink-0 rounded-full" />
-              <div className="flex-1">
-                <p>
-                  <span className="font-medium">
-                    {EVENT_LABEL[event.type] ?? event.type}
-                  </span>
-                  {event.actorName && (
-                    <span className="text-muted-foreground">
-                      {' '}
-                      · {event.actorName}
-                    </span>
-                  )}
-                  {!event.actorName && (
-                    <span className="text-muted-foreground"> · automático</span>
-                  )}
-                </p>
-                {event.payload?.comment != null && (
-                  <p className="text-muted-foreground text-xs">
-                    {String(event.payload.comment)}
-                  </p>
-                )}
-              </div>
-              <span className="text-muted-foreground text-xs">
-                {formatRelative(event.createdAt)}
-              </span>
-            </div>
-          ))}
+        <CardContent>
+          <WorkOrderEventTimeline events={events} />
         </CardContent>
       </Card>
 
@@ -399,7 +406,7 @@ export default function WorkOrderDetailPage() {
               key={event.id}
               className="flex items-center justify-between text-sm"
             >
-              <span>{EVENT_LABEL[event.type] ?? event.type}</span>
+              <span>{WORK_ORDER_EVENT_LABEL[event.type] ?? event.type}</span>
               <span className="text-muted-foreground text-xs">
                 {formatDateTime(event.createdAt)}
               </span>
