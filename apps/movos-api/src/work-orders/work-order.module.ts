@@ -3,6 +3,8 @@ import { Module } from '@nestjs/common';
 import { WorkOrderService } from './work-order.service';
 import { WorkOrderController } from './work-order.controller';
 import { WorkOrderAutomationService } from './work-order-automation.service';
+import { MyWorkService } from './my-work.service';
+import { MyWorkController } from './my-work.controller';
 import { OrgContextGuard } from '../guards/org-context.guard';
 import { RolesGuard } from '../guards/roles.guard';
 
@@ -12,12 +14,17 @@ import { RolesGuard } from '../guards/roles.guard';
  * operational problem. See docs/operations/WORK_ORDER_DOMAIN.md
  * (WO-ARGOS-033) and docs/operations/WORKORDER_READINESS.md
  * (WO-ARGOS-034) for the design and scope this implements.
+ *
+ * MyWorkService/MyWorkController (WO-ARGOS-037) — the technician-facing
+ * self-scoped surface over the same WorkOrder/WorkOrderEvent rows. See
+ * docs/operations/FIELD_TECHNICIAN_CONSOLE.md.
  */
 @Module({
-  controllers: [WorkOrderController],
+  controllers: [WorkOrderController, MyWorkController],
   providers: [
     WorkOrderService,
     WorkOrderAutomationService,
+    MyWorkService,
     OrgContextGuard,
     RolesGuard,
   ],

@@ -27,6 +27,11 @@ enum MemberRole {
   SUPPORT
   ANALYST
   VIEWER
+  // WO-ARGOS-037 — Technician Identity & My Work. A 7th real actor the role
+  // vocabulary already anticipated (see docs/operations/OPERATIONAL_ACTORS.md),
+  // scoped narrower than every other role: self-only visibility onto WorkOrder
+  // (see MyWorkController), no access to any other route.
+  TECHNICIAN
 }
 
 enum MemberStatus {
@@ -1009,6 +1014,12 @@ enum WorkOrderEventType {
   COMMENTED
   RESOLVED
   CANCELLED
+  // WO-ARGOS-037 — field checklist (docs/operations/WORK_ORDER_CHECKLISTS.md).
+  // Reuses WorkOrderEvent.payload for stage-specific evidence; zero new tables.
+  ARRIVAL_CONFIRMED
+  DIAGNOSIS_RECORDED
+  INTERVENTION_RECORDED
+  VALIDATION_RECORDED
 }
 
 // The V1 entity — a deliberately smaller field set than

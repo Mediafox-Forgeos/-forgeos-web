@@ -397,8 +397,20 @@ export type WorkOrderPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
 export type WorkOrderSource = 'CONNECTIVITY_LOSS' | 'RECOMMENDATION' | 'MANUAL';
 
+// WO-ARGOS-037 — the last 4 values are the field checklist
+// (docs/operations/WORK_ORDER_CHECKLISTS.md), written only through
+// MyWorkController's checklist-events endpoint.
 export type WorkOrderEventType =
-  'CREATED' | 'ASSIGNED' | 'STARTED' | 'COMMENTED' | 'RESOLVED' | 'CANCELLED';
+  | 'CREATED'
+  | 'ASSIGNED'
+  | 'STARTED'
+  | 'COMMENTED'
+  | 'RESOLVED'
+  | 'CANCELLED'
+  | 'ARRIVAL_CONFIRMED'
+  | 'DIAGNOSIS_RECORDED'
+  | 'INTERVENTION_RECORDED'
+  | 'VALIDATION_RECORDED';
 
 export interface ApiWorkOrder {
   id: string;
@@ -444,4 +456,43 @@ export interface TransitionWorkOrderRequest {
   transition: WorkOrderTransition;
   assignedMemberId?: string;
   comment?: string;
+}
+
+// Technician Identity & My Work (WO-ARGOS-037). A technician's own
+// self-scoped surface over the same WorkOrder/WorkOrderEvent data an
+// operator sees on /work-orders — see
+// docs/operations/FIELD_TECHNICIAN_CONSOLE.md. Deliberately a narrower
+// transition set than WorkOrderTransition: no `assign`, no `cancel` — a
+// technician executes and closes their own assigned work, they don't
+// dispatch it.
+export type MyWorkTransition = 'start' | 'comment' | 'resolve';
+
+export interface TransitionMyWorkRequest {
+  transition: MyWorkTransition;
+  comment?: string;
+}
+
+// docs/operations/WORK_ORDER_CHECKLISTS.md's 5-stage model, stages 1-4
+// (stage 5 is the existing `resolve` transition, unchanged). Every field
+// besides `type` is optional at the type level because the required set is
+// stage-specific — validated server-side in MyWorkService, not here.
+export type ChecklistEventType =
+  | 'ARRIVAL_CONFIRMED'
+  | 'DIAGNOSIS_RECORDED'
+  | 'INTERVENTION_RECORDED'
+  | 'VALIDATION_RECORDED';
+
+export interface RecordChecklistEventRequest {
+  type: ChecklistEventType;
+  /** ARRIVAL_CONFIRMED only — opt-in browser geolocation. */
+  latitude?: number;
+  longitude?: number;
+  accuracy?: number;
+  /** DIAGNOSIS_RECORDED only — required by the server for this type. */
+  finding?: string;
+  /** INTERVENTION_RECORDED only — description required, actionType optional. */
+  description?: string;
+  actionType?: string;
+  /** VALIDATION_RECORDED only — required by the server for this type. */
+  outcomeNote?: string;
 }

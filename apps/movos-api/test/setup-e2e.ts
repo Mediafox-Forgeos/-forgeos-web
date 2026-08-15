@@ -81,6 +81,13 @@ export async function resetDatabase(prisma: PrismaService): Promise<void> {
   // all RESTRICT-on-delete except assignedTo (SET NULL); deleted before
   // any of them regardless.
   await prisma.action.deleteMany();
+  // WO-ARGOS-035/037 — WorkOrderEvent -> WorkOrder is RESTRICT-on-delete
+  // (child before parent); WorkOrder -> Organization/ChargingStation are
+  // also RESTRICT (assignedMember/actor -> User are SET NULL, so those
+  // don't block User deletion, but WorkOrder itself must go before Site's
+  // chargingStations and before Organization).
+  await prisma.workOrderEvent.deleteMany();
+  await prisma.workOrder.deleteMany();
   await prisma.connector.deleteMany();
   await prisma.evse.deleteMany();
   await prisma.chargingStation.deleteMany();

@@ -18,6 +18,7 @@ import {
   TriangleAlert,
   UserRound,
   Users,
+  Wrench,
   X,
   Zap,
 } from 'lucide-react';
@@ -46,13 +47,25 @@ const navigation: NavItem[] = [
   { label: 'Configuración', href: '/settings', icon: Settings },
 ];
 
+// WO-ARGOS-037 — a TECHNICIAN membership has no access to any operator-facing
+// controller (see WorkOrderController's @Roles() exclusion), so the full
+// operator navigation would be mostly dead links for this role. This is the
+// only role-conditional branch in this list; every other role keeps the
+// exact navigation it already had.
+const TECHNICIAN_NAVIGATION: NavItem[] = [
+  { label: 'Mi trabajo', href: '/my-work', icon: Wrench },
+  { label: 'Configuración', href: '/settings', icon: Settings },
+];
+
 export function MovosSidebar() {
   const pathname = usePathname();
-  const { currentUser, currentOrg, logout } = useAuth();
+  const { currentUser, currentOrg, membership, logout } = useAuth();
   const [isOpen, setIsOpen] = React.useState(false);
 
   const orgName = currentOrg?.name ?? tenant.orgName;
   const userName = currentUser?.displayName ?? 'Operador';
+  const items =
+    membership?.role === 'TECHNICIAN' ? TECHNICIAN_NAVIGATION : navigation;
 
   return (
     <>
@@ -106,7 +119,7 @@ export function MovosSidebar() {
           className="space-y-1 overflow-y-auto"
           aria-label="Navegación principal"
         >
-          {navigation.map((item) => {
+          {items.map((item) => {
             const Icon = item.icon;
             const active = pathname.startsWith(item.href);
             return (

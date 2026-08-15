@@ -156,6 +156,81 @@ async function main(): Promise<void> {
           maxPowerKw: 180,
         },
       });
+
+      // WO-ARGOS-037 — a real, login-capable field technician, dev-only,
+      // so /my-work can be exercised end to end without a synthetic
+      // fixture. One WorkOrder pre-assigned to them, in ASSIGNED status —
+      // the rest of the assign -> start -> checklist -> resolve loop is
+      // meant to be driven live through the console, not pre-seeded.
+      const technicianEmail = 'tecnico@kylum.co';
+      const technicianPasswordHash = await bcrypt.hash(
+        'LocalDev2026!Tech',
+        BCRYPT_ROUNDS,
+      );
+      const technician = await prisma.user.upsert({
+        where: { email: technicianEmail },
+        update: { passwordHash: technicianPasswordHash, status: 'ACTIVE' },
+        create: {
+          email: technicianEmail,
+          passwordHash: technicianPasswordHash,
+          displayName: 'Camilo Restrepo',
+          status: 'ACTIVE',
+        },
+      });
+      await prisma.membership.upsert({
+        where: {
+          userId_organizationId: {
+            userId: technician.id,
+            organizationId: organization.id,
+          },
+        },
+        update: { role: 'TECHNICIAN', status: 'ACTIVE' },
+        create: {
+          userId: technician.id,
+          organizationId: organization.id,
+          role: 'TECHNICIAN',
+          status: 'ACTIVE',
+        },
+      });
+
+      const existingAssignment = await prisma.workOrder.findFirst({
+        where: {
+          organizationId: organization.id,
+          assignedMemberId: technician.id,
+        },
+      });
+      if (!existingAssignment) {
+        const workOrder = await prisma.workOrder.create({
+          data: {
+            organizationId: organization.id,
+            stationId: station.id,
+            title: 'Conector no responde a intentos de autorización',
+            description:
+              'El conector 1 de la EVSE 1 rechaza las últimas 3 tarjetas presentadas.',
+            status: 'ASSIGNED',
+            priority: 'HIGH',
+            source: 'MANUAL',
+            assignedMemberId: technician.id,
+            assignedAt: new Date(),
+          },
+        });
+        await prisma.workOrderEvent.create({
+          data: {
+            workOrderId: workOrder.id,
+            type: 'CREATED',
+            actorId: user.id,
+            payload: { source: 'MANUAL', priority: 'HIGH' },
+          },
+        });
+        await prisma.workOrderEvent.create({
+          data: {
+            workOrderId: workOrder.id,
+            type: 'ASSIGNED',
+            actorId: user.id,
+            payload: { assignedMemberId: technician.id },
+          },
+        });
+      }
     }
   }
 
