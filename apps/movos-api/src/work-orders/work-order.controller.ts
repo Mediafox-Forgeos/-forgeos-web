@@ -22,7 +22,11 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { OrgContext } from '../common/decorators/org-context.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../common/request-context';
-import { toApiWorkOrder, toApiWorkOrderEvent } from '../auth/presenters';
+import {
+  toApiAssignableTechnician,
+  toApiWorkOrder,
+  toApiWorkOrderEvent,
+} from '../auth/presenters';
 
 // WO-ARGOS-037 — every pre-existing role kept exactly the access it already
 // had (this controller had no @Roles() at all before now); the one thing
@@ -66,6 +70,20 @@ export class WorkOrderController {
       query.status,
     );
     return workOrders.map(toApiWorkOrder);
+  }
+
+  // Declared before `:id` — a static segment must be matched first or
+  // Nest/Express would treat "assignable-technicians" as an `:id` value.
+  @Get('assignable-technicians')
+  @Roles(...OPERATOR_FACING_ROLES)
+  @ApiOperation({
+    summary: 'List ACTIVE TECHNICIAN members eligible for assignment',
+  })
+  async listAssignableTechnicians(@OrgContext() membership: Membership) {
+    const technicians = await this.workOrders.listAssignableTechnicians(
+      membership.organizationId,
+    );
+    return technicians.map(toApiAssignableTechnician);
   }
 
   @Get(':id')

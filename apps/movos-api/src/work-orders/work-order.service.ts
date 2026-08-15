@@ -33,6 +33,11 @@ export type WorkOrderEventWithActor = WorkOrderEvent & {
   actor: { displayName: string } | null;
 };
 
+export interface AssignableTechnician {
+  userId: string;
+  displayName: string;
+}
+
 // V1 scope (WO-ARGOS-035) — 5 real transitions, one per non-CREATED
 // WorkOrderEventType. Deliberately no `block`/`unassign` — see
 // docs/operations/WORKORDER_READINESS.md for why this version stays
@@ -118,6 +123,31 @@ export class WorkOrderService {
       include: WORK_ORDER_EVENT_WITH_ACTOR_INCLUDE,
       orderBy: { createdAt: 'asc' },
     });
+  }
+
+  /**
+   * WO-ARGOS-038 — the eligible-assignee list for the operator's picker on
+   * /work-orders/[id]. Scoped to real, ACTIVE `MemberRole.TECHNICIAN`
+   * memberships in the caller's own organization only — the same
+   * `assertAssignee` active-membership check `transition()` already
+   * enforces, narrowed further to the technician role specifically, since
+   * this list exists to answer "who can I dispatch," not "who could this
+   * API theoretically accept." Does not restrict `transition()` itself —
+   * that still accepts any active member, unchanged, matching how
+   * `create()`'s own OWNER/ADMIN self-assignment already works today.
+   */
+  async listAssignableTechnicians(
+    organizationId: string,
+  ): Promise<AssignableTechnician[]> {
+    const memberships = await this.prisma.membership.findMany({
+      where: { organizationId, role: 'TECHNICIAN', status: 'ACTIVE' },
+      include: { user: { select: { id: true, displayName: true } } },
+      orderBy: { user: { displayName: 'asc' } },
+    });
+    return memberships.map((m) => ({
+      userId: m.user.id,
+      displayName: m.user.displayName,
+    }));
   }
 
   async create(
