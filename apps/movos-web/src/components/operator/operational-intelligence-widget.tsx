@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge, type BadgeTone } from '@/components/ui/badge';
 import { usePolledResource } from './use-polled-resource';
 import { ActionButtons } from './action-buttons';
+import { CreateWorkOrderFromRecommendationButton } from '../work-orders/create-from-recommendation-button';
 
 // Exported for reuse by the Operational Actions section (WO-ARGOS-026) —
 // one canonical severity vocabulary, not a second copy of these two maps.
@@ -106,6 +107,7 @@ export function OperationalIntelligenceWidget() {
                 onChanged={refetch}
               />
             )}
+            <CreateWorkOrderFromRecommendationButton recommendation={rec} />
           </div>
         ))}
       </CardContent>

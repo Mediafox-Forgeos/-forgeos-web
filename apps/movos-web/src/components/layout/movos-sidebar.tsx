@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   Cable,
   CircleGauge,
+  ClipboardList,
   FileBarChart,
   LayoutDashboard,
   LogOut,
@@ -40,6 +41,7 @@ const navigation: NavItem[] = [
   { label: 'Usuarios', href: '/users', icon: Users },
   { label: 'Tarifas', href: '/tariffs', icon: Receipt },
   { label: 'Alertas', href: '/alerts', icon: TriangleAlert },
+  { label: 'Órdenes de trabajo', href: '/work-orders', icon: ClipboardList },
   { label: 'Reportes', href: '/reports', icon: FileBarChart },
   { label: 'Configuración', href: '/settings', icon: Settings },
 ];

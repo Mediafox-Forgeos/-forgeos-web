@@ -383,3 +383,65 @@ export interface TransitionActionRequest {
   notes?: string;
   snoozeMinutes?: number;
 }
+
+// Work Order V1 (WO-ARGOS-035). The first execution layer that coordinates
+// a person, not just a station's status, around an operational problem —
+// see docs/operations/WORK_ORDER_DOMAIN.md (WO-ARGOS-033) for the full
+// design this implements a deliberately smaller slice of, and
+// docs/operations/WORKORDER_READINESS.md (WO-ARGOS-034) for why exactly
+// these 3 sources and not the other 2 the full design proposed.
+export type WorkOrderStatus =
+  'OPEN' | 'ASSIGNED' | 'IN_PROGRESS' | 'RESOLVED' | 'CANCELLED';
+
+export type WorkOrderPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+
+export type WorkOrderSource = 'CONNECTIVITY_LOSS' | 'RECOMMENDATION' | 'MANUAL';
+
+export type WorkOrderEventType =
+  'CREATED' | 'ASSIGNED' | 'STARTED' | 'COMMENTED' | 'RESOLVED' | 'CANCELLED';
+
+export interface ApiWorkOrder {
+  id: string;
+  title: string;
+  description: string;
+  status: WorkOrderStatus;
+  priority: WorkOrderPriority;
+  source: WorkOrderSource;
+  stationId: string;
+  stationName: string;
+  assignedMemberId: string | null;
+  assignedMemberName: string | null;
+  assignedAt: string | null;
+  startedAt: string | null;
+  resolvedAt: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ApiWorkOrderEvent {
+  id: string;
+  workOrderId: string;
+  type: WorkOrderEventType;
+  actorId: string | null;
+  actorName: string | null;
+  payload: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export type WorkOrderTransition =
+  'assign' | 'start' | 'comment' | 'resolve' | 'cancel';
+
+export interface CreateWorkOrderRequest {
+  title: string;
+  description: string;
+  priority: WorkOrderPriority;
+  source: WorkOrderSource;
+  stationId: string;
+}
+
+export interface TransitionWorkOrderRequest {
+  transition: WorkOrderTransition;
+  assignedMemberId?: string;
+  comment?: string;
+}

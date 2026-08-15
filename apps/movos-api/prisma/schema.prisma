@@ -179,6 +179,10 @@ model User {
 
   // WO-ARGOS-026 — Operational Execution Layer.
   assignedActions Action[]
+
+  // WO-ARGOS-035 — Work Order V1.
+  assignedWorkOrders WorkOrder[]
+  workOrderEvents    WorkOrderEvent[]
 }
 
 model Organization {
@@ -210,6 +214,9 @@ model Organization {
 
   // WO-ARGOS-026 — Operational Execution Layer.
   actions Action[]
+
+  // WO-ARGOS-035 — Work Order V1.
+  workOrders WorkOrder[]
 }
 
 model Membership {
@@ -344,6 +351,9 @@ model ChargingStation {
 
   // WO-ARGOS-026 — Operational Execution Layer.
   actions Action[]
+
+  // WO-ARGOS-035 — Work Order V1.
+  workOrders WorkOrder[]
 
   // Nullable-safe: Postgres treats multiple NULLs as distinct, so stations
   // without a business code never collide with each other.
@@ -947,4 +957,115 @@ model Action {
 
   @@index([organizationId, status])
   @@index([chargingStationId, recommendationType])
+}
+
+// ============================================================================
+// WO-ARGOS-035 — Work Order V1. The first execution layer that coordinates a
+// person, not just a chargers's status, around an operational problem —
+// scoped per docs/operations/WORKORDER_READINESS.md's own recommendation
+// (WO-ARGOS-034) to exactly the three sources with a complete, evidenced
+// actor chain: CONNECTIVITY_LOSS, RECOMMENDATION, MANUAL. CUSTOMER_REPORT
+// and MAINTENANCE are deliberately excluded from this version — their
+// upstream actors (Customer Support, scheduled-maintenance detection) have
+// no real product surface yet, per docs/operations/RESPONSIBILITY_MATRIX.md.
+// No Technician entity here either (docs/operations/TECHNICIAN_MODEL.md was
+// designed, not authorized for this implementation) — assignment in V1 is
+// to a real User, the same actor Action.assignedToUserId already uses.
+// ============================================================================
+
+enum WorkOrderStatus {
+  OPEN
+  ASSIGNED
+  IN_PROGRESS
+  RESOLVED
+  CANCELLED
+}
+
+// No CRITICAL-vs-HIGH distinction is enforced anywhere yet — see the open
+// question docs/operations/WORK_ORDER_AUTOMATIONS.md Rule 2 already named
+// (RecommendationSeverity has no CRITICAL tier). CRITICAL exists here as a
+// real, selectable value an operator can choose; nothing currently derives
+// it automatically.
+enum WorkOrderPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// Deliberately 3 values, not the 5 docs/operations/WORK_ORDER_DOMAIN.md
+// designed — CUSTOMER_REPORT and MAINTENANCE excluded per this work order's
+// explicit scope restriction, not an oversight.
+enum WorkOrderSource {
+  CONNECTIVITY_LOSS
+  RECOMMENDATION
+  MANUAL
+}
+
+enum WorkOrderEventType {
+  CREATED
+  ASSIGNED
+  STARTED
+  COMMENTED
+  RESOLVED
+  CANCELLED
+}
+
+// The V1 entity — a deliberately smaller field set than
+// docs/operations/WORK_ORDER_DOMAIN.md's own proposal (no connectorId,
+// incidentId, dueAt, slaMinutes, or evidence in this version). Every
+// omitted field is a real, separately-scoped future capability, not a
+// forgotten one.
+model WorkOrder {
+  id          String @id @default(cuid())
+  title       String
+  description String
+
+  status   WorkOrderStatus   @default(OPEN)
+  priority WorkOrderPriority
+  source   WorkOrderSource
+
+  organizationId String
+  stationId      String
+
+  assignedMemberId String?
+  assignedAt       DateTime?
+  startedAt        DateTime?
+  resolvedAt       DateTime?
+
+  // Current-value note, mirroring Action.notes — the full comment history
+  // lives in WorkOrderEvent (type: COMMENTED), not duplicated here.
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+  station        ChargingStation @relation(fields: [stationId], references: [id])
+  assignedMember User?           @relation(fields: [assignedMemberId], references: [id])
+  events         WorkOrderEvent[]
+
+  @@index([organizationId, status])
+  @@index([stationId])
+}
+
+// Append-only event log — the history log Action never got (see
+// docs/product/LEARNING_SIGNALS.md signal 5). One row per real change;
+// `payload` carries whatever structured detail that event type needs (a
+// comment's text, a cancellation reason) rather than a fixed column per
+// event type — deliberately loose, the same reasoning
+// AuthorizationCredential.metadata already established for this schema.
+model WorkOrderEvent {
+  id          String             @id @default(cuid())
+  workOrderId String
+  type        WorkOrderEventType
+  actorId     String?
+  payload     Json?
+
+  createdAt DateTime @default(now())
+
+  workOrder WorkOrder @relation(fields: [workOrderId], references: [id])
+  actor     User?     @relation(fields: [actorId], references: [id])
+
+  @@index([workOrderId, createdAt])
 }

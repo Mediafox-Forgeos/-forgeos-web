@@ -23,9 +23,15 @@ import type {
   ApiAuthorizationCredential,
   ApiAuthorizationAttempt,
   ApiAction,
+  ApiWorkOrder,
+  ApiWorkOrderEvent,
 } from '@mediafox/shared-types';
 import type { ChargingSessionWithNames } from '../sessions/sessions.service';
 import type { ActionWithNames } from '../recommendations/action.service';
+import type {
+  WorkOrderWithNames,
+  WorkOrderEventWithActor,
+} from '../work-orders/work-order.service';
 
 /**
  * Explicit projections from Prisma models to public API contracts. These are
@@ -243,5 +249,41 @@ export function toApiAction(action: ActionWithNames): ApiAction {
     createdAt: action.createdAt.toISOString(),
     updatedAt: action.updatedAt.toISOString(),
     resolvedAt: action.resolvedAt?.toISOString() ?? null,
+  };
+}
+
+// Work Order V1 (WO-ARGOS-035).
+export function toApiWorkOrder(workOrder: WorkOrderWithNames): ApiWorkOrder {
+  return {
+    id: workOrder.id,
+    title: workOrder.title,
+    description: workOrder.description,
+    status: workOrder.status,
+    priority: workOrder.priority,
+    source: workOrder.source,
+    stationId: workOrder.stationId,
+    stationName: workOrder.station.name,
+    assignedMemberId: workOrder.assignedMemberId,
+    assignedMemberName: workOrder.assignedMember?.displayName ?? null,
+    assignedAt: workOrder.assignedAt?.toISOString() ?? null,
+    startedAt: workOrder.startedAt?.toISOString() ?? null,
+    resolvedAt: workOrder.resolvedAt?.toISOString() ?? null,
+    notes: workOrder.notes,
+    createdAt: workOrder.createdAt.toISOString(),
+    updatedAt: workOrder.updatedAt.toISOString(),
+  };
+}
+
+export function toApiWorkOrderEvent(
+  event: WorkOrderEventWithActor,
+): ApiWorkOrderEvent {
+  return {
+    id: event.id,
+    workOrderId: event.workOrderId,
+    type: event.type,
+    actorId: event.actorId,
+    actorName: event.actor?.displayName ?? null,
+    payload: (event.payload as Record<string, unknown> | null) ?? null,
+    createdAt: event.createdAt.toISOString(),
   };
 }
