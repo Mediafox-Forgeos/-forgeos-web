@@ -79,7 +79,24 @@ These are measurements, not targets — recorded for the eventual 5-`WorkOrder` 
 
 ## 6. External communication
 
-`EXTERNAL_COMMUNICATION: PENDING_HUMAN_CONFIRMATION` — not inferred from database records, per instruction. ARGOS has not yet reported whether WhatsApp/phone/verbal assistance was used during this WorkOrder.
+`EXTERNAL_COMMUNICATION: NOT_REQUIRED`
+
+**HUMAN_REPORTED** — confirmed by ARGOS/business after completion, not derived from any database record (no field in this schema tracks external communication at all; see `docs/pilot/PILOT_MEASUREMENT_PLAN.md`). Recorded here as a human statement, not system evidence.
+
+## 6a. Human usability assessment
+
+`HUMAN_USABILITY_ASSESSMENT: EASY_AND_INTUITIVE`
+
+**HUMAN_REPORTED**, not system-derived — the following statements are ARGOS/business's own account of the human participants' experience, not something MOVOS measured or logged:
+
+- Álvaro Pino created the `WorkOrder` through MOVOS without assistance.
+- Álvaro assigned Javier Cabal Jr. without assistance.
+- Javier discovered, understood, and executed his assigned `WorkOrder` without product-use instructions.
+- Javier completed the technician workflow without ARGOS/VULCAN guidance.
+- No WhatsApp or phone communication was required to understand or complete the MOVOS workflow.
+- Both operator and technician reported the experience as easy and intuitive.
+
+**Both facts are preserved side by side, deliberately:** the system-derived observations in section 5 (checklist recorded before `STARTED`, a minimal "OK" resolution note, non-granular intervention text) are real and unedited, and the human-reported experience above is also real and unedited. Neither cancels the other — a workflow can be genuinely easy to use end to end while still producing evidence that's thinner than it could be. Both are inputs to the eventual 5-`WorkOrder` review (`docs/pilot/PILOT_SUCCESS_CRITERIA.md`), not resolved against each other here.
 
 ## 7. Pilot progress
 
