@@ -32,6 +32,12 @@ export default function MyWorkPage() {
   const workOrders = data ?? [];
   const inProgress = workOrders.filter((wo) => wo.status === 'IN_PROGRESS');
   const assigned = workOrders.filter((wo) => wo.status === 'ASSIGNED');
+  // Local calendar day, same comparison basis "Completadas hoy" has always
+  // used (WO-ARGOS-037) — WO-ARGOS-050 doesn't introduce a new timezone
+  // model, just a second bucket on the same basis: a RESOLVED WorkOrder
+  // is either resolved today (completedToday) or it isn't (historial).
+  // Mutually exclusive by construction, both derived from the one
+  // /my-work fetch already being made — no new API call.
   const today = new Date().toDateString();
   const completedToday = workOrders.filter(
     (wo) =>
@@ -39,6 +45,22 @@ export default function MyWorkPage() {
       wo.resolvedAt &&
       new Date(wo.resolvedAt).toDateString() === today,
   );
+  // WO-ARGOS-050 — "Historial": RESOLVED WorkOrders from before today,
+  // newest first, so a technician can still reach yesterday's (or older)
+  // completed work once it ages out of "Completadas hoy". Named
+  // deliberately smaller than a full history feature per the work order's
+  // own scope: no search, no pagination, no filters yet.
+  const historial = workOrders
+    .filter(
+      (wo) =>
+        wo.status === 'RESOLVED' &&
+        wo.resolvedAt &&
+        new Date(wo.resolvedAt).toDateString() !== today,
+    )
+    .sort(
+      (a, b) =>
+        new Date(b.resolvedAt!).getTime() - new Date(a.resolvedAt!).getTime(),
+    );
   const activeCount = inProgress.length + assigned.length;
   const avgResolutionMinutes = averageResolutionMinutes(
     workOrders.filter((wo) => wo.status === 'RESOLVED'),
@@ -97,6 +119,11 @@ export default function MyWorkPage() {
             title="Completadas hoy"
             rows={completedToday}
             emptyLabel="Todavía no has completado ninguna tarea hoy."
+          />
+          <WorkOrderSection
+            title="Historial"
+            rows={historial}
+            emptyLabel="Todavía no tienes tareas completadas de días anteriores."
           />
         </div>
       )}
