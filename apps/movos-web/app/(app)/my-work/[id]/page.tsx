@@ -8,6 +8,7 @@ import { ArrowLeft } from 'lucide-react';
 import type {
   ApiChargingStation,
   ApiWorkOrder,
+  ApiWorkOrderAttachment,
   ApiWorkOrderEvent,
   ChecklistEventType,
   MyWorkTransition,
@@ -27,8 +28,14 @@ import {
   WorkOrderPriorityBadge,
 } from '@/components/work-orders/work-order-badges';
 import { WorkOrderEventTimeline } from '@/components/work-orders/work-order-event-timeline';
+import { WorkOrderTimelineSummary } from '@/components/work-orders/work-order-timeline-summary';
+import { WorkOrderVisitLocation } from '@/components/work-orders/work-order-visit-location';
+import { WorkOrderAttachmentGallery } from '@/components/work-orders/work-order-attachment-gallery';
+import { WorkOrderEvidenceCapture } from '@/components/work-orders/work-order-evidence-capture';
 import { apiClient, ApiError } from '@/lib/api-client';
-import { formatRelative } from '@/lib/format';
+import { formatRelative, formatWorkOrderDateTime } from '@/lib/format';
+
+const RESOLUTION_SUMMARY_MIN_LENGTH = 20;
 
 type LoadState = 'loading' | 'ready' | 'notfound' | 'error';
 
@@ -51,6 +58,9 @@ export default function MyWorkDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [workOrder, setWorkOrder] = React.useState<ApiWorkOrder | null>(null);
   const [events, setEvents] = React.useState<ApiWorkOrderEvent[]>([]);
+  const [attachments, setAttachments] = React.useState<
+    ApiWorkOrderAttachment[]
+  >([]);
   const [station, setStation] = React.useState<ApiChargingStation | null>(null);
   const [state, setState] = React.useState<LoadState>('loading');
   const [pending, setPending] = React.useState(false);
@@ -62,13 +72,17 @@ export default function MyWorkDetailPage() {
     try {
       const wo = await apiClient.get<ApiWorkOrder>(`/my-work/${id}`);
       setWorkOrder(wo);
-      const [evts, stationDetail] = await Promise.all([
+      const [evts, atts, stationDetail] = await Promise.all([
         apiClient.get<ApiWorkOrderEvent[]>(`/my-work/${id}/events`),
+        apiClient
+          .get<ApiWorkOrderAttachment[]>(`/my-work/${id}/attachments`)
+          .catch(() => []),
         apiClient
           .get<ApiChargingStation>(`/charging-stations/${wo.stationId}`)
           .catch(() => null),
       ]);
       setEvents(evts);
+      setAttachments(atts);
       setStation(stationDetail);
       setState('ready');
     } catch (err) {
@@ -175,6 +189,12 @@ export default function MyWorkDetailPage() {
               {workOrder.assignedAt &&
                 ` · Asignada ${formatRelative(workOrder.assignedAt)}`}
             </p>
+            {workOrder.scheduledAt && (
+              <p className="text-muted-foreground mt-1 text-xs">
+                Visita programada:{' '}
+                {formatWorkOrderDateTime(workOrder.scheduledAt)}
+              </p>
+            )}
           </CardContent>
         </Card>
 
@@ -183,23 +203,14 @@ export default function MyWorkDetailPage() {
             <CardTitle>Dónde</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
-            {station ? (
-              <>
-                <div className="flex flex-wrap gap-2">
-                  <ApiConnectivityStatusBadge
-                    status={station.connectivityStatus}
-                  />
-                  <ApiChargingStationStatusBadge status={station.status} />
-                </div>
-                <p className="text-muted-foreground text-xs">
-                  {station.manufacturer ?? 'Fabricante desconocido'}
-                  {station.model ? ` · ${station.model}` : ''}
-                </p>
-              </>
-            ) : (
-              <p className="text-muted-foreground">
-                No se pudo cargar la estación.
-              </p>
+            <WorkOrderVisitLocation location={workOrder.visitLocation} />
+            {station && (
+              <div className="flex flex-wrap gap-2">
+                <ApiConnectivityStatusBadge
+                  status={station.connectivityStatus}
+                />
+                <ApiChargingStationStatusBadge status={station.status} />
+              </div>
             )}
           </CardContent>
         </Card>
@@ -234,28 +245,49 @@ export default function MyWorkDetailPage() {
           )}
 
           {resolving && (
-            <div className="flex flex-wrap items-center gap-2">
-              <Input
-                placeholder="Nota de resolución…"
-                value={resolveNote}
-                onChange={(e) => setResolveNote(e.target.value)}
-                className="h-8 flex-1 text-xs"
-              />
-              <Button
-                size="sm"
-                disabled={pending || resolveNote.trim().length === 0}
-                onClick={() => void transition('resolve', resolveNote)}
-              >
-                Confirmar resolución
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={pending}
-                onClick={() => setResolving(false)}
-              >
-                Cancelar
-              </Button>
+            <div className="space-y-1.5">
+              <div>
+                <label className="text-xs font-medium">
+                  Resumen de resolución
+                </label>
+                <p className="text-muted-foreground text-[11px]">
+                  Describe brevemente qué se encontró, qué se hizo y el
+                  resultado final.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  placeholder="Resumen de resolución…"
+                  value={resolveNote}
+                  onChange={(e) => setResolveNote(e.target.value)}
+                  className="h-8 flex-1 text-xs"
+                />
+                <Button
+                  size="sm"
+                  disabled={
+                    pending ||
+                    resolveNote.trim().length < RESOLUTION_SUMMARY_MIN_LENGTH
+                  }
+                  onClick={() => void transition('resolve', resolveNote)}
+                >
+                  Confirmar resolución
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={pending}
+                  onClick={() => setResolving(false)}
+                >
+                  Cancelar
+                </Button>
+              </div>
+              {resolveNote.trim().length > 0 &&
+                resolveNote.trim().length < RESOLUTION_SUMMARY_MIN_LENGTH && (
+                  <p className="text-[11px] text-amber-500">
+                    Cuéntanos un poco más — mínimo{' '}
+                    {RESOLUTION_SUMMARY_MIN_LENGTH} caracteres.
+                  </p>
+                )}
             </div>
           )}
 
@@ -271,22 +303,52 @@ export default function MyWorkDetailPage() {
         <ChecklistCard
           workOrderId={id}
           completedStages={completedStages}
+          events={events}
           onRecorded={load}
         />
       )}
+
+      {workOrder.status === 'RESOLVED' && workOrder.notes && (
+        <Card className="mt-4">
+          <CardHeader>
+            <CardTitle>Resumen de resolución</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="border-border bg-accent/20 rounded-lg border px-3 py-2 text-sm">
+              {workOrder.notes}
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card className="mt-4">
+        <CardHeader>
+          <CardTitle>Evidencia</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {!isTerminal && (
+            <WorkOrderEvidenceCapture workOrderId={id} onUploaded={load} />
+          )}
+          <WorkOrderAttachmentGallery
+            workOrderId={id}
+            surface="my-work"
+            attachments={attachments}
+          />
+        </CardContent>
+      </Card>
 
       <Card className="mt-4">
         <CardHeader>
           <CardTitle>Notas</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
-          {workOrder.notes ? (
+          {workOrder.status !== 'RESOLVED' && workOrder.notes ? (
             <p className="border-border rounded-lg border px-3 py-2">
               {workOrder.notes}
             </p>
-          ) : (
+          ) : workOrder.status !== 'RESOLVED' ? (
             <p className="text-muted-foreground">Sin notas todavía.</p>
-          )}
+          ) : null}
           {!isTerminal && (
             <div className="flex flex-wrap items-center gap-2">
               <Input
@@ -308,6 +370,8 @@ export default function MyWorkDetailPage() {
         </CardContent>
       </Card>
 
+      <WorkOrderTimelineSummary workOrder={workOrder} events={events} />
+
       <Card className="mt-4">
         <CardHeader>
           <CardTitle>Línea de tiempo</CardTitle>
@@ -323,10 +387,12 @@ export default function MyWorkDetailPage() {
 function ChecklistCard({
   workOrderId,
   completedStages,
+  events,
   onRecorded,
 }: {
   workOrderId: string;
   completedStages: Set<ChecklistEventType>;
+  events: ApiWorkOrderEvent[];
   onRecorded: () => Promise<void>;
 }) {
   const [activeStage, setActiveStage] =
@@ -371,11 +437,11 @@ function ChecklistCard({
       </CardHeader>
       <CardContent className="space-y-2 text-sm">
         <p className="text-muted-foreground text-xs">
-          Opcional — evidencia de cada etapa. La evidencia fotográfica no está
-          disponible todavía: MOVOS no tiene almacenamiento de archivos.
+          Opcional — evidencia de cada etapa, incluida foto o video.
         </p>
         {CHECKLIST_STAGES.map((stage) => {
           const done = completedStages.has(stage.type);
+          const stageEvent = events.find((e) => e.type === stage.type);
           return (
             <div
               key={stage.type}
@@ -406,6 +472,15 @@ function ChecklistCard({
                   <span className="text-movos-blue text-xs">Completado</span>
                 )}
               </div>
+              {done && stageEvent && (
+                <div className="mt-2">
+                  <WorkOrderEvidenceCapture
+                    workOrderId={workOrderId}
+                    eventId={stageEvent.id}
+                    onUploaded={onRecorded}
+                  />
+                </div>
+              )}
               {activeStage === stage.type &&
                 stage.type !== 'ARRIVAL_CONFIRMED' && (
                   <div className="mt-2 flex flex-wrap items-center gap-2">

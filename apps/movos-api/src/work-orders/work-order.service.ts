@@ -14,14 +14,45 @@ import type {
 import type { WorkOrderTransition } from '@mediafox/shared-types';
 
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  WorkOrderAttachmentService,
+  type WorkOrderAttachmentWithUploader,
+} from './work-order-attachment.service';
 
-const WORK_ORDER_WITH_NAMES_INCLUDE = {
-  station: { select: { name: true } },
+// WO-ARGOS-049 — station.site is joined here (not a separate query) purely
+// to derive ApiWorkOrder.visitLocation at presenter time. Site already
+// carries every location field this needs — no new column on WorkOrder or
+// ChargingStation. Exported so MyWorkService reuses this exact shape rather
+// than maintaining a second, driftable copy.
+export const WORK_ORDER_WITH_NAMES_INCLUDE = {
+  station: {
+    select: {
+      name: true,
+      site: {
+        select: {
+          name: true,
+          formattedAddress: true,
+          address: true,
+          latitude: true,
+          longitude: true,
+        },
+      },
+    },
+  },
   assignedMember: { select: { displayName: true } },
 } as const;
 
 export type WorkOrderWithNames = WorkOrder & {
-  station: { name: string };
+  station: {
+    name: string;
+    site: {
+      name: string;
+      formattedAddress: string | null;
+      address: string;
+      latitude: number | null;
+      longitude: number | null;
+    };
+  };
   assignedMember: { displayName: string } | null;
 };
 
@@ -70,7 +101,16 @@ export interface CreateWorkOrderInput {
    * here as: automated events simply have no human actor, rather than a
    * synthetic system User row. */
   actorId: string | null;
+  /** WO-ARGOS-049 — optional planned field visit. */
+  scheduledAt?: Date | null;
 }
+
+// A resolution note this short ("OK", "listo") passed twice in the real
+// pilot (PILOT-WO-01/02) despite richer checklist content already on the
+// record — see docs/pilot/PILOT_WO_01_EVIDENCE.md. This closes exactly that
+// gap: reliably rejects a near-empty closure without becoming a word-count
+// requirement or a structured form.
+const RESOLUTION_SUMMARY_MIN_LENGTH = 20;
 
 /**
  * Work Order V1 (WO-ARGOS-035). Owns the one write path onto `WorkOrder` —
@@ -82,7 +122,10 @@ export interface CreateWorkOrderInput {
  */
 @Injectable()
 export class WorkOrderService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly attachments: WorkOrderAttachmentService,
+  ) {}
 
   async list(
     organizationId: string,
@@ -123,6 +166,27 @@ export class WorkOrderService {
       include: WORK_ORDER_EVENT_WITH_ACTOR_INCLUDE,
       orderBy: { createdAt: 'asc' },
     });
+  }
+
+  // WO-ARGOS-049 — operator-side field evidence, read-only. Uploading is
+  // technician-only (MyWorkController) — an operator only ever views what a
+  // technician already attached, matching the mobile-first design this
+  // capability was scoped around.
+  async listAttachments(
+    organizationId: string,
+    workOrderId: string,
+  ): Promise<WorkOrderAttachmentWithUploader[]> {
+    await this.getById(organizationId, workOrderId);
+    return this.attachments.list(workOrderId);
+  }
+
+  async getAttachment(
+    organizationId: string,
+    workOrderId: string,
+    attachmentId: string,
+  ): Promise<WorkOrderAttachmentWithUploader> {
+    await this.getById(organizationId, workOrderId);
+    return this.attachments.getOne(workOrderId, attachmentId);
   }
 
   /**
@@ -172,6 +236,7 @@ export class WorkOrderService {
         priority: input.priority,
         source: input.source,
         status: 'OPEN',
+        scheduledAt: input.scheduledAt ?? null,
       },
       include: WORK_ORDER_WITH_NAMES_INCLUDE,
     });
@@ -210,8 +275,17 @@ export class WorkOrderService {
     ) {
       throw new BadRequestException(
         input.transition === 'resolve'
-          ? 'Se requiere una nota de resolución.'
+          ? 'Se requiere un resumen de resolución.'
           : 'Se requiere un motivo para cancelar.',
+      );
+    }
+    if (
+      input.transition === 'resolve' &&
+      input.comment &&
+      input.comment.trim().length < RESOLUTION_SUMMARY_MIN_LENGTH
+    ) {
+      throw new BadRequestException(
+        `El resumen de resolución debe tener al menos ${RESOLUTION_SUMMARY_MIN_LENGTH} caracteres — describe brevemente qué se encontró, qué se hizo y el resultado final.`,
       );
     }
     if (input.transition === 'comment' && !input.comment) {
@@ -219,6 +293,48 @@ export class WorkOrderService {
     }
 
     return this.applyTransition(workOrder, input);
+  }
+
+  /**
+   * WO-ARGOS-049 — sets or clears the planned visit. Deliberately not a
+   * WorkOrderTransition: scheduling never touches WorkOrderStatus and must
+   * stay usable at any point before the WorkOrder closes, independent of
+   * VALID_TRANSITIONS. Logs a SCHEDULED event for actor/timestamp
+   * attribution in the timeline — the same append-only discipline every
+   * other real change to this WorkOrder already follows.
+   */
+  async schedule(
+    organizationId: string,
+    id: string,
+    scheduledAt: Date | null,
+    actorId: string,
+  ): Promise<WorkOrderWithNames> {
+    const workOrder = await this.prisma.workOrder.findFirst({
+      where: { id, organizationId },
+    });
+    if (!workOrder) {
+      throw new NotFoundException('Orden de trabajo no encontrada.');
+    }
+    if (workOrder.status === 'RESOLVED' || workOrder.status === 'CANCELLED') {
+      throw new BadRequestException(
+        'No se puede programar una visita en una orden de trabajo cerrada.',
+      );
+    }
+
+    const updated = await this.prisma.workOrder.update({
+      where: { id: workOrder.id },
+      data: { scheduledAt },
+      include: WORK_ORDER_WITH_NAMES_INCLUDE,
+    });
+    await this.prisma.workOrderEvent.create({
+      data: {
+        workOrderId: workOrder.id,
+        type: 'SCHEDULED',
+        actorId,
+        payload: { scheduledAt: scheduledAt?.toISOString() ?? null },
+      },
+    });
+    return updated;
   }
 
   private assertValidTransition(

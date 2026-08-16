@@ -15,6 +15,7 @@ import { WorkOrderService } from './work-order.service';
 import { CreateWorkOrderDto } from './dto/create-work-order.dto';
 import { TransitionWorkOrderDto } from './dto/transition-work-order.dto';
 import { ListWorkOrdersQueryDto } from './dto/list-work-orders-query.dto';
+import { SetWorkOrderScheduleDto } from './dto/set-work-order-schedule.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { OrgContextGuard } from '../guards/org-context.guard';
 import { RolesGuard } from '../guards/roles.guard';
@@ -26,6 +27,7 @@ import {
   toApiAssignableTechnician,
   toApiWorkOrder,
   toApiWorkOrderEvent,
+  toApiWorkOrderAttachment,
 } from '../auth/presenters';
 
 // WO-ARGOS-037 — every pre-existing role kept exactly the access it already
@@ -128,6 +130,7 @@ export class WorkOrderController {
       source: dto.source,
       stationId: dto.stationId,
       actorId: user.id,
+      scheduledAt: dto.scheduledAt ? new Date(dto.scheduledAt) : null,
     });
     return toApiWorkOrder(workOrder);
   }
@@ -152,5 +155,61 @@ export class WorkOrderController {
       },
     );
     return toApiWorkOrder(workOrder);
+  }
+
+  // WO-ARGOS-049 — deliberately separate from `transition()`: setting a
+  // planned visit is not a WorkOrderStatus change and must not be forced
+  // through TransitionWorkOrderDto/the state machine.
+  @Patch(':id/schedule')
+  @Roles(...OPERATOR_FACING_ROLES)
+  @ApiOperation({ summary: "Set or clear a work order's planned visit" })
+  async schedule(
+    @OrgContext() membership: Membership,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() dto: SetWorkOrderScheduleDto,
+  ) {
+    const workOrder = await this.workOrders.schedule(
+      membership.organizationId,
+      id,
+      dto.scheduledAt ? new Date(dto.scheduledAt) : null,
+      user.id,
+    );
+    return toApiWorkOrder(workOrder);
+  }
+
+  // WO-ARGOS-049 — field evidence, read-only from the operator surface.
+  // Uploading is technician-only (MyWorkController).
+  @Get(':id/attachments')
+  @Roles(...OPERATOR_FACING_ROLES)
+  @ApiOperation({ summary: 'List field evidence attached to a work order' })
+  async listAttachments(
+    @OrgContext() membership: Membership,
+    @Param('id') id: string,
+  ) {
+    const attachments = await this.workOrders.listAttachments(
+      membership.organizationId,
+      id,
+    );
+    return attachments.map(toApiWorkOrderAttachment);
+  }
+
+  @Get(':id/attachments/:attachmentId')
+  @Roles(...OPERATOR_FACING_ROLES)
+  @ApiOperation({
+    summary:
+      'Get one attachment (used by movos-web to authorize a private view URL)',
+  })
+  async getAttachment(
+    @OrgContext() membership: Membership,
+    @Param('id') id: string,
+    @Param('attachmentId') attachmentId: string,
+  ) {
+    const attachment = await this.workOrders.getAttachment(
+      membership.organizationId,
+      id,
+      attachmentId,
+    );
+    return toApiWorkOrderAttachment(attachment);
   }
 }

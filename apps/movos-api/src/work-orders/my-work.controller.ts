@@ -15,12 +15,18 @@ import { MyWorkService } from './my-work.service';
 import { TransitionMyWorkDto } from './dto/transition-my-work.dto';
 import { RecordChecklistEventDto } from './dto/record-checklist-event.dto';
 import { ListWorkOrdersQueryDto } from './dto/list-work-orders-query.dto';
+import { AuthorizeAttachmentUploadDto } from './dto/authorize-attachment-upload.dto';
+import { CreateWorkOrderAttachmentDto } from './dto/create-work-order-attachment.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { OrgContextGuard } from '../guards/org-context.guard';
 import { OrgContext } from '../common/decorators/org-context.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../common/request-context';
-import { toApiWorkOrder, toApiWorkOrderEvent } from '../auth/presenters';
+import {
+  toApiWorkOrder,
+  toApiWorkOrderEvent,
+  toApiWorkOrderAttachment,
+} from '../auth/presenters';
 
 /**
  * Technician Identity & My Work (WO-ARGOS-037). The complete backend
@@ -127,5 +133,82 @@ export class MyWorkController {
       dto,
     );
     return toApiWorkOrderEvent(event);
+  }
+
+  // WO-ARGOS-049 — field evidence. Called by movos-web's own upload route,
+  // server-to-server, forwarding the technician's own Bearer token before
+  // it mints a Blob client upload token — this is the one place upload
+  // authorization is actually decided; movos-web trusts nothing else.
+  @Post(':id/attachments/authorize-upload')
+  @ApiOperation({
+    summary: 'Authorize an evidence upload before a Blob token is minted',
+  })
+  async authorizeAttachmentUpload(
+    @OrgContext() membership: Membership,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() dto: AuthorizeAttachmentUploadDto,
+  ) {
+    await this.myWork.authorizeAttachmentUpload(
+      membership.organizationId,
+      user.id,
+      id,
+      dto,
+    );
+    return { authorized: true };
+  }
+
+  @Post(':id/attachments')
+  @ApiOperation({
+    summary: 'Persist evidence metadata after a direct-to-Blob upload',
+  })
+  async createAttachment(
+    @OrgContext() membership: Membership,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() dto: CreateWorkOrderAttachmentDto,
+  ) {
+    const attachment = await this.myWork.createAttachment(
+      membership.organizationId,
+      user.id,
+      id,
+      dto,
+    );
+    return toApiWorkOrderAttachment(attachment);
+  }
+
+  @Get(':id/attachments')
+  @ApiOperation({ summary: 'List evidence attached to an assigned work order' })
+  async listAttachments(
+    @OrgContext() membership: Membership,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+  ) {
+    const attachments = await this.myWork.listAttachments(
+      membership.organizationId,
+      user.id,
+      id,
+    );
+    return attachments.map(toApiWorkOrderAttachment);
+  }
+
+  @Get(':id/attachments/:attachmentId')
+  @ApiOperation({
+    summary:
+      'Get one attachment (used by movos-web to authorize a private view URL)',
+  })
+  async getAttachment(
+    @OrgContext() membership: Membership,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Param('attachmentId') attachmentId: string,
+  ) {
+    const attachment = await this.myWork.getAttachment(
+      membership.organizationId,
+      user.id,
+      id,
+      attachmentId,
+    );
+    return toApiWorkOrderAttachment(attachment);
   }
 }

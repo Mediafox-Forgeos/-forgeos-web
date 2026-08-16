@@ -9,6 +9,7 @@ import type {
   ApiAssignableTechnician,
   ApiChargingStation,
   ApiWorkOrder,
+  ApiWorkOrderAttachment,
   ApiWorkOrderEvent,
   WorkOrderTransition,
 } from '@mediafox/shared-types';
@@ -31,9 +32,14 @@ import {
   WORK_ORDER_EVENT_LABEL,
   WorkOrderEventTimeline,
 } from '@/components/work-orders/work-order-event-timeline';
+import { WorkOrderTimelineSummary } from '@/components/work-orders/work-order-timeline-summary';
+import { WorkOrderVisitLocation } from '@/components/work-orders/work-order-visit-location';
+import { WorkOrderAttachmentGallery } from '@/components/work-orders/work-order-attachment-gallery';
 import { apiClient, ApiError } from '@/lib/api-client';
 import { useAuth } from '@/context/auth-context';
-import { formatDateTime } from '@/lib/format';
+import { formatDateTime, formatWorkOrderDateTime } from '@/lib/format';
+
+const RESOLUTION_SUMMARY_MIN_LENGTH = 20;
 
 type LoadState = 'loading' | 'ready' | 'notfound' | 'error';
 
@@ -56,6 +62,9 @@ export default function WorkOrderDetailPage() {
   const { currentUser } = useAuth();
   const [workOrder, setWorkOrder] = React.useState<ApiWorkOrder | null>(null);
   const [events, setEvents] = React.useState<ApiWorkOrderEvent[]>([]);
+  const [attachments, setAttachments] = React.useState<
+    ApiWorkOrderAttachment[]
+  >([]);
   const [station, setStation] = React.useState<ApiChargingStation | null>(null);
   const [technicians, setTechnicians] = React.useState<
     ApiAssignableTechnician[]
@@ -68,21 +77,30 @@ export default function WorkOrderDetailPage() {
     null,
   );
   const [closeNote, setCloseNote] = React.useState('');
+  const [editingSchedule, setEditingSchedule] = React.useState(false);
+  const [scheduleDraft, setScheduleDraft] = React.useState('');
 
   const load = React.useCallback(async () => {
     try {
       const wo = await apiClient.get<ApiWorkOrder>(`/work-orders/${id}`);
       setWorkOrder(wo);
-      const [evts, stationDetail, eligibleTechnicians] = await Promise.all([
-        apiClient.get<ApiWorkOrderEvent[]>(`/work-orders/${id}/events`),
-        apiClient
-          .get<ApiChargingStation>(`/charging-stations/${wo.stationId}`)
-          .catch(() => null),
-        apiClient
-          .get<ApiAssignableTechnician[]>('/work-orders/assignable-technicians')
-          .catch(() => []),
-      ]);
+      const [evts, atts, stationDetail, eligibleTechnicians] =
+        await Promise.all([
+          apiClient.get<ApiWorkOrderEvent[]>(`/work-orders/${id}/events`),
+          apiClient
+            .get<ApiWorkOrderAttachment[]>(`/work-orders/${id}/attachments`)
+            .catch(() => []),
+          apiClient
+            .get<ApiChargingStation>(`/charging-stations/${wo.stationId}`)
+            .catch(() => null),
+          apiClient
+            .get<ApiAssignableTechnician[]>(
+              '/work-orders/assignable-technicians',
+            )
+            .catch(() => []),
+        ]);
       setEvents(evts);
+      setAttachments(atts);
       setStation(stationDetail);
       setTechnicians(eligibleTechnicians);
       setState('ready');
@@ -96,6 +114,21 @@ export default function WorkOrderDetailPage() {
   React.useEffect(() => {
     void load();
   }, [load]);
+
+  async function saveSchedule(): Promise<void> {
+    setPending(true);
+    try {
+      await apiClient.patch(`/work-orders/${id}/schedule`, {
+        scheduledAt: scheduleDraft
+          ? new Date(scheduleDraft).toISOString()
+          : null,
+      });
+      setEditingSchedule(false);
+      await load();
+    } finally {
+      setPending(false);
+    }
+  }
 
   async function send(
     transition: WorkOrderTransition,
@@ -205,10 +238,11 @@ export default function WorkOrderDetailPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Estación</CardTitle>
+            <CardTitle>Dónde</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            {station ? (
+          <CardContent className="space-y-3 text-sm">
+            <WorkOrderVisitLocation location={workOrder.visitLocation} />
+            {station && (
               <>
                 <div className="flex flex-wrap gap-2">
                   <ApiConnectivityStatusBadge
@@ -216,10 +250,6 @@ export default function WorkOrderDetailPage() {
                   />
                   <ApiChargingStationStatusBadge status={station.status} />
                 </div>
-                <p className="text-muted-foreground text-xs">
-                  {station.manufacturer ?? 'Fabricante desconocido'}
-                  {station.model ? ` · ${station.model}` : ''}
-                </p>
                 <Link
                   href={`/sites/${station.siteId}/charging-stations/${station.id}`}
                   className="text-movos-blue text-xs hover:underline"
@@ -227,14 +257,69 @@ export default function WorkOrderDetailPage() {
                   Ver estación →
                 </Link>
               </>
-            ) : (
-              <p className="text-muted-foreground">
-                No se pudo cargar la estación.
-              </p>
             )}
           </CardContent>
         </Card>
       </div>
+
+      <Card className="mt-4">
+        <CardHeader>
+          <CardTitle>Visita programada</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm">
+          {!editingSchedule && (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p>
+                {workOrder.scheduledAt
+                  ? formatWorkOrderDateTime(workOrder.scheduledAt)
+                  : 'Sin programar'}
+              </p>
+              {!isTerminal && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={pending}
+                  onClick={() => {
+                    setScheduleDraft(
+                      workOrder.scheduledAt
+                        ? workOrder.scheduledAt.slice(0, 16)
+                        : '',
+                    );
+                    setEditingSchedule(true);
+                  }}
+                >
+                  {workOrder.scheduledAt ? 'Editar' : 'Programar visita'}
+                </Button>
+              )}
+            </div>
+          )}
+          {editingSchedule && (
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="datetime-local"
+                value={scheduleDraft}
+                onChange={(e) => setScheduleDraft(e.target.value)}
+                className="border-border bg-accent/40 h-8 rounded-md border px-2 text-xs"
+              />
+              <Button
+                size="sm"
+                disabled={pending}
+                onClick={() => void saveSchedule()}
+              >
+                Guardar
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={pending}
+                onClick={() => setEditingSchedule(false)}
+              >
+                Cancelar
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card className="mt-4">
         <CardHeader>
@@ -323,49 +408,88 @@ export default function WorkOrderDetailPage() {
           )}
 
           {closeMode && (
-            <div className="flex flex-wrap items-center gap-2">
-              <Input
-                placeholder={
-                  closeMode === 'resolve'
-                    ? 'Nota de resolución…'
-                    : 'Motivo de cancelación…'
-                }
-                value={closeNote}
-                onChange={(e) => setCloseNote(e.target.value)}
-                className="h-8 flex-1 text-xs"
-              />
-              <Button
-                size="sm"
-                disabled={pending || closeNote.trim().length === 0}
-                onClick={() => void send(closeMode, { comment: closeNote })}
-              >
-                Confirmar
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={pending}
-                onClick={() => setCloseMode(null)}
-              >
-                Cancelar
-              </Button>
+            <div className="space-y-1.5">
+              {closeMode === 'resolve' && (
+                <div>
+                  <label className="text-xs font-medium">
+                    Resumen de resolución
+                  </label>
+                  <p className="text-muted-foreground text-[11px]">
+                    Describe brevemente qué se encontró, qué se hizo y el
+                    resultado final.
+                  </p>
+                </div>
+              )}
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  placeholder={
+                    closeMode === 'resolve'
+                      ? 'Resumen de resolución…'
+                      : 'Motivo de cancelación…'
+                  }
+                  value={closeNote}
+                  onChange={(e) => setCloseNote(e.target.value)}
+                  className="h-8 flex-1 text-xs"
+                />
+                <Button
+                  size="sm"
+                  disabled={
+                    pending ||
+                    (closeMode === 'resolve'
+                      ? closeNote.trim().length < RESOLUTION_SUMMARY_MIN_LENGTH
+                      : closeNote.trim().length === 0)
+                  }
+                  onClick={() => void send(closeMode, { comment: closeNote })}
+                >
+                  Confirmar
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={pending}
+                  onClick={() => setCloseMode(null)}
+                >
+                  Cancelar
+                </Button>
+              </div>
+              {closeMode === 'resolve' &&
+                closeNote.trim().length > 0 &&
+                closeNote.trim().length < RESOLUTION_SUMMARY_MIN_LENGTH && (
+                  <p className="text-[11px] text-amber-500">
+                    Cuéntanos un poco más — mínimo{' '}
+                    {RESOLUTION_SUMMARY_MIN_LENGTH} caracteres.
+                  </p>
+                )}
             </div>
           )}
         </CardContent>
       </Card>
+
+      {workOrder.status === 'RESOLVED' && workOrder.notes && (
+        <Card className="mt-4">
+          <CardHeader>
+            <CardTitle>Resumen de resolución</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="border-border bg-accent/20 rounded-lg border px-3 py-2 text-sm">
+              {workOrder.notes}
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="mt-4">
         <CardHeader>
           <CardTitle>Notas</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
-          {workOrder.notes ? (
+          {workOrder.status !== 'RESOLVED' && workOrder.notes ? (
             <p className="border-border rounded-lg border px-3 py-2">
               {workOrder.notes}
             </p>
-          ) : (
+          ) : workOrder.status !== 'RESOLVED' ? (
             <p className="text-muted-foreground">Sin notas todavía.</p>
-          )}
+          ) : null}
           {!isTerminal && (
             <div className="flex flex-wrap items-center gap-2">
               <Input
@@ -386,6 +510,21 @@ export default function WorkOrderDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      <Card className="mt-4">
+        <CardHeader>
+          <CardTitle>Evidencia</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <WorkOrderAttachmentGallery
+            workOrderId={id}
+            surface="work-orders"
+            attachments={attachments}
+          />
+        </CardContent>
+      </Card>
+
+      <WorkOrderTimelineSummary workOrder={workOrder} events={events} />
 
       <Card className="mt-4">
         <CardHeader>

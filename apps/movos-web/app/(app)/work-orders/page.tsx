@@ -166,6 +166,7 @@ function CreateWorkOrderForm({
   const [description, setDescription] = React.useState('');
   const [priority, setPriority] = React.useState('MEDIUM');
   const [stationId, setStationId] = React.useState('');
+  const [scheduledAt, setScheduledAt] = React.useState('');
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -183,6 +184,11 @@ function CreateWorkOrderForm({
         priority,
         source: 'MANUAL',
         stationId,
+        // datetime-local has no timezone — interpreted as America/Bogota,
+        // this pilot's fixed display timezone (see src/lib/format.ts).
+        ...(scheduledAt
+          ? { scheduledAt: new Date(scheduledAt).toISOString() }
+          : {}),
       });
       onCreated(created.id);
     } catch {
@@ -229,6 +235,17 @@ function CreateWorkOrderForm({
               </option>
             ))}
           </select>
+        </div>
+        <div>
+          <label className="text-muted-foreground mb-1 block text-xs">
+            Visita programada (opcional)
+          </label>
+          <input
+            type="datetime-local"
+            value={scheduledAt}
+            onChange={(e) => setScheduledAt(e.target.value)}
+            className="border-border bg-accent/40 h-9 rounded-lg border px-3 text-sm"
+          />
         </div>
         {error && <p className="text-xs text-red-400">{error}</p>}
         <div className="flex gap-2">

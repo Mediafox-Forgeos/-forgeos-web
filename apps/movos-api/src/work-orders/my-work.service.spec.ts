@@ -3,6 +3,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 
 import { MyWorkService } from './my-work.service';
 import { WorkOrderService } from './work-order.service';
+import { WorkOrderAttachmentService } from './work-order-attachment.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 type PrismaMock = {
@@ -42,7 +43,17 @@ function workOrderRow(overrides: Record<string, unknown> = {}) {
     notes: null,
     createdAt: new Date(),
     updatedAt: new Date(),
-    station: { name: 'Station 1' },
+    scheduledAt: null,
+    station: {
+      name: 'Station 1',
+      site: {
+        name: 'Site 1',
+        formattedAddress: 'Calle 1, Cali',
+        address: 'Calle 1',
+        latitude: 3.45,
+        longitude: -76.53,
+      },
+    },
     assignedMember: { displayName: 'Tech One' },
     ...overrides,
   };
@@ -58,6 +69,7 @@ describe('MyWorkService', () => {
       providers: [
         MyWorkService,
         WorkOrderService,
+        WorkOrderAttachmentService,
         { provide: PrismaService, useValue: prisma },
       ],
     }).compile();

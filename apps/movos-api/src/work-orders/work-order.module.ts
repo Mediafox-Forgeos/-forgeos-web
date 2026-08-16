@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { WorkOrderService } from './work-order.service';
 import { WorkOrderController } from './work-order.controller';
 import { WorkOrderAutomationService } from './work-order-automation.service';
+import { WorkOrderAttachmentService } from './work-order-attachment.service';
 import { MyWorkService } from './my-work.service';
 import { MyWorkController } from './my-work.controller';
 import { OrgContextGuard } from '../guards/org-context.guard';
@@ -24,6 +25,7 @@ import { RolesGuard } from '../guards/roles.guard';
   providers: [
     WorkOrderService,
     WorkOrderAutomationService,
+    WorkOrderAttachmentService,
     MyWorkService,
     OrgContextGuard,
     RolesGuard,

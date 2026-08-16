@@ -26,6 +26,7 @@ import type {
   ApiWorkOrder,
   ApiWorkOrderEvent,
   ApiAssignableTechnician,
+  ApiWorkOrderAttachment,
 } from '@mediafox/shared-types';
 import type { ChargingSessionWithNames } from '../sessions/sessions.service';
 import type { ActionWithNames } from '../recommendations/action.service';
@@ -34,6 +35,7 @@ import type {
   WorkOrderEventWithActor,
   AssignableTechnician,
 } from '../work-orders/work-order.service';
+import type { WorkOrderAttachmentWithUploader } from '../work-orders/work-order-attachment.service';
 
 /**
  * Explicit projections from Prisma models to public API contracts. These are
@@ -269,10 +271,45 @@ export function toApiWorkOrder(workOrder: WorkOrderWithNames): ApiWorkOrder {
     assignedMemberName: workOrder.assignedMember?.displayName ?? null,
     assignedAt: workOrder.assignedAt?.toISOString() ?? null,
     startedAt: workOrder.startedAt?.toISOString() ?? null,
+    scheduledAt: workOrder.scheduledAt?.toISOString() ?? null,
     resolvedAt: workOrder.resolvedAt?.toISOString() ?? null,
     notes: workOrder.notes,
     createdAt: workOrder.createdAt.toISOString(),
     updatedAt: workOrder.updatedAt.toISOString(),
+    // WO-ARGOS-049 — derived, never stored: WorkOrder -> ChargingStation ->
+    // Site is the one source of truth for location, per the field-hardening
+    // design's explicit decision not to add a redundant override field.
+    visitLocation: {
+      siteName: workOrder.station.site.name,
+      stationName: workOrder.station.name,
+      formattedAddress:
+        workOrder.station.site.formattedAddress ??
+        workOrder.station.site.address,
+      latitude: workOrder.station.site.latitude,
+      longitude: workOrder.station.site.longitude,
+    },
+  };
+}
+
+// WO-ARGOS-049 — field evidence metadata. storagePath is the opaque Blob
+// pathname, included for authorized viewers only (this presenter is never
+// reached by an unauthorized caller) — it grants no access on its own
+// against a private store; only movos-web's own signed-URL minting does.
+export function toApiWorkOrderAttachment(
+  attachment: WorkOrderAttachmentWithUploader,
+): ApiWorkOrderAttachment {
+  return {
+    id: attachment.id,
+    workOrderId: attachment.workOrderId,
+    eventId: attachment.eventId,
+    kind: attachment.kind,
+    mimeType: attachment.mimeType,
+    originalFilename: attachment.originalFilename,
+    fileSizeBytes: attachment.fileSizeBytes,
+    uploadedById: attachment.uploadedById,
+    uploadedByName: attachment.uploadedBy.displayName,
+    createdAt: attachment.createdAt.toISOString(),
+    storagePath: attachment.storagePath,
   };
 }
 
