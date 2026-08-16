@@ -4,14 +4,14 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { WorkOrderAttachment } from '@prisma/client';
+
+import { PrismaService } from '../prisma/prisma.service';
+import type { WorkOrderWithNames } from './work-order.service';
 import {
   ATTACHMENT_ALLOWED_MIME_TYPES,
   ATTACHMENT_MAX_SIZE_BYTES,
   attachmentKindForMimeType,
-} from '@mediafox/shared-types';
-
-import { PrismaService } from '../prisma/prisma.service';
-import type { WorkOrderWithNames } from './work-order.service';
+} from './attachment-constraints';
 
 const TERMINAL_STATUSES = ['RESOLVED', 'CANCELLED'];
 
