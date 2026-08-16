@@ -2,6 +2,7 @@ import type {
   WorkOrderPriority,
   WorkOrderSource,
   WorkOrderStatus,
+  WorkOrderAttentionReason,
 } from '@mediafox/shared-types';
 
 import { Badge, type BadgeTone } from '@/components/ui/badge';
@@ -71,3 +72,18 @@ export const workOrderPriorityOptions: {
 }[] = (['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as WorkOrderPriority[]).map(
   (value) => ({ value, label: PRIORITY_LABEL[value] }),
 );
+
+// WO-ARGOS-051 — Operations Console "Requires attention." Mirrors
+// WorkOrderService.IN_PROGRESS_STALL_HOURS (apps/movos-api/src/work-orders/
+// work-order.service.ts) for display purposes only — the backend is the
+// sole authority on which work orders actually match STALLED_IN_PROGRESS;
+// this label is never used to re-derive that decision here.
+export const IN_PROGRESS_STALL_HOURS_LABEL = 4;
+
+export const ATTENTION_REASON_LABEL: Record<WorkOrderAttentionReason, string> =
+  {
+    HIGH_PRIORITY_UNRESOLVED: 'Prioridad alta/crítica',
+    SCHEDULED_OVERDUE: 'Visita programada vencida',
+    UNASSIGNED: 'Sin asignar',
+    STALLED_IN_PROGRESS: `En progreso +${IN_PROGRESS_STALL_HOURS_LABEL}h`,
+  };

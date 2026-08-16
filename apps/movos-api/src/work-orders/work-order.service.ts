@@ -11,7 +11,10 @@ import type {
   WorkOrderPriority,
   WorkOrderSource,
 } from '@prisma/client';
-import type { WorkOrderTransition } from '@mediafox/shared-types';
+import type {
+  WorkOrderTransition,
+  WorkOrderAttentionReason,
+} from '@mediafox/shared-types';
 
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -67,6 +70,53 @@ export type WorkOrderEventWithActor = WorkOrderEvent & {
 export interface AssignableTechnician {
   userId: string;
   displayName: string;
+}
+
+export interface ListWorkOrdersFilter {
+  status?: WorkOrderStatus;
+  priority?: WorkOrderPriority;
+  assignedMemberId?: string;
+  unassigned?: boolean;
+  scheduledFrom?: Date;
+  scheduledTo?: Date;
+}
+
+export interface WorkOrderAttentionItem {
+  workOrder: WorkOrderWithNames;
+  reasons: WorkOrderAttentionReason[];
+}
+
+export interface TechnicianWorkload {
+  userId: string;
+  displayName: string;
+  unresolvedCount: number;
+  inProgressCount: number;
+  scheduledTodayCount: number;
+}
+
+const TERMINAL_STATUSES: WorkOrderStatus[] = ['RESOLVED', 'CANCELLED'];
+
+// WO-ARGOS-051 — Requires Attention rule D's threshold (ARGOS's approved
+// spec: "status = IN_PROGRESS AND startedAt < now - 4 hours"). Named here,
+// not inlined, per that spec's explicit instruction not to bury it as an
+// unexplained UI magic number — this is also the one place it's evaluated;
+// movos-web never re-derives it, it only renders whatever reasons this
+// service already decided.
+export const IN_PROGRESS_STALL_HOURS = 4;
+
+// America/Bogota has no DST (fixed UTC-5) — the same fixed-timezone
+// convention apps/movos-web/src/lib/format.ts already uses for displaying
+// WorkOrder.scheduledAt. Computed here so "today" for technician workload
+// has one definition, not a second driftable one on the frontend.
+function bogotaTodayRange(): { start: Date; end: Date } {
+  const BOGOTA_OFFSET_MS = 5 * 60 * 60 * 1000;
+  const nowBogota = new Date(Date.now() - BOGOTA_OFFSET_MS);
+  const year = nowBogota.getUTCFullYear();
+  const month = nowBogota.getUTCMonth();
+  const day = nowBogota.getUTCDate();
+  const start = new Date(Date.UTC(year, month, day) + BOGOTA_OFFSET_MS);
+  const end = new Date(Date.UTC(year, month, day + 1) + BOGOTA_OFFSET_MS);
+  return { start, end };
 }
 
 // V1 scope (WO-ARGOS-035) — 5 real transitions, one per non-CREATED
@@ -129,13 +179,142 @@ export class WorkOrderService {
 
   async list(
     organizationId: string,
-    status?: WorkOrderStatus,
+    filter: ListWorkOrdersFilter = {},
   ): Promise<WorkOrderWithNames[]> {
     return this.prisma.workOrder.findMany({
-      where: { organizationId, ...(status ? { status } : {}) },
+      where: {
+        organizationId,
+        ...(filter.status ? { status: filter.status } : {}),
+        ...(filter.priority ? { priority: filter.priority } : {}),
+        ...(filter.unassigned
+          ? { assignedMemberId: null }
+          : filter.assignedMemberId
+            ? { assignedMemberId: filter.assignedMemberId }
+            : {}),
+        ...(filter.scheduledFrom || filter.scheduledTo
+          ? {
+              scheduledAt: {
+                ...(filter.scheduledFrom ? { gte: filter.scheduledFrom } : {}),
+                ...(filter.scheduledTo ? { lt: filter.scheduledTo } : {}),
+              },
+            }
+          : {}),
+      },
       include: WORK_ORDER_WITH_NAMES_INCLUDE,
       orderBy: { createdAt: 'desc' },
       take: 100,
+    });
+  }
+
+  /**
+   * WO-ARGOS-051 — Requires Attention V1. Deterministic, no AI: a WorkOrder
+   * appears here if it matches at least one of the 4 approved rules
+   * (A: HIGH/CRITICAL unresolved, B: overdue scheduled visit,
+   * C: unassigned and OPEN, D: IN_PROGRESS longer than
+   * IN_PROGRESS_STALL_HOURS). `reasons` is computed from the same row the
+   * OR already matched — never a second, independently-drifting check.
+   */
+  async listAttentionItems(
+    organizationId: string,
+  ): Promise<WorkOrderAttentionItem[]> {
+    const now = new Date();
+    const stalledBefore = new Date(
+      now.getTime() - IN_PROGRESS_STALL_HOURS * 60 * 60 * 1000,
+    );
+
+    const workOrders = await this.prisma.workOrder.findMany({
+      where: {
+        organizationId,
+        OR: [
+          {
+            priority: { in: ['HIGH', 'CRITICAL'] },
+            status: { notIn: TERMINAL_STATUSES },
+          },
+          { scheduledAt: { lt: now }, status: { notIn: TERMINAL_STATUSES } },
+          { status: 'OPEN', assignedMemberId: null },
+          { status: 'IN_PROGRESS', startedAt: { lt: stalledBefore } },
+        ],
+      },
+      include: WORK_ORDER_WITH_NAMES_INCLUDE,
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+
+    return workOrders.map((workOrder) => ({
+      workOrder,
+      reasons: this.computeAttentionReasons(workOrder, now, stalledBefore),
+    }));
+  }
+
+  private computeAttentionReasons(
+    workOrder: WorkOrder,
+    now: Date,
+    stalledBefore: Date,
+  ): WorkOrderAttentionReason[] {
+    const reasons: WorkOrderAttentionReason[] = [];
+    const notTerminal = !TERMINAL_STATUSES.includes(workOrder.status);
+
+    if (
+      notTerminal &&
+      (workOrder.priority === 'HIGH' || workOrder.priority === 'CRITICAL')
+    ) {
+      reasons.push('HIGH_PRIORITY_UNRESOLVED');
+    }
+    if (notTerminal && workOrder.scheduledAt && workOrder.scheduledAt < now) {
+      reasons.push('SCHEDULED_OVERDUE');
+    }
+    if (workOrder.status === 'OPEN' && !workOrder.assignedMemberId) {
+      reasons.push('UNASSIGNED');
+    }
+    if (
+      workOrder.status === 'IN_PROGRESS' &&
+      workOrder.startedAt &&
+      workOrder.startedAt < stalledBefore
+    ) {
+      reasons.push('STALLED_IN_PROGRESS');
+    }
+    return reasons;
+  }
+
+  /**
+   * WO-ARGOS-051 — per-technician workload for the Operations Console.
+   * Roster is the same real ACTIVE TECHNICIAN membership query
+   * listAssignableTechnicians already uses; counts are a plain in-memory
+   * aggregation over real, unresolved WorkOrder rows — no groupBy, no new
+   * index (deferred per spec until there's evidence it's needed).
+   */
+  async getTechnicianWorkload(
+    organizationId: string,
+  ): Promise<TechnicianWorkload[]> {
+    const technicians = await this.listAssignableTechnicians(organizationId);
+    if (technicians.length === 0) return [];
+
+    const { start: todayStart, end: todayEnd } = bogotaTodayRange();
+    const workOrders = await this.prisma.workOrder.findMany({
+      where: {
+        organizationId,
+        assignedMemberId: { in: technicians.map((t) => t.userId) },
+        status: { notIn: TERMINAL_STATUSES },
+      },
+      select: { assignedMemberId: true, status: true, scheduledAt: true },
+    });
+
+    return technicians.map((technician) => {
+      const own = workOrders.filter(
+        (wo) => wo.assignedMemberId === technician.userId,
+      );
+      return {
+        userId: technician.userId,
+        displayName: technician.displayName,
+        unresolvedCount: own.length,
+        inProgressCount: own.filter((wo) => wo.status === 'IN_PROGRESS').length,
+        scheduledTodayCount: own.filter(
+          (wo) =>
+            wo.scheduledAt &&
+            wo.scheduledAt >= todayStart &&
+            wo.scheduledAt < todayEnd,
+        ).length,
+      };
     });
   }
 

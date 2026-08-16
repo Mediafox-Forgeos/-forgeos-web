@@ -3,6 +3,7 @@ import type {
   ApiConnectivitySummary,
   ApiConnectorStatusCounts,
   ApiOccupancySummary,
+  ApiOfflineStation,
   ApiSiteHealthSummary,
   ApiStationHealth,
   ApiStationHealthSummary,
@@ -256,5 +257,40 @@ export class StationHealthService {
       eligibleCount,
       occupancyRate: eligibleCount > 0 ? occupiedCount / eligibleCount : null,
     };
+  }
+
+  /**
+   * WO-ARGOS-051 — Operations Console station attention. The actual list
+   * behind summarizeConnectivity's `offline` count, for a panel that needs
+   * to link out to real stations, not just show a number. Filters on the
+   * verified `connectivityStatus === 'OFFLINE'` value only — UNKNOWN is
+   * never treated as, or folded into, offline.
+   */
+  async listOfflineStations(
+    organizationId: string,
+    siteId?: string,
+  ): Promise<ApiOfflineStation[]> {
+    const stations = await this.prisma.chargingStation.findMany({
+      where: {
+        status: 'ACTIVE',
+        connectivityStatus: 'OFFLINE',
+        site: { organizationId, ...(siteId ? { id: siteId } : {}) },
+      },
+      select: {
+        id: true,
+        name: true,
+        lastDisconnectedAt: true,
+        site: { select: { id: true, name: true } },
+      },
+      orderBy: { lastDisconnectedAt: 'desc' },
+    });
+
+    return stations.map((station) => ({
+      stationId: station.id,
+      stationName: station.name,
+      siteId: station.site.id,
+      siteName: station.site.name,
+      lastDisconnectedAt: station.lastDisconnectedAt?.toISOString() ?? null,
+    }));
   }
 }

@@ -18,7 +18,7 @@ type PrismaMock = {
   };
   workOrderEvent: { create: jest.Mock; findMany: jest.Mock };
   chargingStation: { findFirst: jest.Mock };
-  membership: { findFirst: jest.Mock };
+  membership: { findFirst: jest.Mock; findMany: jest.Mock };
 };
 
 function createPrismaMock(): PrismaMock {
@@ -31,7 +31,7 @@ function createPrismaMock(): PrismaMock {
     },
     workOrderEvent: { create: jest.fn(), findMany: jest.fn() },
     chargingStation: { findFirst: jest.fn() },
-    membership: { findFirst: jest.fn() },
+    membership: { findFirst: jest.fn(), findMany: jest.fn() },
   };
 }
 
@@ -483,13 +483,211 @@ describe('WorkOrderService', () => {
     it('scopes to the organization and filters by status when provided', async () => {
       prisma.workOrder.findMany.mockResolvedValue([workOrderRow()]);
 
-      await service.list('org-1', 'OPEN');
+      await service.list('org-1', { status: 'OPEN' });
 
       expect(prisma.workOrder.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { organizationId: 'org-1', status: 'OPEN' },
         }),
       );
+    });
+  });
+
+  // WO-ARGOS-051 — Requires Attention V1. Boundary cases explicitly
+  // required by the approved implementation spec.
+  describe('listAttentionItems', () => {
+    it('queries with an OR of exactly the 4 approved rules, scoped to the org', async () => {
+      prisma.workOrder.findMany.mockResolvedValue([]);
+
+      await service.listAttentionItems('org-1');
+
+      expect(prisma.workOrder.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            organizationId: 'org-1',
+            OR: expect.arrayContaining([
+              expect.objectContaining({
+                priority: { in: ['HIGH', 'CRITICAL'] },
+              }),
+              expect.objectContaining({
+                status: 'OPEN',
+                assignedMemberId: null,
+              }),
+              expect.objectContaining({ status: 'IN_PROGRESS' }),
+            ]),
+          }),
+        }),
+      );
+      expect(
+        (
+          prisma.workOrder.findMany.mock.calls[0][0] as {
+            where: { OR: unknown[] };
+          }
+        ).where.OR,
+      ).toHaveLength(4);
+    });
+
+    it('tags a HIGH/CRITICAL unresolved work order with HIGH_PRIORITY_UNRESOLVED', async () => {
+      prisma.workOrder.findMany.mockResolvedValue([
+        workOrderRow({ priority: 'CRITICAL', status: 'ASSIGNED' }),
+      ]);
+
+      const [item] = await service.listAttentionItems('org-1');
+
+      expect(item.reasons).toContain('HIGH_PRIORITY_UNRESOLVED');
+    });
+
+    it('does not tag a RESOLVED/CANCELLED work order, even at CRITICAL priority', async () => {
+      prisma.workOrder.findMany.mockResolvedValue([
+        workOrderRow({ priority: 'CRITICAL', status: 'RESOLVED' }),
+      ]);
+
+      const [item] = await service.listAttentionItems('org-1');
+
+      expect(item.reasons).toEqual([]);
+    });
+
+    it('tags an OPEN, unassigned work order with UNASSIGNED', async () => {
+      prisma.workOrder.findMany.mockResolvedValue([
+        workOrderRow({
+          priority: 'LOW',
+          status: 'OPEN',
+          assignedMemberId: null,
+        }),
+      ]);
+
+      const [item] = await service.listAttentionItems('org-1');
+
+      expect(item.reasons).toEqual(['UNASSIGNED']);
+    });
+
+    it('tags a work order scheduled in the past (not terminal) with SCHEDULED_OVERDUE', async () => {
+      prisma.workOrder.findMany.mockResolvedValue([
+        workOrderRow({
+          priority: 'LOW',
+          status: 'ASSIGNED',
+          scheduledAt: new Date(Date.now() - 60 * 60 * 1000),
+        }),
+      ]);
+
+      const [item] = await service.listAttentionItems('org-1');
+
+      expect(item.reasons).toEqual(['SCHEDULED_OVERDUE']);
+    });
+
+    it('tags an IN_PROGRESS work order started more than 4 hours ago with STALLED_IN_PROGRESS', async () => {
+      prisma.workOrder.findMany.mockResolvedValue([
+        workOrderRow({
+          priority: 'LOW',
+          status: 'IN_PROGRESS',
+          startedAt: new Date(Date.now() - 4 * 60 * 60 * 1000 - 60_000),
+        }),
+      ]);
+
+      const [item] = await service.listAttentionItems('org-1');
+
+      expect(item.reasons).toEqual(['STALLED_IN_PROGRESS']);
+    });
+
+    it('does not tag an IN_PROGRESS work order started less than 4 hours ago', async () => {
+      prisma.workOrder.findMany.mockResolvedValue([
+        workOrderRow({
+          priority: 'LOW',
+          status: 'IN_PROGRESS',
+          startedAt: new Date(Date.now() - 4 * 60 * 60 * 1000 + 60_000),
+        }),
+      ]);
+
+      const [item] = await service.listAttentionItems('org-1');
+
+      expect(item.reasons).toEqual([]);
+    });
+
+    it('can tag a single work order with multiple reasons at once', async () => {
+      prisma.workOrder.findMany.mockResolvedValue([
+        workOrderRow({
+          priority: 'HIGH',
+          status: 'OPEN',
+          assignedMemberId: null,
+        }),
+      ]);
+
+      const [item] = await service.listAttentionItems('org-1');
+
+      expect(item.reasons).toEqual(
+        expect.arrayContaining(['HIGH_PRIORITY_UNRESOLVED', 'UNASSIGNED']),
+      );
+    });
+  });
+
+  describe('getTechnicianWorkload', () => {
+    it('returns zero counts for a roster technician with no work orders', async () => {
+      prisma.membership.findMany.mockResolvedValue([
+        {
+          user: { id: 'tech-1', displayName: 'Ana' },
+        },
+      ]);
+      prisma.workOrder.findMany.mockResolvedValue([]);
+
+      const result = await service.getTechnicianWorkload('org-1');
+
+      expect(result).toEqual([
+        {
+          userId: 'tech-1',
+          displayName: 'Ana',
+          unresolvedCount: 0,
+          inProgressCount: 0,
+          scheduledTodayCount: 0,
+        },
+      ]);
+    });
+
+    it('counts unresolved and in-progress work orders per technician independently', async () => {
+      prisma.membership.findMany.mockResolvedValue([
+        { user: { id: 'tech-1', displayName: 'Ana' } },
+        { user: { id: 'tech-2', displayName: 'Beto' } },
+      ]);
+      prisma.workOrder.findMany.mockResolvedValue([
+        { assignedMemberId: 'tech-1', status: 'ASSIGNED', scheduledAt: null },
+        {
+          assignedMemberId: 'tech-1',
+          status: 'IN_PROGRESS',
+          scheduledAt: null,
+        },
+        {
+          assignedMemberId: 'tech-2',
+          status: 'IN_PROGRESS',
+          scheduledAt: null,
+        },
+      ]);
+
+      const result = await service.getTechnicianWorkload('org-1');
+
+      expect(result).toEqual([
+        {
+          userId: 'tech-1',
+          displayName: 'Ana',
+          unresolvedCount: 2,
+          inProgressCount: 1,
+          scheduledTodayCount: 0,
+        },
+        {
+          userId: 'tech-2',
+          displayName: 'Beto',
+          unresolvedCount: 1,
+          inProgressCount: 1,
+          scheduledTodayCount: 0,
+        },
+      ]);
+    });
+
+    it('returns an empty list without querying work orders when there are no ACTIVE technicians', async () => {
+      prisma.membership.findMany.mockResolvedValue([]);
+
+      const result = await service.getTechnicianWorkload('org-1');
+
+      expect(result).toEqual([]);
+      expect(prisma.workOrder.findMany).not.toHaveBeenCalled();
     });
   });
 
