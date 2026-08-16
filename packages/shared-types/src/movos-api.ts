@@ -539,8 +539,16 @@ export interface RecordChecklistEventRequest {
 // persisted anywhere.
 export type AttachmentKind = 'IMAGE' | 'VIDEO';
 
-// Single source of truth for both movos-api's authorization checks and
-// movos-web's upload-token constraints — never let the two drift.
+// Consumed at runtime by movos-web (bundled by Next.js, safe as a value
+// import) for its upload-token constraints and client-side MIME filtering.
+// movos-api does NOT import these as values — this package ships as raw
+// .ts source with no build step (see package.json's `exports`), so a
+// runtime `import { ... }` here works fine inside a bundler but fails
+// under movos-api's plain `node dist/main.js` at container start (Node's
+// ESM loader can't resolve the extensionless .ts import chain). movos-api
+// keeps its own copy in src/work-orders/attachment-constraints.ts,
+// consciously duplicated for exactly this reason — see that file's
+// comment. Only `import type` from this package is safe inside movos-api.
 export const ATTACHMENT_ALLOWED_MIME_TYPES = [
   'image/jpeg',
   'image/png',
