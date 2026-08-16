@@ -1,7 +1,7 @@
 # MOVOS API Outage — August 2026
 
 **Work order:** WO-ARGOS-048 (Production API Recovery)
-**Status:** ROOT CAUSE CONFIRMED. Recovery **blocked** — requires a Railway billing/plan decision only ARGOS can make. No code, schema, or data change was made or is needed.
+**Status:** RESOLVED. Root cause confirmed, billing gate cleared by ARGOS (Railway Hobby plan activated), service restored and independently verified live. No code, schema, or data change was made or needed.
 
 ## Symptom
 
@@ -34,18 +34,74 @@ This explains every observed symptom: no application crash, no migration failure
 
 Selecting/paying for a Railway plan is a financial/account transaction on ARGOS's own Railway account — outside VULCAN's authority to perform under any circumstance, independent of this engagement's own freeze rules.
 
+## Human billing resolution
+
+ARGOS activated the Railway **Hobby** plan directly in the Railway dashboard, clearing the blocker. Once active, `Postgres` and `movos-api` both came back online **automatically** — Railway auto-redeployed each service's most recent build the moment the plan was live; no `railway redeploy`/`restart` command from this session triggered it. This was independently confirmed rather than assumed from ARGOS's dashboard observation:
+
+- `railway status` (re-run fresh): `movos-api` → **Online**; `Postgres` → **Online**, volume `postgres-volume` attached.
+- `movos-api`'s active deployment (`56f1db09-b209-4655-a42c-39f5605bbb37`, status `SUCCESS`, created `2026-08-16T02:27:04.453Z`) was built from commit `a22fb3caae09ea87ae80e9d53fb39b85be24acf9` — an **older** commit than current `main` (`983b0c0`), because Railway redeployed the last successfully built image rather than pulling latest. Verified this is not a regression: `git diff a22fb3c..origin/main -- apps/movos-api packages prisma` is empty — every commit between them is docs-only, so the running application code is identical to current `main`'s application code. No redeploy-from-source was needed or performed.
+- Startup logs are clean: all routes mapped, ending in `Nest application successfully started` / `MOVOS API listening on http://localhost:4000/api/v1` / `OCPP WebSocket transport attached` — no errors, no crash-loop, no failed Prisma connection.
+
 ## Downtime
 
 Started: 2026-08-15, shortly after 06:40:53 UTC (last confirmed healthy request, `PILOT-WO-02`'s resolution).
-Ended: **not yet — ongoing** as of this report. Duration is indeterminate until ARGOS selects a plan and service is restored.
+Ended: 2026-08-16, ~02:27 UTC (movos-api's restored deployment timestamp). **Approximately 19.7 hours**, entirely attributable to the Railway trial expiration and the time to reach and act on the billing gate — no engineering recovery time once the plan was activated (Railway's own auto-redeploy handled it).
 
 ## Was data affected?
 
-**No.** Every recovery command that touched a service failed before executing (validation/authorization failure preceded any container action). The database's persistent volume (`postgres-volume`) was never deleted, resized, or otherwise touched — only the compute container attached to it was stopped, by Railway's own trial-expiration mechanism, not by any action taken in this or any prior VULCAN session. No `WorkOrder`, `User`, `ChargingStation`, or `Membership` row was created, modified, or deleted during this incident or its investigation.
+**No, confirmed twice over.** First, structurally: every recovery command that touched a service before the plan was activated failed before executing (validation/authorization failure preceded any container action), and the persistent volume (`postgres-volume`) was never deleted or resized. Second, empirically, post-recovery: a read-only production query (below) shows the exact organization, site, 3 stations, both users, and both `WorkOrder`s with `updatedAt` timestamps byte-identical to what `PILOT_WO_01_EVIDENCE.md`/`PILOT_WO_02_EVIDENCE.md` recorded, and event counts matching exactly (9 and 8). No `WorkOrder`, `User`, `ChargingStation`, or `Membership` row was created, modified, or deleted at any point during this incident, its investigation, or its recovery.
+
+## Post-recovery verification
+
+**Pilot data integrity (read-only query against restored production):**
+
+| Check                      | Result                                                   |
+| -------------------------- | -------------------------------------------------------- |
+| Organization               | Kylum Energy (`cmrmkq9ok0000rcnfa7q0loxd`)               |
+| Site                       | Centro Comercial Calima (`cmrq5sb71001xmo010tfp606p`)    |
+| Stations                   | exactly 3 — Calima - Estación 01/02/03                   |
+| Álvaro Pino                | `ACTIVE`, `OWNER`                                        |
+| Javier Cabal Jr.           | `ACTIVE`, `TECHNICIAN`                                   |
+| `WorkOrder` count          | exactly **2**, both `RESOLVED`                           |
+| WO-01 `updatedAt`          | `2026-08-15T06:15:57.395Z` — unchanged from evidence doc |
+| WO-02 `updatedAt`          | `2026-08-15T06:40:52.256Z` — unchanged from evidence doc |
+| WO-01 / WO-02 event counts | 9 / 8 — unchanged from evidence docs                     |
+| `PILOT-WO-03`              | does not exist                                           |
+
+**Live smoke test** (real HTTP calls against `https://movos-api-production.up.railway.app`, using short-lived access tokens minted with the app's own `JWT_ACCESS_SECRET` for Álvaro's and Javier's real, existing user records — chosen specifically to avoid ever touching either participant's real password):
+
+| Check                                              | Result                                                             |
+| -------------------------------------------------- | ------------------------------------------------------------------ |
+| `GET /health` (no auth)                            | 200                                                                |
+| `GET /auth/me` (Álvaro)                            | 200                                                                |
+| `GET /auth/me` (Javier)                            | 200                                                                |
+| `GET /sites` (Álvaro)                              | 200, 6 sites (unchanged baseline — 1 real + 5 pre-existing QA)     |
+| `GET /work-orders` (Álvaro)                        | 200, 2 items                                                       |
+| `GET /work-orders/assignable-technicians` (Álvaro) | 200, 1 item (Javier)                                               |
+| `GET /recommendations` (Álvaro)                    | 200, empty                                                         |
+| `GET /actions` (Álvaro)                            | 200, empty                                                         |
+| `GET /my-work` (Javier)                            | 200, 2 items (both assigned `WorkOrder`s)                          |
+| `GET /work-orders` (Javier)                        | **403** — technician correctly forbidden from the operator surface |
+| `GET /work-orders/assignable-technicians` (Javier) | **403**                                                            |
+| `GET /sites` (no token)                            | **401**                                                            |
+| `GET /work-orders` (no token)                      | **401**                                                            |
+
+Role isolation (`TECHNICIAN` vs. `OWNER`/operator surface) and unauthenticated rejection both hold exactly as designed. Cross-organization isolation was not independently re-exercised in this pass — it's covered by the 11 e2e security tests from WO-ARGOS-037, which CI re-runs on every merge and passed on the current `main`.
 
 ## Was pilot evidence affected?
 
-**No.** `PILOT-WO-01` and `PILOT-WO-02` both completed and were fully captured (`docs/pilot/PILOT_WO_01_EVIDENCE.md`, `docs/pilot/PILOT_WO_02_EVIDENCE.md`) **before** the outage began — the outage's first symptom (`Stopping Container`) appears in the logs immediately _after_ `PILOT-WO-02`'s last event, not during it. Nothing about the pilot's 2/5 evidence record is in question. `PILOT-WO-03` has not started and cannot start until the API is restored, which is exactly why WO-ARGOS-048 blocks it explicitly.
+**No.** `PILOT-WO-01` and `PILOT-WO-02` both completed and were fully captured (`docs/pilot/PILOT_WO_01_EVIDENCE.md`, `docs/pilot/PILOT_WO_02_EVIDENCE.md`) **before** the outage began — the outage's first symptom (`Stopping Container`) appears in the logs immediately _after_ `PILOT-WO-02`'s last event, not during it. Nothing about the pilot's 2/5 evidence record is in question, and the post-recovery integrity check above confirms it directly. `PILOT-WO-03` has not started.
+
+## `-forgeos-web` relevance
+
+The Railway `-forgeos-web` service's historical "Build failed 1 month ago" status is **unrelated** to MOVOS production and was **not** repaired, per instruction. Verified rather than assumed: `-forgeos-web` corresponds to `apps/forgeos-web` (`@mediafox/forgeos-web`) — a separate application in this monorepo from the real MOVOS frontend (`apps/movos-web`). `apps/movos-web` has zero references to `forgeos-web` anywhere in its config, and is confirmed live and serving on Vercel (`https://movos-web.vercel.app`, HTTP 307 → login, a normal healthy response), independent of Railway entirely. `-forgeos-web`'s stale failure predates this incident by a month and does not affect MOVOS's frontend, API, or database.
+
+## Final production status
+
+- `movos-api`: **Online**, deployment `56f1db09-b209-4655-a42c-39f5605bbb37`, commit `a22fb3c` (app code identical to current `main`).
+- `Postgres`: **Online**, `postgres-volume` attached, all pilot data intact and verified.
+- `movos-web` (Vercel): live, unaffected by this incident throughout.
+- No BLOCKER/HIGH issue remains. `PILOT-WO-03` may now proceed once ARGOS authorizes it.
 
 ## Preventive follow-up candidates (not implemented — named only, per instruction)
 
