@@ -12,14 +12,16 @@ import type {
 import { PrismaService } from '../prisma/prisma.service';
 import {
   WorkOrderService,
+  WORK_ORDER_WITH_NAMES_INCLUDE,
   type WorkOrderEventWithActor,
   type WorkOrderWithNames,
 } from './work-order.service';
-
-const WORK_ORDER_WITH_NAMES_INCLUDE = {
-  station: { select: { name: true } },
-  assignedMember: { select: { displayName: true } },
-} as const;
+import {
+  WorkOrderAttachmentService,
+  type WorkOrderAttachmentWithUploader,
+  type AuthorizeUploadInput,
+  type CreateAttachmentInput,
+} from './work-order-attachment.service';
 
 const WORK_ORDER_EVENT_WITH_ACTOR_INCLUDE = {
   actor: { select: { displayName: true } },
@@ -62,6 +64,7 @@ export class MyWorkService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly workOrders: WorkOrderService,
+    private readonly attachments: WorkOrderAttachmentService,
   ) {}
 
   async list(
@@ -164,6 +167,61 @@ export class MyWorkService {
       include: WORK_ORDER_EVENT_WITH_ACTOR_INCLUDE,
     });
     return event;
+  }
+
+  // WO-ARGOS-049 — field evidence. Ownership re-verified via
+  // getOwnWorkOrder before ever touching WorkOrderAttachmentService, the
+  // same discipline every other technician-scoped write in this class
+  // already follows.
+  async authorizeAttachmentUpload(
+    organizationId: string,
+    technicianUserId: string,
+    workOrderId: string,
+    input: AuthorizeUploadInput,
+  ): Promise<void> {
+    const workOrder = await this.getOwnWorkOrder(
+      organizationId,
+      technicianUserId,
+      workOrderId,
+    );
+    await this.attachments.authorizeUpload(workOrder, input);
+  }
+
+  async createAttachment(
+    organizationId: string,
+    technicianUserId: string,
+    workOrderId: string,
+    input: CreateAttachmentInput,
+  ): Promise<WorkOrderAttachmentWithUploader> {
+    const workOrder = await this.getOwnWorkOrder(
+      organizationId,
+      technicianUserId,
+      workOrderId,
+    );
+    return this.attachments.createAttachment(
+      workOrder,
+      technicianUserId,
+      input,
+    );
+  }
+
+  async listAttachments(
+    organizationId: string,
+    technicianUserId: string,
+    workOrderId: string,
+  ): Promise<WorkOrderAttachmentWithUploader[]> {
+    await this.getOwnWorkOrder(organizationId, technicianUserId, workOrderId);
+    return this.attachments.list(workOrderId);
+  }
+
+  async getAttachment(
+    organizationId: string,
+    technicianUserId: string,
+    workOrderId: string,
+    attachmentId: string,
+  ): Promise<WorkOrderAttachmentWithUploader> {
+    await this.getOwnWorkOrder(organizationId, technicianUserId, workOrderId);
+    return this.attachments.getOne(workOrderId, attachmentId);
   }
 
   private async buildChecklistPayload(

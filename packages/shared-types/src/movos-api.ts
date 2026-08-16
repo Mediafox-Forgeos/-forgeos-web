@@ -408,6 +408,8 @@ export interface ApiAssignableTechnician {
 // WO-ARGOS-037 — the last 4 values are the field checklist
 // (docs/operations/WORK_ORDER_CHECKLISTS.md), written only through
 // MyWorkController's checklist-events endpoint.
+// WO-ARGOS-049 — SCHEDULED is logged whenever an operator sets/clears
+// WorkOrder.scheduledAt; not a status transition.
 export type WorkOrderEventType =
   | 'CREATED'
   | 'ASSIGNED'
@@ -418,7 +420,19 @@ export type WorkOrderEventType =
   | 'ARRIVAL_CONFIRMED'
   | 'DIAGNOSIS_RECORDED'
   | 'INTERVENTION_RECORDED'
-  | 'VALIDATION_RECORDED';
+  | 'VALIDATION_RECORDED'
+  | 'SCHEDULED';
+
+// WO-ARGOS-049 — derived, read-only. Never a manually-entered field on
+// WorkOrder itself: computed server-side from
+// WorkOrder -> ChargingStation -> Site at read time.
+export interface ApiWorkOrderVisitLocation {
+  siteName: string;
+  stationName: string;
+  formattedAddress: string | null;
+  latitude: number | null;
+  longitude: number | null;
+}
 
 export interface ApiWorkOrder {
   id: string;
@@ -433,10 +447,13 @@ export interface ApiWorkOrder {
   assignedMemberName: string | null;
   assignedAt: string | null;
   startedAt: string | null;
+  /** WO-ARGOS-049 — optional planned field visit, stored UTC. */
+  scheduledAt: string | null;
   resolvedAt: string | null;
   notes: string | null;
   createdAt: string;
   updatedAt: string;
+  visitLocation: ApiWorkOrderVisitLocation;
 }
 
 export interface ApiWorkOrderEvent {
@@ -458,6 +475,15 @@ export interface CreateWorkOrderRequest {
   priority: WorkOrderPriority;
   source: WorkOrderSource;
   stationId: string;
+  /** WO-ARGOS-049 — optional, ISO 8601. */
+  scheduledAt?: string;
+}
+
+// WO-ARGOS-049 — deliberately separate from TransitionWorkOrderRequest:
+// scheduling a visit is not a WorkOrderStatus transition and must not be
+// forced through VALID_TRANSITIONS' state-machine rules.
+export interface SetWorkOrderScheduleRequest {
+  scheduledAt: string | null;
 }
 
 export interface TransitionWorkOrderRequest {
@@ -503,4 +529,86 @@ export interface RecordChecklistEventRequest {
   actionType?: string;
   /** VALIDATION_RECORDED only — required by the server for this type. */
   outcomeNote?: string;
+}
+
+// WO-ARGOS-049 — Field evidence (photo/video). The binary itself never
+// touches movos-api — only Vercel Blob (movos-web's connected store) holds
+// it. This is metadata only, and deliberately omits any storage
+// path/URL: a client that's authorized to view an attachment always gets a
+// fresh, short-lived signed URL minted on demand, never a durable one
+// persisted anywhere.
+export type AttachmentKind = 'IMAGE' | 'VIDEO';
+
+// Single source of truth for both movos-api's authorization checks and
+// movos-web's upload-token constraints — never let the two drift.
+export const ATTACHMENT_ALLOWED_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/heic',
+  'image/heif',
+  'video/mp4',
+  'video/quicktime',
+  'video/webm',
+] as const;
+
+export const ATTACHMENT_MAX_SIZE_BYTES: Record<AttachmentKind, number> = {
+  IMAGE: 25 * 1024 * 1024, // 25 MB
+  VIDEO: 200 * 1024 * 1024, // 200 MB
+};
+
+export function attachmentKindForMimeType(
+  mimeType: string,
+): AttachmentKind | null {
+  if (mimeType.startsWith('image/')) return 'IMAGE';
+  if (mimeType.startsWith('video/')) return 'VIDEO';
+  return null;
+}
+
+export interface ApiWorkOrderAttachment {
+  id: string;
+  workOrderId: string;
+  eventId: string | null;
+  kind: AttachmentKind;
+  mimeType: string;
+  originalFilename: string | null;
+  fileSizeBytes: number;
+  uploadedById: string;
+  uploadedByName: string | null;
+  createdAt: string;
+  /** Opaque Blob pathname — durable identity, not a fetchable URL on its
+   * own (the store is private). Used only by movos-web's own view-url
+   * route to mint a fresh short-lived signed URL; never persisted or
+   * cached as if it granted access by itself. */
+  storagePath: string;
+}
+
+/** Sent by movos-web's upload route to movos-api, server-to-server, before
+ * minting a client upload token — the one place attachment authorization is
+ * actually decided. */
+export interface AuthorizeAttachmentUploadRequest {
+  mimeType: string;
+  fileSizeBytes: number;
+  eventId?: string;
+}
+
+/** Sent by the browser to movos-api after a direct-to-Blob upload
+ * completes, to persist durable metadata. storagePath is the opaque Blob
+ * pathname — never a URL, never client-invented (movos-api verifies it was
+ * actually issued for this WorkOrder before accepting it). */
+export interface CreateWorkOrderAttachmentRequest {
+  storagePath: string;
+  kind: AttachmentKind;
+  mimeType: string;
+  fileSizeBytes: number;
+  originalFilename?: string;
+  eventId?: string;
+}
+
+/** Returned by movos-web's read-authorization route: a freshly-minted,
+ * short-lived signed URL for viewing/downloading one private attachment.
+ * Never cached, never persisted — request a new one each time. */
+export interface AttachmentViewUrl {
+  url: string;
+  expiresAt: string;
 }

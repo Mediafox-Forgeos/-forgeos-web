@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 
 import { WorkOrderService } from './work-order.service';
+import { WorkOrderAttachmentService } from './work-order-attachment.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 type PrismaMock = {
@@ -51,7 +52,17 @@ function workOrderRow(overrides: Record<string, unknown> = {}) {
     notes: null,
     createdAt: new Date(),
     updatedAt: new Date(),
-    station: { name: 'Station 1' },
+    scheduledAt: null,
+    station: {
+      name: 'Station 1',
+      site: {
+        name: 'Site 1',
+        formattedAddress: 'Calle 1, Cali',
+        address: 'Calle 1',
+        latitude: 3.45,
+        longitude: -76.53,
+      },
+    },
     assignedMember: null,
     ...overrides,
   };
@@ -66,6 +77,7 @@ describe('WorkOrderService', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         WorkOrderService,
+        WorkOrderAttachmentService,
         { provide: PrismaService, useValue: prisma },
       ],
     }).compile();
@@ -297,6 +309,52 @@ describe('WorkOrderService', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
+    it('resolve rejects a resolution summary shorter than the minimum (the "OK" pattern from PILOT-WO-01/02)', async () => {
+      prisma.workOrder.findFirst.mockResolvedValue(
+        workOrderRow({ status: 'IN_PROGRESS' }),
+      );
+
+      await expect(
+        service.transition('org-1', 'wo-1', {
+          transition: 'resolve',
+          comment: 'OK',
+          actorId: 'user-1',
+        }),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.workOrder.update).not.toHaveBeenCalled();
+    });
+
+    it('resolve accepts a resolution summary right at the minimum length', async () => {
+      const twentyChars = 'x'.repeat(20);
+      prisma.workOrder.findFirst.mockResolvedValue(
+        workOrderRow({ status: 'IN_PROGRESS' }),
+      );
+      prisma.workOrder.update.mockResolvedValue(
+        workOrderRow({ status: 'RESOLVED', resolvedAt: new Date() }),
+      );
+
+      const result = await service.transition('org-1', 'wo-1', {
+        transition: 'resolve',
+        comment: twentyChars,
+        actorId: 'user-1',
+      });
+      expect(result.status).toBe('RESOLVED');
+    });
+
+    it('the minimum-length rule does not apply to cancel', async () => {
+      prisma.workOrder.findFirst.mockResolvedValue(workOrderRow());
+      prisma.workOrder.update.mockResolvedValue(
+        workOrderRow({ status: 'CANCELLED' }),
+      );
+
+      const result = await service.transition('org-1', 'wo-1', {
+        transition: 'cancel',
+        comment: 'Duplicada',
+        actorId: 'user-1',
+      });
+      expect(result.status).toBe('CANCELLED');
+    });
+
     it('cancel requires a reason and is valid from OPEN', async () => {
       prisma.workOrder.findFirst.mockResolvedValue(workOrderRow());
       prisma.workOrder.update.mockResolvedValue(
@@ -338,6 +396,86 @@ describe('WorkOrderService', () => {
           actorId: 'user-1',
         }),
       ).rejects.toThrow(ConflictException);
+    });
+  });
+
+  describe('schedule', () => {
+    it('sets scheduledAt and logs a SCHEDULED event with actor attribution', async () => {
+      prisma.workOrder.findFirst.mockResolvedValue(
+        workOrderRow({ status: 'ASSIGNED' }),
+      );
+      const scheduledAt = new Date('2026-08-20T15:00:00.000Z');
+      prisma.workOrder.update.mockResolvedValue(
+        workOrderRow({ status: 'ASSIGNED', scheduledAt }),
+      );
+
+      const result = await service.schedule(
+        'org-1',
+        'wo-1',
+        scheduledAt,
+        'user-1',
+      );
+
+      expect(result.scheduledAt).toEqual(scheduledAt);
+      expect(prisma.workOrder.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { scheduledAt } }),
+      );
+      expect(prisma.workOrderEvent.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          workOrderId: 'wo-1',
+          type: 'SCHEDULED',
+          actorId: 'user-1',
+          payload: { scheduledAt: scheduledAt.toISOString() },
+        }),
+      });
+    });
+
+    it('clears scheduledAt when passed null', async () => {
+      prisma.workOrder.findFirst.mockResolvedValue(
+        workOrderRow({ status: 'ASSIGNED', scheduledAt: new Date() }),
+      );
+      prisma.workOrder.update.mockResolvedValue(
+        workOrderRow({ status: 'ASSIGNED', scheduledAt: null }),
+      );
+
+      await service.schedule('org-1', 'wo-1', null, 'user-1');
+
+      expect(prisma.workOrder.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { scheduledAt: null } }),
+      );
+    });
+
+    it('never touches WorkOrderStatus', async () => {
+      prisma.workOrder.findFirst.mockResolvedValue(
+        workOrderRow({ status: 'OPEN' }),
+      );
+      prisma.workOrder.update.mockResolvedValue(
+        workOrderRow({ status: 'OPEN' }),
+      );
+
+      await service.schedule('org-1', 'wo-1', new Date(), 'user-1');
+
+      const updateCall = prisma.workOrder.update.mock.calls[0][0];
+      expect(updateCall.data).not.toHaveProperty('status');
+    });
+
+    it('rejects scheduling a RESOLVED work order', async () => {
+      prisma.workOrder.findFirst.mockResolvedValue(
+        workOrderRow({ status: 'RESOLVED' }),
+      );
+
+      await expect(
+        service.schedule('org-1', 'wo-1', new Date(), 'user-1'),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.workOrder.update).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException for a work order outside the organization', async () => {
+      prisma.workOrder.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.schedule('org-1', 'wo-1', new Date(), 'user-1'),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 

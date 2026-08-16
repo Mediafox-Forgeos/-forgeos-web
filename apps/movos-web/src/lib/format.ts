@@ -29,6 +29,35 @@ export function formatDateTime(
   }).format(new Date(iso));
 }
 
+// WO-ARGOS-049 — WorkOrder.scheduledAt and the timeline summary are stored
+// UTC and displayed in a single fixed timezone (America/Bogota, matching
+// this pilot's real users) rather than the browser's own timezone — a
+// deliberate V1 simplification since Site has no per-location timezone
+// field yet. Revisit if MOVOS ever operates outside Colombia.
+export function formatWorkOrderDateTime(
+  iso: string,
+  locale: string = tenant.locale,
+): string {
+  return new Intl.DateTimeFormat(locale, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: 'America/Bogota',
+  }).format(new Date(iso));
+}
+
+export function formatDuration(startIso: string, endIso: string): string {
+  const minutes = Math.max(
+    0,
+    Math.round(
+      (new Date(endIso).getTime() - new Date(startIso).getTime()) / 60000,
+    ),
+  );
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest === 0 ? `${hours} h` : `${hours} h ${rest} min`;
+}
+
 export function formatRelative(iso: string): string {
   const then = new Date(iso).getTime();
   const now = Date.now();

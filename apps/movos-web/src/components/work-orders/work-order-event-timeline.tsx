@@ -26,6 +26,7 @@ export const WORK_ORDER_EVENT_LABEL: Record<WorkOrderEventType, string> = {
   DIAGNOSIS_RECORDED: 'Diagnóstico registrado',
   INTERVENTION_RECORDED: 'Intervención registrada',
   VALIDATION_RECORDED: 'Validación registrada',
+  SCHEDULED: 'Visita programada',
 };
 
 function eventDetailText(event: ApiWorkOrderEvent): string | null {

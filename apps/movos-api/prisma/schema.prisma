@@ -188,6 +188,9 @@ model User {
   // WO-ARGOS-035 — Work Order V1.
   assignedWorkOrders WorkOrder[]
   workOrderEvents    WorkOrderEvent[]
+
+  // WO-ARGOS-049 — Work Order V1 field hardening.
+  uploadedAttachments WorkOrderAttachment[]
 }
 
 model Organization {
@@ -1020,6 +1023,10 @@ enum WorkOrderEventType {
   DIAGNOSIS_RECORDED
   INTERVENTION_RECORDED
   VALIDATION_RECORDED
+  // WO-ARGOS-049 — logged whenever an operator sets or clears
+  // WorkOrder.scheduledAt, for actor/timestamp attribution in the timeline.
+  // Not a status transition — scheduling never touches WorkOrderStatus.
+  SCHEDULED
 }
 
 // The V1 entity — a deliberately smaller field set than
@@ -1044,6 +1051,14 @@ model WorkOrder {
   startedAt        DateTime?
   resolvedAt       DateTime?
 
+  // WO-ARGOS-049 — optional planned field visit. Stored as an absolute UTC
+  // instant, like every other timestamp on this model; V1 displays it in a
+  // single fixed timezone (America/Bogota) rather than a per-Site timezone
+  // field, which doesn't exist yet. Not a lifecycle state — a WorkOrder can
+  // be scheduled or not in any non-terminal status, set/cleared independently
+  // of the transition state machine below.
+  scheduledAt DateTime?
+
   // Current-value note, mirroring Action.notes — the full comment history
   // lives in WorkOrderEvent (type: COMMENTED), not duplicated here.
   notes String?
@@ -1055,6 +1070,7 @@ model WorkOrder {
   station        ChargingStation @relation(fields: [stationId], references: [id])
   assignedMember User?           @relation(fields: [assignedMemberId], references: [id])
   events         WorkOrderEvent[]
+  attachments    WorkOrderAttachment[]
 
   @@index([organizationId, status])
   @@index([stationId])
@@ -1075,8 +1091,50 @@ model WorkOrderEvent {
 
   createdAt DateTime @default(now())
 
-  workOrder WorkOrder @relation(fields: [workOrderId], references: [id])
-  actor     User?     @relation(fields: [actorId], references: [id])
+  workOrder   WorkOrder             @relation(fields: [workOrderId], references: [id])
+  actor       User?                 @relation(fields: [actorId], references: [id])
+  attachments WorkOrderAttachment[]
 
   @@index([workOrderId, createdAt])
+}
+
+enum AttachmentKind {
+  IMAGE
+  VIDEO
+}
+
+// WO-ARGOS-049 — field evidence. Metadata only: the durable storage identity
+// (storagePath) and enough to render/authorize it, never a temporary signed
+// URL (those are minted fresh, short-lived, on every authorized read — see
+// apps/movos-web's /api/evidence routes). eventId is nullable so evidence can
+// attach either to the WorkOrder generally or to the specific checklist/
+// resolution WorkOrderEvent it documents. The binary itself never touches
+// movos-api or this database — only Vercel Blob (movos-web's connected
+// store) ever holds the bytes.
+model WorkOrderAttachment {
+  id           String         @id @default(cuid())
+  workOrderId  String
+  eventId      String?
+  uploadedById String
+
+  kind             AttachmentKind
+  mimeType         String
+  originalFilename String?
+  fileSizeBytes    Int
+
+  // Always "VERCEL_BLOB" today — kept as a column, not assumed, so a future
+  // provider migration doesn't require guessing which rows predate it.
+  storageProvider String
+  // Opaque, server-generated Blob pathname — never derived from a
+  // client-supplied filename, never guessable.
+  storagePath String
+
+  createdAt DateTime @default(now())
+
+  workOrder  WorkOrder       @relation(fields: [workOrderId], references: [id])
+  event      WorkOrderEvent? @relation(fields: [eventId], references: [id])
+  uploadedBy User            @relation(fields: [uploadedById], references: [id])
+
+  @@index([workOrderId])
+  @@index([eventId])
 }

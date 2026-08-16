@@ -1,6 +1,13 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { WorkOrderPriority } from '@prisma/client';
-import { IsEnum, IsIn, IsString, MinLength } from 'class-validator';
+import {
+  IsEnum,
+  IsIn,
+  IsISO8601,
+  IsOptional,
+  IsString,
+  MinLength,
+} from 'class-validator';
 
 // Deliberately narrower than WorkOrderSource — CONNECTIVITY_LOSS is only
 // ever created by WorkOrderAutomationService (Rule 1), never directly by
@@ -29,4 +36,11 @@ export class CreateWorkOrderDto {
   @ApiProperty()
   @IsString()
   stationId!: string;
+
+  @ApiPropertyOptional({
+    description: 'WO-ARGOS-049 — optional planned field visit, ISO 8601.',
+  })
+  @IsOptional()
+  @IsISO8601()
+  scheduledAt?: string;
 }
