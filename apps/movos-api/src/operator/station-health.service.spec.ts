@@ -252,4 +252,50 @@ describe('StationHealthService', () => {
       expect(summary.occupancyRate).toBeNull();
     });
   });
+
+  // WO-ARGOS-051 — Operations Console station attention. Explicit boundary
+  // case required by the approved implementation spec: UNKNOWN must never
+  // be presented as, or folded into, OFFLINE.
+  describe('listOfflineStations', () => {
+    it('queries only verified OFFLINE connectivity, never UNKNOWN', async () => {
+      prisma.chargingStation.findMany.mockResolvedValue([]);
+
+      await service.listOfflineStations('org-1');
+
+      expect(prisma.chargingStation.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            status: 'ACTIVE',
+            connectivityStatus: 'OFFLINE',
+          }),
+        }),
+      );
+    });
+
+    it('maps only what the verified-OFFLINE query returns, unmodified', async () => {
+      // The WHERE clause (asserted above) is what actually keeps UNKNOWN
+      // stations out — this confirms the service does no further
+      // reclassification of whatever Prisma hands back.
+      prisma.chargingStation.findMany.mockResolvedValue([
+        {
+          id: 'station-1',
+          name: 'Station A',
+          lastDisconnectedAt: new Date('2026-08-15T10:00:00.000Z'),
+          site: { id: 'site-1', name: 'Site 1' },
+        },
+      ]);
+
+      const result = await service.listOfflineStations('org-1');
+
+      expect(result).toEqual([
+        {
+          stationId: 'station-1',
+          stationName: 'Station A',
+          siteId: 'site-1',
+          siteName: 'Site 1',
+          lastDisconnectedAt: '2026-08-15T10:00:00.000Z',
+        },
+      ]);
+    });
+  });
 });

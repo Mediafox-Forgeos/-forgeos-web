@@ -28,6 +28,7 @@ import {
   toApiWorkOrder,
   toApiWorkOrderEvent,
   toApiWorkOrderAttachment,
+  toApiTechnicianWorkload,
 } from '../auth/presenters';
 
 // WO-ARGOS-037 — every pre-existing role kept exactly the access it already
@@ -67,15 +68,22 @@ export class WorkOrderController {
     @OrgContext() membership: Membership,
     @Query() query: ListWorkOrdersQueryDto,
   ) {
-    const workOrders = await this.workOrders.list(
-      membership.organizationId,
-      query.status,
-    );
+    const workOrders = await this.workOrders.list(membership.organizationId, {
+      status: query.status,
+      priority: query.priority,
+      assignedMemberId: query.assignedMemberId,
+      unassigned: query.unassigned === 'true',
+      scheduledFrom: query.scheduledFrom
+        ? new Date(query.scheduledFrom)
+        : undefined,
+      scheduledTo: query.scheduledTo ? new Date(query.scheduledTo) : undefined,
+    });
     return workOrders.map(toApiWorkOrder);
   }
 
   // Declared before `:id` — a static segment must be matched first or
-  // Nest/Express would treat "assignable-technicians" as an `:id` value.
+  // Nest/Express would treat "assignable-technicians"/"attention"/"workload"
+  // as an `:id` value.
   @Get('assignable-technicians')
   @Roles(...OPERATOR_FACING_ROLES)
   @ApiOperation({
@@ -86,6 +94,38 @@ export class WorkOrderController {
       membership.organizationId,
     );
     return technicians.map(toApiAssignableTechnician);
+  }
+
+  // WO-ARGOS-051 — Operations Console "Requires attention." Deterministic
+  // V1 rules only, evaluated once in WorkOrderService — this controller
+  // never re-derives them.
+  @Get('attention')
+  @Roles(...OPERATOR_FACING_ROLES)
+  @ApiOperation({
+    summary: 'Work orders matching the deterministic V1 attention rules',
+  })
+  async attention(@OrgContext() membership: Membership) {
+    const items = await this.workOrders.listAttentionItems(
+      membership.organizationId,
+    );
+    return items.map((item) => ({
+      workOrder: toApiWorkOrder(item.workOrder),
+      reasons: item.reasons,
+    }));
+  }
+
+  // WO-ARGOS-051 — Operations Console technician workload panel.
+  @Get('workload')
+  @Roles(...OPERATOR_FACING_ROLES)
+  @ApiOperation({
+    summary:
+      'Per-ACTIVE-technician unresolved / in-progress / scheduled-today counts',
+  })
+  async workload(@OrgContext() membership: Membership) {
+    const workload = await this.workOrders.getTechnicianWorkload(
+      membership.organizationId,
+    );
+    return workload.map(toApiTechnicianWorkload);
   }
 
   @Get(':id')

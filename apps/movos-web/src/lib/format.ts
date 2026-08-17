@@ -58,6 +58,22 @@ export function formatDuration(startIso: string, endIso: string): string {
   return rest === 0 ? `${hours} h` : `${hours} h ${rest} min`;
 }
 
+// WO-ARGOS-051 — Operations Console "Today's scheduled work." Mirrors
+// WorkOrderService's bogotaTodayRange (apps/movos-api/src/work-orders/
+// work-order.service.ts) — same fixed America/Bogota UTC-5 convention (no
+// DST) formatWorkOrderDateTime above already uses. Returns the
+// [scheduledFrom, scheduledTo) query string GET /work-orders expects.
+export function bogotaTodayRangeQuery(): string {
+  const BOGOTA_OFFSET_MS = 5 * 60 * 60 * 1000;
+  const nowBogota = new Date(Date.now() - BOGOTA_OFFSET_MS);
+  const year = nowBogota.getUTCFullYear();
+  const month = nowBogota.getUTCMonth();
+  const day = nowBogota.getUTCDate();
+  const start = new Date(Date.UTC(year, month, day) + BOGOTA_OFFSET_MS);
+  const end = new Date(Date.UTC(year, month, day + 1) + BOGOTA_OFFSET_MS);
+  return `scheduledFrom=${encodeURIComponent(start.toISOString())}&scheduledTo=${encodeURIComponent(end.toISOString())}`;
+}
+
 export function formatRelative(iso: string): string {
   const then = new Date(iso).getTime();
   const now = Date.now();

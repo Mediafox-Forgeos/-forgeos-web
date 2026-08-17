@@ -73,4 +73,20 @@ export class OperatorController {
       query.siteId,
     );
   }
+
+  // WO-ARGOS-051 — Operations Console station attention: the real, linkable
+  // list backing summarizeConnectivity's `offline` count.
+  @Get('offline-stations')
+  @ApiOperation({
+    summary: 'ACTIVE stations with verified OFFLINE connectivity',
+  })
+  async offlineStations(
+    @OrgContext() membership: Membership,
+    @Query() query: SiteScopeQueryDto,
+  ) {
+    return this.stationHealth.listOfflineStations(
+      membership.organizationId,
+      query.siteId,
+    );
+  }
 }

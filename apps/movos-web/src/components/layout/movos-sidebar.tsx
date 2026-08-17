@@ -32,17 +32,24 @@ import { cn } from '@/lib/utils';
 
 type NavItem = { label: string; href: string; icon: LucideIcon };
 
+// WO-ARGOS-051 — Operations Console. "Resumen" -> "Operaciones" reflects
+// /dashboard's new role as the operator's primary control surface, not a
+// passive summary. Reordered (pure array reorder, no route/permission
+// change) so operationally-central items — Operaciones, Órdenes de
+// trabajo, Sitios — sit ahead of the more granular infrastructure
+// drill-down routes, per ARGOS's approved spec (product decision 13):
+// a minimal navigation change, not a full IA redesign.
 const navigation: NavItem[] = [
-  { label: 'Resumen', href: '/dashboard', icon: LayoutDashboard },
+  { label: 'Operaciones', href: '/dashboard', icon: LayoutDashboard },
+  { label: 'Órdenes de trabajo', href: '/work-orders', icon: ClipboardList },
   { label: 'Sitios', href: '/sites', icon: MapPin },
   { label: 'Estaciones', href: '/stations', icon: ServerCog },
   { label: 'Cargadores', href: '/chargers', icon: Plug },
   { label: 'Conectores', href: '/connectors', icon: Cable },
   { label: 'Sesiones', href: '/sessions', icon: CircleGauge },
+  { label: 'Alertas', href: '/alerts', icon: TriangleAlert },
   { label: 'Usuarios', href: '/users', icon: Users },
   { label: 'Tarifas', href: '/tariffs', icon: Receipt },
-  { label: 'Alertas', href: '/alerts', icon: TriangleAlert },
-  { label: 'Órdenes de trabajo', href: '/work-orders', icon: ClipboardList },
   { label: 'Reportes', href: '/reports', icon: FileBarChart },
   { label: 'Configuración', href: '/settings', icon: Settings },
 ];

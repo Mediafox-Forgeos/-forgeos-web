@@ -573,6 +573,44 @@ export function attachmentKindForMimeType(
   return null;
 }
 
+// WO-ARGOS-051 — Operations Console "Requires attention" V1. Deterministic
+// rules only, evaluated once server-side (WorkOrderService.
+// listAttentionItems) — movos-web renders `reasons`, it never re-derives
+// them or duplicates the IN_PROGRESS_STALL_HOURS threshold.
+export type WorkOrderAttentionReason =
+  | 'HIGH_PRIORITY_UNRESOLVED'
+  | 'SCHEDULED_OVERDUE'
+  | 'UNASSIGNED'
+  | 'STALLED_IN_PROGRESS';
+
+export interface ApiWorkOrderAttentionItem {
+  workOrder: ApiWorkOrder;
+  reasons: WorkOrderAttentionReason[];
+}
+
+// WO-ARGOS-051 — the real, linkable list behind
+// ApiConnectivitySummary.offline. Only ever built from a verified
+// `connectivityStatus === 'OFFLINE'` row; UNKNOWN never appears here.
+export interface ApiOfflineStation {
+  stationId: string;
+  stationName: string;
+  siteId: string;
+  siteName: string;
+  lastDisconnectedAt: string | null;
+}
+
+// WO-ARGOS-051 — Operations Console technician workload panel. Roster is
+// real ACTIVE MemberRole.TECHNICIAN memberships (the same set
+// ApiAssignableTechnician already draws from); counts are real, unresolved
+// WorkOrder rows assigned to that technician.
+export interface ApiTechnicianWorkload {
+  userId: string;
+  displayName: string;
+  unresolvedCount: number;
+  inProgressCount: number;
+  scheduledTodayCount: number;
+}
+
 export interface ApiWorkOrderAttachment {
   id: string;
   workOrderId: string;

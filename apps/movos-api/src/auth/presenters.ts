@@ -27,6 +27,7 @@ import type {
   ApiWorkOrderEvent,
   ApiAssignableTechnician,
   ApiWorkOrderAttachment,
+  ApiTechnicianWorkload,
 } from '@mediafox/shared-types';
 import type { ChargingSessionWithNames } from '../sessions/sessions.service';
 import type { ActionWithNames } from '../recommendations/action.service';
@@ -34,6 +35,7 @@ import type {
   WorkOrderWithNames,
   WorkOrderEventWithActor,
   AssignableTechnician,
+  TechnicianWorkload,
 } from '../work-orders/work-order.service';
 import type { WorkOrderAttachmentWithUploader } from '../work-orders/work-order-attachment.service';
 
@@ -333,5 +335,18 @@ export function toApiAssignableTechnician(
   return {
     userId: technician.userId,
     displayName: technician.displayName,
+  };
+}
+
+// WO-ARGOS-051 — Operations Console technician workload panel.
+export function toApiTechnicianWorkload(
+  workload: TechnicianWorkload,
+): ApiTechnicianWorkload {
+  return {
+    userId: workload.userId,
+    displayName: workload.displayName,
+    unresolvedCount: workload.unresolvedCount,
+    inProgressCount: workload.inProgressCount,
+    scheduledTodayCount: workload.scheduledTodayCount,
   };
 }
