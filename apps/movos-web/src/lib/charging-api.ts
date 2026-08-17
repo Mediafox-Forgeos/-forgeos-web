@@ -97,16 +97,20 @@ export function updateChargingStation(
   );
 }
 
+// WO-ARGOS-056 — both endpoints now also carry the derived Operational
+// Status evidence (see ApiEvseListItem), so both return that richer shape
+// rather than the bare ApiEvse used elsewhere (create/update responses,
+// which don't have connector/session evidence to derive from).
 export function listEvsesByChargingStation(
   chargingStationId: string,
-): Promise<ApiEvse[]> {
-  return apiClient.get<ApiEvse[]>(
+): Promise<ApiEvseListItem[]> {
+  return apiClient.get<ApiEvseListItem[]>(
     `/charging-stations/${chargingStationId}/evses`,
   );
 }
 
-export function getEvse(id: string): Promise<ApiEvse> {
-  return apiClient.get<ApiEvse>(`/evses/${id}`);
+export function getEvse(id: string): Promise<ApiEvseListItem> {
+  return apiClient.get<ApiEvseListItem>(`/evses/${id}`);
 }
 
 export function createEvse(

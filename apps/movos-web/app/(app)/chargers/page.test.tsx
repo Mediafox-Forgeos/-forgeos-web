@@ -35,6 +35,17 @@ function evse(overrides: Partial<ApiEvseListItem> = {}): ApiEvseListItem {
     phaseType: null,
     createdAt: '2026-08-01T00:00:00.000Z',
     updatedAt: '2026-08-01T00:00:00.000Z',
+    // WO-ARGOS-056 — derived Operational Status, not persisted anywhere.
+    operationalStatus: 'AVAILABLE',
+    requiresAttention: false,
+    attentionReasons: [],
+    connectorSummary: {
+      total: 1,
+      available: 1,
+      inUse: 0,
+      unavailable: 0,
+      faulted: 0,
+    },
     ...overrides,
   };
 }
@@ -63,6 +74,10 @@ describe('/chargers', () => {
     );
     expect(screen.getByText('Estación 01')).toBeInTheDocument();
     expect(screen.getByText('60 kW')).toBeInTheDocument();
+    // WO-ARGOS-056 — derived Operational Status + connector-based
+    // availability, not the Evse.status-based "% disponible" metric.
+    expect(screen.getByText('Disponible')).toBeInTheDocument();
+    expect(screen.getByText('1 de 1 conector disponible')).toBeInTheDocument();
     // The old gateway copy must never appear here anymore.
     expect(
       screen.queryByText(/Las estaciones de carga pertenecen a un Sitio/),

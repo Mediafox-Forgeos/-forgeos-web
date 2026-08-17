@@ -1,3 +1,5 @@
+import { TriangleAlert } from 'lucide-react';
+
 import { Badge, type BadgeTone } from '@/components/ui/badge';
 
 /**
@@ -125,4 +127,50 @@ export function ApiChargingSessionStatusBadge({ status }: { status: string }) {
     tone: 'neutral' as const,
   };
   return <Badge tone={descriptor.tone}>{descriptor.label}</Badge>;
+}
+
+// WO-ARGOS-056 — EVSE Operational Status. Derived at read time from real
+// connectivity + connector + session evidence (never persisted, never a
+// substitute for Evse.status — see ApiEvseListItem). Deliberately a
+// separate badge from ApiEvseStatusBadge (which remains the Administrative
+// Status badge) so the two layers are never visually conflated.
+const operationalStatusLabelMap: Record<
+  string,
+  { label: string; tone: BadgeTone }
+> = {
+  AVAILABLE: { label: 'Disponible', tone: 'success' },
+  IN_USE: { label: 'En uso', tone: 'info' },
+  PARTIALLY_AVAILABLE: { label: 'Parcialmente disponible', tone: 'warning' },
+  UNAVAILABLE: { label: 'No disponible', tone: 'neutral' },
+  OFFLINE: { label: 'Fuera de línea', tone: 'danger' },
+  UNKNOWN: { label: 'Desconocido', tone: 'neutral' },
+};
+
+export function OperationalStatusBadge({ status }: { status: string }) {
+  const descriptor = operationalStatusLabelMap[status] ?? {
+    label: status,
+    tone: 'neutral' as const,
+  };
+  return <Badge tone={descriptor.tone}>{descriptor.label}</Badge>;
+}
+
+const attentionReasonLabelMap: Record<string, string> = {
+  CONNECTOR_FAULTED: 'Un conector reporta falla',
+  ACTIVE_SESSION_CONNECTOR_NOT_IN_USE:
+    'Hay una sesión activa que el estado del conector no refleja',
+};
+
+/**
+ * Transversal flag (WO-ARGOS-056 Decision: requiresAttention is NOT a
+ * seventh OperationalStatus value) — can appear next to any status.
+ */
+export function RequiresAttentionIndicator({ reasons }: { reasons: string[] }) {
+  if (reasons.length === 0) return null;
+  const title = reasons.map((r) => attentionReasonLabelMap[r] ?? r).join(' · ');
+  return (
+    <span title={title} className="inline-flex text-amber-500">
+      <TriangleAlert className="size-4" aria-hidden="true" />
+      <span className="sr-only">{title}</span>
+    </span>
+  );
 }

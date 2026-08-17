@@ -130,13 +130,42 @@ export interface ApiEvse {
   updatedAt: string;
 }
 
+export type ApiOperationalStatus =
+  | 'AVAILABLE'
+  | 'IN_USE'
+  | 'PARTIALLY_AVAILABLE'
+  | 'UNAVAILABLE'
+  | 'OFFLINE'
+  | 'UNKNOWN';
+
+export type ApiAttentionReason =
+  'CONNECTOR_FAULTED' | 'ACTIVE_SESSION_CONNECTOR_NOT_IN_USE';
+
+export interface ApiConnectorSummary {
+  total: number;
+  available: number;
+  inUse: number;
+  unavailable: number;
+  faulted: number;
+}
+
 // WO-ARGOS-054 — "Cargador" is the friendly UX name for Evse; the type
 // stays ApiEvse-shaped internally, this only adds parent names for the
 // global inventory list.
+//
+// WO-ARGOS-056 — also carries the derived, never-persisted Operational
+// Status (see docs — three-layer separation: Administrative status stays
+// `status` above, unchanged; these four fields are the third, derived
+// layer, computed at read time, never written back to `status` or to
+// Connector.status).
 export interface ApiEvseListItem extends ApiEvse {
   chargingStationName: string;
   siteId: string;
   siteName: string;
+  operationalStatus: ApiOperationalStatus;
+  requiresAttention: boolean;
+  attentionReasons: ApiAttentionReason[];
+  connectorSummary: ApiConnectorSummary;
 }
 
 export interface ApiConnector {

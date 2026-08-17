@@ -4,17 +4,22 @@ import { useParams } from 'next/navigation';
 import * as React from 'react';
 import type {
   ApiChargingStation,
-  ApiEvse,
+  ApiEvseListItem,
   ApiSite,
 } from '@mediafox/shared-types';
 
 import { PageContainer } from '@/components/layout/page-container';
 import { PageHeader } from '@/components/layout/page-header';
 import { EmptyState } from '@/components/movos/empty-state';
-import { ApiEvseStatusBadge } from '@/components/movos/api-charging-status-badges';
+import {
+  ApiEvseStatusBadge,
+  OperationalStatusBadge,
+  RequiresAttentionIndicator,
+} from '@/components/movos/api-charging-status-badges';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { apiClient, ApiError } from '@/lib/api-client';
+import { formatConnectorAvailability } from '@/lib/format';
 import { getChargingStation, getEvse } from '@/lib/charging-api';
 import { useAuth } from '@/context/auth-context';
 import { ConnectorList } from '@/components/charging/connector-list';
@@ -35,7 +40,7 @@ export default function EvseDetailPage() {
     membership?.role === 'ADMIN' ||
     membership?.role === 'OPERATOR';
 
-  const [evse, setEvse] = React.useState<ApiEvse | null>(null);
+  const [evse, setEvse] = React.useState<ApiEvseListItem | null>(null);
   const [station, setStation] = React.useState<ApiChargingStation | null>(null);
   const [site, setSite] = React.useState<ApiSite | null>(null);
   const [state, setState] = React.useState<LoadState>('loading');
@@ -108,7 +113,8 @@ export default function EvseDetailPage() {
         }
         actions={
           <div className="flex items-center gap-2">
-            <ApiEvseStatusBadge status={evse.status} />
+            <OperationalStatusBadge status={evse.operationalStatus} />
+            <RequiresAttentionIndicator reasons={evse.attentionReasons} />
             {canManage && (
               <Button
                 variant="outline"
@@ -124,6 +130,13 @@ export default function EvseDetailPage() {
 
       <div className="mt-8 grid gap-4 sm:grid-cols-3">
         <DetailCard
+          label="Conectores disponibles"
+          value={formatConnectorAvailability(
+            evse.connectorSummary.available,
+            evse.connectorSummary.total,
+          )}
+        />
+        <DetailCard
           label="Identificador de protocolo"
           value={evse.externalId ?? 'Sin especificar'}
         />
@@ -132,6 +145,11 @@ export default function EvseDetailPage() {
           value={evse.currentType ?? 'Sin especificar'}
         />
         <DetailCard label="Fases" value={evse.phaseType ?? 'Sin especificar'} />
+        <DetailCard
+          label="Estado administrativo"
+          value=""
+          badge={<ApiEvseStatusBadge status={evse.status} />}
+        />
       </div>
 
       <div className="mt-8">
@@ -142,18 +160,30 @@ export default function EvseDetailPage() {
         open={editOpen}
         onClose={() => setEditOpen(false)}
         evse={evse}
-        onSaved={setEvse}
+        onSaved={() => void load()}
       />
     </PageContainer>
   );
 }
 
-function DetailCard({ label, value }: { label: string; value: string }) {
+function DetailCard({
+  label,
+  value,
+  badge,
+}: {
+  label: string;
+  value: string;
+  badge?: React.ReactNode;
+}) {
   return (
     <Card>
       <CardContent className="pt-5">
         <p className="text-muted-foreground text-xs">{label}</p>
-        <p className="mt-2 text-lg font-semibold">{value}</p>
+        {badge ? (
+          <div className="mt-2">{badge}</div>
+        ) : (
+          <p className="mt-2 text-lg font-semibold">{value}</p>
+        )}
       </CardContent>
     </Card>
   );
