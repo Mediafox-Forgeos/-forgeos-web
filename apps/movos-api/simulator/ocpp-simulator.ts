@@ -47,7 +47,12 @@ export class OcppSimulator {
 
   connect(): Promise<void> {
     return new Promise((resolve, reject) => {
-      const url = `ws://${this.config.host}:${this.config.port}/ocpp/${encodeURIComponent(this.config.ocppIdentity)}`;
+      // Port 443 is the standard HTTPS/WSS port — used here as the signal to
+      // speak wss:// instead of ws:// (e.g. movos-api-production over
+      // Railway's public HTTPS domain, which never accepts plain ws://).
+      // Local usage (port 4000 by default) is unaffected: unchanged ws://.
+      const scheme = this.config.port === 443 ? 'wss' : 'ws';
+      const url = `${scheme}://${this.config.host}:${this.config.port}/ocpp/${encodeURIComponent(this.config.ocppIdentity)}`;
       const authHeader = Buffer.from(
         `${this.config.ocppIdentity}:${this.config.secret}`,
       ).toString('base64');
