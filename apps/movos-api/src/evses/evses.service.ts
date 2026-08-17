@@ -12,17 +12,43 @@ import type { UpdateEvseDto } from './dto/update-evse.dto';
 import type { ListEvsesQueryDto } from './dto/list-evses-query.dto';
 
 // WO-ARGOS-054 — "Cargador" (EVSE) global inventory. Same with-names
-// pattern as ChargingStation/WorkOrder — dedicated include + type, only
-// for the global list.
-export const EVSE_WITH_NAMES_INCLUDE = {
-  chargingStation: {
-    select: { name: true, site: { select: { id: true, name: true } } },
-  },
-} as const;
+// pattern as ChargingStation/WorkOrder — dedicated include + type.
+//
+// WO-ARGOS-056 — extended with exactly the evidence the pure Operational
+// Status calculator (evse-operational-status.ts) needs to derive a
+// read-time-only status: the parent station's real connectivityStatus, and
+// each connector's real status plus whether a real non-terminal
+// ChargingSession currently exists on it. One query, no N+1. This include
+// never reads/writes Evse.status or Connector.status beyond the plain
+// select already needed for display — nothing here mutates anything.
+const SESSION_IN_PROGRESS_STATUSES: Prisma.ChargingSessionWhereInput['status'] =
+  {
+    in: ['ACTIVE', 'SUSPENDED', 'OFFLINE'],
+  };
 
-export type EvseWithNames = Evse & {
-  chargingStation: { name: string; site: { id: string; name: string } };
-};
+export const EVSE_WITH_NAMES_INCLUDE = Prisma.validator<Prisma.EvseInclude>()({
+  chargingStation: {
+    select: {
+      name: true,
+      connectivityStatus: true,
+      site: { select: { id: true, name: true } },
+    },
+  },
+  connectors: {
+    select: {
+      status: true,
+      chargingSessions: {
+        where: { status: SESSION_IN_PROGRESS_STATUSES },
+        select: { id: true },
+        take: 1,
+      },
+    },
+  },
+});
+
+export type EvseWithNames = Prisma.EvseGetPayload<{
+  include: typeof EVSE_WITH_NAMES_INCLUDE;
+}>;
 
 @Injectable()
 export class EvsesService {
@@ -32,7 +58,8 @@ export class EvsesService {
   ) {}
 
   /** Global, organization-scoped inventory (WO-ARGOS-054) — one query,
-   * relation filter, no N+1. */
+   * relation filter, no N+1. Now also carries WO-ARGOS-056's operational
+   * evidence (see EVSE_WITH_NAMES_INCLUDE). */
   async listAll(
     organizationId: string,
     filters: ListEvsesQueryDto,
@@ -58,10 +85,11 @@ export class EvsesService {
   async listByChargingStation(
     organizationId: string,
     chargingStationId: string,
-  ): Promise<Evse[]> {
+  ): Promise<EvseWithNames[]> {
     await this.getOwnedChargingStation(organizationId, chargingStationId);
     return this.prisma.evse.findMany({
       where: { chargingStationId },
+      include: EVSE_WITH_NAMES_INCLUDE,
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -71,9 +99,13 @@ export class EvsesService {
    * organization) via a single Prisma relation filter — no organizationId
    * or siteId is stored directly on Evse.
    */
-  async getById(organizationId: string, evseId: string): Promise<Evse> {
+  async getById(
+    organizationId: string,
+    evseId: string,
+  ): Promise<EvseWithNames> {
     const evse = await this.prisma.evse.findFirst({
       where: { id: evseId, chargingStation: { site: { organizationId } } },
+      include: EVSE_WITH_NAMES_INCLUDE,
     });
     if (!evse) {
       throw new NotFoundException('EVSE no encontrado');

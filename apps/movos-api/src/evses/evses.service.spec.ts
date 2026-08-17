@@ -2,7 +2,7 @@ import { Test } from '@nestjs/testing';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
-import { EvsesService } from './evses.service';
+import { EvsesService, EVSE_WITH_NAMES_INCLUDE } from './evses.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 
@@ -60,6 +60,7 @@ describe('EvsesService', () => {
       });
       expect(prisma.evse.findMany).toHaveBeenCalledWith({
         where: { chargingStationId: 'cs1' },
+        include: EVSE_WITH_NAMES_INCLUDE,
         orderBy: { createdAt: 'desc' },
       });
     });
@@ -88,6 +89,7 @@ describe('EvsesService', () => {
           id: 'e1',
           chargingStation: { site: { organizationId: 'o1' } },
         },
+        include: EVSE_WITH_NAMES_INCLUDE,
       });
       expect(evse.id).toBe('e1');
     });

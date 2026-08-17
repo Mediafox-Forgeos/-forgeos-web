@@ -35,6 +35,7 @@ import type {
 import type { ChargingSessionWithNames } from '../sessions/sessions.service';
 import type { ChargingStationWithSiteName } from '../charging-stations/charging-stations.service';
 import type { EvseWithNames } from '../evses/evses.service';
+import { computeEvseOperationalStatus } from '../evses/evse-operational-status';
 import type { ConnectorWithNames } from '../connectors/connectors.service';
 import type { ActionWithNames } from '../recommendations/action.service';
 import type {
@@ -170,11 +171,22 @@ export function toApiChargingStationListItem(
 }
 
 export function toApiEvseListItem(evse: EvseWithNames): ApiEvseListItem {
+  const derived = computeEvseOperationalStatus({
+    connectivityStatus: evse.chargingStation.connectivityStatus,
+    connectors: evse.connectors.map((c) => ({
+      status: c.status,
+      hasActiveSession: c.chargingSessions.length > 0,
+    })),
+  });
   return {
     ...toApiEvse(evse),
     chargingStationName: evse.chargingStation.name,
     siteId: evse.chargingStation.site.id,
     siteName: evse.chargingStation.site.name,
+    operationalStatus: derived.operationalStatus,
+    requiresAttention: derived.requiresAttention,
+    attentionReasons: derived.attentionReasons,
+    connectorSummary: derived.connectorSummary,
   };
 }
 

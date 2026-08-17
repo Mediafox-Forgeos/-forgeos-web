@@ -3,13 +3,17 @@
 import Link from 'next/link';
 import { Plug, Plus } from 'lucide-react';
 import * as React from 'react';
-import type { ApiEvse } from '@mediafox/shared-types';
+import type { ApiEvseListItem } from '@mediafox/shared-types';
 
 import { EmptyState } from '@/components/movos/empty-state';
-import { ApiEvseStatusBadge } from '@/components/movos/api-charging-status-badges';
+import {
+  OperationalStatusBadge,
+  RequiresAttentionIndicator,
+} from '@/components/movos/api-charging-status-badges';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ApiError } from '@/lib/api-client';
+import { formatConnectorAvailability } from '@/lib/format';
 import { listEvsesByChargingStation } from '@/lib/charging-api';
 import { EvseFormModal } from './evse-form-modal';
 
@@ -22,15 +26,25 @@ interface EvseListProps {
 }
 
 /**
- * Availability is only ever computed here, live, from statuses the API just
- * returned — never fabricated or carried over from mock data. With zero
- * EVSEs there is nothing honest to compute, so it's omitted rather than
- * shown as 0% or 100%.
+ * WO-ARGOS-056 — connector-based availability, aggregated across every EVSE
+ * of this station. Replaces the old Evse.status-based "% disponible" metric
+ * (evse.status === 'AVAILABLE' count), which measured administrative status
+ * with zero relation to real charging activity — see
+ * evse-operational-status.ts for the full reasoning. `available`/`total`
+ * here are always the real connector-status tallies the API already
+ * computed; nothing is estimated here.
  */
-function computeAvailabilityPercent(evses: ApiEvse[]): number | null {
-  if (evses.length === 0) return null;
-  const available = evses.filter((e) => e.status === 'AVAILABLE').length;
-  return Math.round((available / evses.length) * 100);
+function aggregateConnectorAvailability(evses: ApiEvseListItem[]): {
+  available: number;
+  total: number;
+} {
+  return evses.reduce(
+    (acc, evse) => ({
+      available: acc.available + evse.connectorSummary.available,
+      total: acc.total + evse.connectorSummary.total,
+    }),
+    { available: 0, total: 0 },
+  );
 }
 
 export function EvseList({
@@ -38,7 +52,7 @@ export function EvseList({
   siteId,
   canManage,
 }: EvseListProps) {
-  const [evses, setEvses] = React.useState<ApiEvse[]>([]);
+  const [evses, setEvses] = React.useState<ApiEvseListItem[]>([]);
   const [state, setState] = React.useState<LoadState>('loading');
   const [modalOpen, setModalOpen] = React.useState(false);
 
@@ -59,11 +73,15 @@ export function EvseList({
     void load();
   }, [load]);
 
-  function handleCreated(evse: ApiEvse): void {
-    setEvses((prev) => [evse, ...prev]);
+  // WO-ARGOS-056 — the create response is a plain ApiEvse (no connector/
+  // session evidence yet — a brand-new EVSE has none). Refetching the list
+  // is simpler and stays accurate rather than synthesizing a ListItem's
+  // extra fields (operationalStatus/connectorSummary/parent names) here.
+  function handleCreated(): void {
+    void load();
   }
 
-  const availabilityPercent = computeAvailabilityPercent(evses);
+  const { available, total } = aggregateConnectorAvailability(evses);
 
   return (
     <div>
@@ -77,9 +95,7 @@ export function EvseList({
             >
               {evses.length} {evses.length === 1 ? 'EVSE' : 'EVSEs'}
               {' · '}
-              {availabilityPercent !== null
-                ? `${availabilityPercent}% disponible`
-                : 'Disponibilidad no disponible aún'}
+              {formatConnectorAvailability(available, total)}
             </p>
           )}
         </div>
@@ -145,8 +161,19 @@ export function EvseList({
                           : 'Potencia sin especificar'}
                         {evse.currentType ? ` · ${evse.currentType}` : ''}
                       </p>
+                      <p className="text-muted-foreground mt-1 text-xs">
+                        {formatConnectorAvailability(
+                          evse.connectorSummary.available,
+                          evse.connectorSummary.total,
+                        )}
+                      </p>
                     </div>
-                    <ApiEvseStatusBadge status={evse.status} />
+                    <div className="flex items-center gap-1.5">
+                      <OperationalStatusBadge status={evse.operationalStatus} />
+                      <RequiresAttentionIndicator
+                        reasons={evse.attentionReasons}
+                      />
+                    </div>
                   </div>
                 </CardHeader>
               </Card>

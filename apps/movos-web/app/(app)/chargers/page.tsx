@@ -11,9 +11,13 @@ import type {
 import { PageContainer } from '@/components/layout/page-container';
 import { PageHeader } from '@/components/layout/page-header';
 import { DataTable, type Column } from '@/components/movos/data-table';
-import { ApiEvseStatusBadge } from '@/components/movos/api-charging-status-badges';
+import {
+  OperationalStatusBadge,
+  RequiresAttentionIndicator,
+} from '@/components/movos/api-charging-status-badges';
 import { FilterSelect } from '@/components/movos/filter-select';
 import { apiClient } from '@/lib/api-client';
+import { formatConnectorAvailability } from '@/lib/format';
 import { usePolledResource } from '@/components/operator/use-polled-resource';
 
 const STATUS_OPTIONS = [
@@ -146,9 +150,23 @@ function ChargersTable({ rows }: { rows: ApiEvseListItem[] }) {
       render: (row) => row.currentType ?? '—',
     },
     {
-      key: 'status',
-      header: 'Estado',
-      render: (row) => <ApiEvseStatusBadge status={row.status} />,
+      key: 'availability',
+      header: 'Conectores',
+      render: (row) =>
+        formatConnectorAvailability(
+          row.connectorSummary.available,
+          row.connectorSummary.total,
+        ),
+    },
+    {
+      key: 'operationalStatus',
+      header: 'Estado operacional',
+      render: (row) => (
+        <div className="flex items-center gap-1.5">
+          <OperationalStatusBadge status={row.operationalStatus} />
+          <RequiresAttentionIndicator reasons={row.attentionReasons} />
+        </div>
+      ),
     },
   ];
 

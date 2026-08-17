@@ -60,7 +60,7 @@ export class EvsesController {
       membership.organizationId,
       chargingStationId,
     );
-    return evses.map(toApiEvse);
+    return evses.map(toApiEvseListItem);
   }
 
   @Post('charging-stations/:chargingStationId/evses')
@@ -86,7 +86,7 @@ export class EvsesController {
   @ApiOperation({ summary: 'Get an EVSE by id' })
   async getById(@OrgContext() membership: Membership, @Param('id') id: string) {
     const evse = await this.evses.getById(membership.organizationId, id);
-    return toApiEvse(evse);
+    return toApiEvseListItem(evse);
   }
 
   @Patch('evses/:id')

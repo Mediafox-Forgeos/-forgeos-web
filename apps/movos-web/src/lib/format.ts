@@ -74,6 +74,20 @@ export function bogotaTodayRangeQuery(): string {
   return `scheduledFrom=${encodeURIComponent(start.toISOString())}&scheduledTo=${encodeURIComponent(end.toISOString())}`;
 }
 
+// WO-ARGOS-056 — connector-based availability text, replacing the old
+// EVSE.status-based "% disponible" metric (which measured administrative
+// status, not real charging activity — see evse-operational-status.ts).
+// `total` here is always real connector count; `available` is always the
+// real connector-status tally, never derived/estimated.
+export function formatConnectorAvailability(
+  available: number,
+  total: number,
+): string {
+  if (total === 0) return 'Sin conectores registrados';
+  const plural = total === 1 ? '' : 's';
+  return `${available} de ${total} conector${total === 1 ? '' : 'es'} disponible${plural}`;
+}
+
 export function formatRelative(iso: string): string {
   const then = new Date(iso).getTime();
   const now = Date.now();
