@@ -9,6 +9,35 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import type { CreateConnectorDto } from './dto/create-connector.dto';
 import type { UpdateConnectorDto } from './dto/update-connector.dto';
+import type { ListConnectorsQueryDto } from './dto/list-connectors-query.dto';
+
+// WO-ARGOS-054 — Connector global inventory. Same with-names pattern,
+// nested one level deeper (connector -> evse -> chargingStation -> site).
+export const CONNECTOR_WITH_NAMES_INCLUDE = {
+  evse: {
+    select: {
+      name: true,
+      chargingStation: {
+        select: {
+          id: true,
+          name: true,
+          site: { select: { id: true, name: true } },
+        },
+      },
+    },
+  },
+} as const;
+
+export type ConnectorWithNames = Connector & {
+  evse: {
+    name: string | null;
+    chargingStation: {
+      id: string;
+      name: string;
+      site: { id: string; name: string };
+    };
+  };
+};
 
 @Injectable()
 export class ConnectorsService {
@@ -16,6 +45,33 @@ export class ConnectorsService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
   ) {}
+
+  /** Global, organization-scoped inventory (WO-ARGOS-054) — one query,
+   * relation filter through the full chain, no N+1. */
+  async listAll(
+    organizationId: string,
+    filters: ListConnectorsQueryDto,
+  ): Promise<ConnectorWithNames[]> {
+    return this.prisma.connector.findMany({
+      where: {
+        evse: {
+          chargingStation: {
+            site: {
+              organizationId,
+              ...(filters.siteId ? { id: filters.siteId } : {}),
+            },
+            ...(filters.chargingStationId
+              ? { id: filters.chargingStationId }
+              : {}),
+          },
+          ...(filters.evseId ? { id: filters.evseId } : {}),
+        },
+        ...(filters.status ? { status: filters.status } : {}),
+      },
+      include: CONNECTOR_WITH_NAMES_INCLUDE,
+      orderBy: { createdAt: 'desc' },
+    });
+  }
 
   async listByEvse(
     organizationId: string,

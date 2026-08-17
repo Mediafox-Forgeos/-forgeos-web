@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags, ApiHeader } from '@nestjs/swagger';
@@ -15,13 +16,14 @@ import { MemberRole, type Membership } from '@prisma/client';
 import { ConnectorsService } from './connectors.service';
 import { CreateConnectorDto } from './dto/create-connector.dto';
 import { UpdateConnectorDto } from './dto/update-connector.dto';
+import { ListConnectorsQueryDto } from './dto/list-connectors-query.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { OrgContextGuard } from '../guards/org-context.guard';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { OrgContext } from '../common/decorators/org-context.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import { toApiConnector } from '../auth/presenters';
+import { toApiConnector, toApiConnectorListItem } from '../auth/presenters';
 import type { AuthenticatedUser } from '../common/request-context';
 
 @ApiTags('connectors')
@@ -34,6 +36,22 @@ import type { AuthenticatedUser } from '../common/request-context';
 @UseGuards(JwtAuthGuard, OrgContextGuard, RolesGuard)
 export class ConnectorsController {
   constructor(private readonly connectors: ConnectorsService) {}
+
+  @Get('connectors')
+  @ApiOperation({
+    summary:
+      'List all connectors for the organization (WO-ARGOS-054 global inventory)',
+  })
+  async listAll(
+    @OrgContext() membership: Membership,
+    @Query() query: ListConnectorsQueryDto,
+  ) {
+    const connectors = await this.connectors.listAll(
+      membership.organizationId,
+      query,
+    );
+    return connectors.map(toApiConnectorListItem);
+  }
 
   @Get('evses/:evseId/connectors')
   @ApiOperation({ summary: 'List connectors for an EVSE' })

@@ -9,6 +9,19 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import type { CreateChargingStationDto } from './dto/create-charging-station.dto';
 import type { UpdateChargingStationDto } from './dto/update-charging-station.dto';
+import type { ListChargingStationsQueryDto } from './dto/list-charging-stations-query.dto';
+
+// WO-ARGOS-054 — Infrastructure Inventory Navigation. Same "with names"
+// pattern already used by WorkOrder/ChargingSession: a dedicated include
+// const + type, only for the global inventory list, never for the
+// existing per-site/detail endpoints above.
+export const CHARGING_STATION_WITH_SITE_NAME_INCLUDE = {
+  site: { select: { name: true } },
+} as const;
+
+export type ChargingStationWithSiteName = ChargingStation & {
+  site: { name: string };
+};
 
 @Injectable()
 export class ChargingStationsService {
@@ -16,6 +29,32 @@ export class ChargingStationsService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
   ) {}
+
+  /**
+   * Global, organization-scoped inventory — the endpoint WO-ARGOS-005
+   * previously ruled out for a naive client-side N+1 fan-out. A single
+   * properly-scoped query with a relation filter sidesteps that concern
+   * entirely (see WO-ARGOS-054 discovery).
+   */
+  async listAll(
+    organizationId: string,
+    filters: ListChargingStationsQueryDto,
+  ): Promise<ChargingStationWithSiteName[]> {
+    return this.prisma.chargingStation.findMany({
+      where: {
+        site: {
+          organizationId,
+          ...(filters.siteId ? { id: filters.siteId } : {}),
+        },
+        ...(filters.status ? { status: filters.status } : {}),
+        ...(filters.connectivityStatus
+          ? { connectivityStatus: filters.connectivityStatus }
+          : {}),
+      },
+      include: CHARGING_STATION_WITH_SITE_NAME_INCLUDE,
+      orderBy: { createdAt: 'desc' },
+    });
+  }
 
   /**
    * Lists ChargingStations for a Site, after verifying the Site itself
