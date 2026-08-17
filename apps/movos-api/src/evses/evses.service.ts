@@ -9,6 +9,20 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import type { CreateEvseDto } from './dto/create-evse.dto';
 import type { UpdateEvseDto } from './dto/update-evse.dto';
+import type { ListEvsesQueryDto } from './dto/list-evses-query.dto';
+
+// WO-ARGOS-054 — "Cargador" (EVSE) global inventory. Same with-names
+// pattern as ChargingStation/WorkOrder — dedicated include + type, only
+// for the global list.
+export const EVSE_WITH_NAMES_INCLUDE = {
+  chargingStation: {
+    select: { name: true, site: { select: { id: true, name: true } } },
+  },
+} as const;
+
+export type EvseWithNames = Evse & {
+  chargingStation: { name: string; site: { id: string; name: string } };
+};
 
 @Injectable()
 export class EvsesService {
@@ -16,6 +30,30 @@ export class EvsesService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
   ) {}
+
+  /** Global, organization-scoped inventory (WO-ARGOS-054) — one query,
+   * relation filter, no N+1. */
+  async listAll(
+    organizationId: string,
+    filters: ListEvsesQueryDto,
+  ): Promise<EvseWithNames[]> {
+    return this.prisma.evse.findMany({
+      where: {
+        chargingStation: {
+          site: {
+            organizationId,
+            ...(filters.siteId ? { id: filters.siteId } : {}),
+          },
+          ...(filters.chargingStationId
+            ? { id: filters.chargingStationId }
+            : {}),
+        },
+        ...(filters.status ? { status: filters.status } : {}),
+      },
+      include: EVSE_WITH_NAMES_INCLUDE,
+      orderBy: { createdAt: 'desc' },
+    });
+  }
 
   async listByChargingStation(
     organizationId: string,

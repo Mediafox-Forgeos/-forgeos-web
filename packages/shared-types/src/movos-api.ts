@@ -109,6 +109,14 @@ export interface ApiChargingStation {
   lastProtocolVersion: string | null;
 }
 
+// WO-ARGOS-054 — Infrastructure Inventory Navigation. Denormalized parent
+// names for the global inventory list endpoints only (GET /charging-stations,
+// GET /evses, GET /connectors) — the existing per-parent endpoints/types
+// above are untouched and keep returning the plain shape.
+export interface ApiChargingStationListItem extends ApiChargingStation {
+  siteName: string;
+}
+
 export interface ApiEvse {
   id: string;
   chargingStationId: string;
@@ -122,6 +130,15 @@ export interface ApiEvse {
   updatedAt: string;
 }
 
+// WO-ARGOS-054 — "Cargador" is the friendly UX name for Evse; the type
+// stays ApiEvse-shaped internally, this only adds parent names for the
+// global inventory list.
+export interface ApiEvseListItem extends ApiEvse {
+  chargingStationName: string;
+  siteId: string;
+  siteName: string;
+}
+
 export interface ApiConnector {
   id: string;
   evseId: string;
@@ -131,6 +148,15 @@ export interface ApiConnector {
   maxPowerKw: number | null;
   createdAt: string;
   updatedAt: string;
+}
+
+// WO-ARGOS-054 — parent names for the global connector inventory list.
+export interface ApiConnectorListItem extends ApiConnector {
+  evseName: string | null;
+  chargingStationId: string;
+  chargingStationName: string;
+  siteId: string;
+  siteName: string;
 }
 
 // CAP-004 — Charging Sessions & Authorization Foundation (WO-ARGOS-009).

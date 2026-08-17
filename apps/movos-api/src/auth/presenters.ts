@@ -16,8 +16,11 @@ import type {
   ApiSite,
   ApiUser,
   ApiChargingStation,
+  ApiChargingStationListItem,
   ApiEvse,
+  ApiEvseListItem,
   ApiConnector,
+  ApiConnectorListItem,
   ApiChargingSession,
   ApiMeterValue,
   ApiAuthorizationCredential,
@@ -30,6 +33,9 @@ import type {
   ApiTechnicianWorkload,
 } from '@mediafox/shared-types';
 import type { ChargingSessionWithNames } from '../sessions/sessions.service';
+import type { ChargingStationWithSiteName } from '../charging-stations/charging-stations.service';
+import type { EvseWithNames } from '../evses/evses.service';
+import type { ConnectorWithNames } from '../connectors/connectors.service';
 import type { ActionWithNames } from '../recommendations/action.service';
 import type {
   WorkOrderWithNames,
@@ -147,6 +153,41 @@ export function toApiConnector(connector: Connector): ApiConnector {
     maxPowerKw: connector.maxPowerKw,
     createdAt: connector.createdAt.toISOString(),
     updatedAt: connector.updatedAt.toISOString(),
+  };
+}
+
+// WO-ARGOS-054 — Infrastructure Inventory Navigation. These three build on
+// the base presenters above rather than duplicating field mapping, adding
+// only the denormalized parent names the global inventory list endpoints
+// need (GET /charging-stations, GET /evses, GET /connectors).
+export function toApiChargingStationListItem(
+  station: ChargingStationWithSiteName,
+): ApiChargingStationListItem {
+  return {
+    ...toApiChargingStation(station),
+    siteName: station.site.name,
+  };
+}
+
+export function toApiEvseListItem(evse: EvseWithNames): ApiEvseListItem {
+  return {
+    ...toApiEvse(evse),
+    chargingStationName: evse.chargingStation.name,
+    siteId: evse.chargingStation.site.id,
+    siteName: evse.chargingStation.site.name,
+  };
+}
+
+export function toApiConnectorListItem(
+  connector: ConnectorWithNames,
+): ApiConnectorListItem {
+  return {
+    ...toApiConnector(connector),
+    evseName: connector.evse.name,
+    chargingStationId: connector.evse.chargingStation.id,
+    chargingStationName: connector.evse.chargingStation.name,
+    siteId: connector.evse.chargingStation.site.id,
+    siteName: connector.evse.chargingStation.site.name,
   };
 }
 

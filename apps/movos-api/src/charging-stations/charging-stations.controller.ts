@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags, ApiHeader } from '@nestjs/swagger';
@@ -15,13 +16,17 @@ import { MemberRole, type Membership } from '@prisma/client';
 import { ChargingStationsService } from './charging-stations.service';
 import { CreateChargingStationDto } from './dto/create-charging-station.dto';
 import { UpdateChargingStationDto } from './dto/update-charging-station.dto';
+import { ListChargingStationsQueryDto } from './dto/list-charging-stations-query.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { OrgContextGuard } from '../guards/org-context.guard';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { OrgContext } from '../common/decorators/org-context.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import { toApiChargingStation } from '../auth/presenters';
+import {
+  toApiChargingStation,
+  toApiChargingStationListItem,
+} from '../auth/presenters';
 import type { AuthenticatedUser } from '../common/request-context';
 
 @ApiTags('charging-stations')
@@ -34,6 +39,22 @@ import type { AuthenticatedUser } from '../common/request-context';
 @UseGuards(JwtAuthGuard, OrgContextGuard, RolesGuard)
 export class ChargingStationsController {
   constructor(private readonly chargingStations: ChargingStationsService) {}
+
+  @Get('charging-stations')
+  @ApiOperation({
+    summary:
+      'List all charging stations for the organization (WO-ARGOS-054 global inventory)',
+  })
+  async listAll(
+    @OrgContext() membership: Membership,
+    @Query() query: ListChargingStationsQueryDto,
+  ) {
+    const stations = await this.chargingStations.listAll(
+      membership.organizationId,
+      query,
+    );
+    return stations.map(toApiChargingStationListItem);
+  }
 
   @Get('sites/:siteId/charging-stations')
   @ApiOperation({ summary: 'List charging stations for a site' })
