@@ -2,6 +2,7 @@
 
 import { useParams } from 'next/navigation';
 import * as React from 'react';
+import { X } from 'lucide-react';
 import type { ApiChargingStation, ApiSite } from '@mediafox/shared-types';
 
 import { PageContainer } from '@/components/layout/page-container';
@@ -35,6 +36,12 @@ export default function ChargingStationDetailPage() {
   const [site, setSite] = React.useState<ApiSite | null>(null);
   const [state, setState] = React.useState<LoadState>('loading');
   const [editOpen, setEditOpen] = React.useState(false);
+  const [isProvisioning, setIsProvisioning] = React.useState(false);
+  const [provisionResult, setProvisionResult] =
+    React.useState<ProvisionResult | null>(null);
+  const [provisionError, setProvisionError] = React.useState<string | null>(
+    null,
+  );
 
   const load = React.useCallback(async (): Promise<void> => {
     setState('loading');
@@ -57,6 +64,26 @@ export default function ChargingStationDetailPage() {
   React.useEffect(() => {
     void load();
   }, [load]);
+
+  async function handleProvision(): Promise<void> {
+    if (!station) return;
+    setIsProvisioning(true);
+    setProvisionError(null);
+    try {
+      const result = await apiClient.post<ProvisionResult>(
+        `/charging-stations/${station.id}/ocpp-provisioning`,
+      );
+      setProvisionResult(result);
+    } catch (err) {
+      setProvisionError(
+        err instanceof ApiError
+          ? err.message
+          : 'No fue posible aprovisionar OCPP. Intenta nuevamente.',
+      );
+    } finally {
+      setIsProvisioning(false);
+    }
+  }
 
   if (state === 'loading') {
     return (
@@ -110,9 +137,28 @@ export default function ChargingStationDetailPage() {
                 Editar
               </Button>
             )}
+            {canManage && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void handleProvision()}
+                disabled={isProvisioning}
+              >
+                {isProvisioning ? 'Aprovisionando…' : 'Aprovisionar OCPP'}
+              </Button>
+            )}
           </div>
         }
       />
+
+      {provisionError && (
+        <p
+          role="alert"
+          className="mt-4 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-400"
+        >
+          {provisionError}
+        </p>
+      )}
 
       <div className="mt-8 grid gap-4 sm:grid-cols-3">
         <DetailCard label="Código" value={station.code ?? 'Sin código'} />
@@ -150,6 +196,13 @@ export default function ChargingStationDetailPage() {
         station={station}
         onSaved={setStation}
       />
+
+      {provisionResult && (
+        <ProvisionResultModal
+          result={provisionResult}
+          onClose={() => setProvisionResult(null)}
+        />
+      )}
     </PageContainer>
   );
 }
@@ -162,5 +215,117 @@ function DetailCard({ label, value }: { label: string; value: string }) {
         <p className="mt-2 text-lg font-semibold">{value}</p>
       </CardContent>
     </Card>
+  );
+}
+
+interface ProvisionResult {
+  ocppIdentity: string;
+  plaintextSecret: string;
+}
+
+/**
+ * The secret is only ever held here, in this component's own local state —
+ * never localStorage/sessionStorage/global state — matching the backend's
+ * own guarantee that it's returned exactly once and never retrievable
+ * again after this response.
+ */
+function ProvisionResultModal({
+  result,
+  onClose,
+}: {
+  result: ProvisionResult;
+  onClose: () => void;
+}) {
+  const [copied, setCopied] = React.useState<'identity' | 'secret' | null>(
+    null,
+  );
+
+  async function copy(
+    value: string,
+    which: 'identity' | 'secret',
+  ): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(which);
+      setTimeout(() => setCopied(null), 2000);
+    } catch {
+      // Clipboard access can be denied by the browser — the value is still
+      // shown on screen for manual copy, so this is not fatal.
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 px-4 py-8"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="provision-result-title"
+    >
+      <div className="border-border bg-background w-full max-w-lg rounded-xl border p-6 shadow-xl">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 id="provision-result-title" className="text-lg font-semibold">
+            Estación aprovisionada para OCPP
+          </h2>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            aria-label="Cerrar"
+          >
+            <X className="size-5" />
+          </Button>
+        </div>
+
+        <p
+          role="alert"
+          className="mb-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-500"
+        >
+          El secreto solo se muestra esta vez. Cópialo ahora — MOVOS no lo
+          volverá a mostrar.
+        </p>
+
+        <div className="space-y-4">
+          <div>
+            <p className="text-muted-foreground mb-1 text-xs">Identidad OCPP</p>
+            <div className="flex items-center gap-2">
+              <code className="bg-muted flex-1 break-all rounded-md px-3 py-2 text-sm">
+                {result.ocppIdentity}
+              </code>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void copy(result.ocppIdentity, 'identity')}
+              >
+                {copied === 'identity' ? 'Copiado' : 'Copiar'}
+              </Button>
+            </div>
+          </div>
+
+          <div>
+            <p className="text-muted-foreground mb-1 text-xs">Secreto</p>
+            <div className="flex items-center gap-2">
+              <code className="bg-muted flex-1 break-all rounded-md px-3 py-2 text-sm">
+                {result.plaintextSecret}
+              </code>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void copy(result.plaintextSecret, 'secret')}
+              >
+                {copied === 'secret' ? 'Copiado' : 'Copiar'}
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6 flex justify-end">
+          <Button type="button" onClick={onClose}>
+            Ya copié ambos valores
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
