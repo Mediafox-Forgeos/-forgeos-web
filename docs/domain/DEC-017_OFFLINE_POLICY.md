@@ -77,3 +77,16 @@ Everything above is preserved unedited as the original recommendation and analys
 **What remains exactly as originally recommended, not modified by this approval:** the 3× multiplier, the "first of (a) registry event or (b) heartbeat silence" trigger logic, and the explicit rejection of Option A (fixed 60s, incoherent with the shipped 300s interval) and Option C (requires a vendor catalog that doesn't exist).
 
 **Consequence of this approval:** CAP-005 (branch `feat/cap-005-connectivity-engine`) is authorized to build the wiring this document's own "Implementation note" described as not-yet-authorized. Scope beyond that wiring (RFID, billing, OCPP 2.0.1 functional messages, etc.) remains unauthorized by this approval — see CAP-005's own out-of-scope list.
+
+---
+
+## Addendum (2026-08-17, WO-ARGOS-061) — clarifying item 5, not changing it
+
+CAP-005's initial implementation read item 5 ("a disconnect alone must never complete or fail a session") as also forbidding a **clean** disconnect from moving a session to `OFFLINE` — only a **stale** disconnect did so. WO-ARGOS-060 (discovery) confirmed this produced a real bug: a cleanly-disconnected station's `ACTIVE` session could remain stranded indefinitely, invisible to reconnect recovery. WO-ARGOS-061 (implementation, ARGOS-approved) corrected this.
+
+**This addendum removes the ambiguity; it does not revise the policy.** Item 5 has always meant, and continues to mean, exactly this:
+
+- Connectivity loss (clean **or** stale, both reported by `ConnectionRegistryService` per item 1) **may** move a logically-active (`ACTIVE`/`SUSPENDED`) session to `OFFLINE`. This was already a legal transition under item 3 — item 5 never withheld it from a clean disconnect specifically, that was CAP-005's own implementation choice, not this document's requirement.
+- Connectivity loss **must never**, regardless of detection mechanism, infer `COMPLETED`, `FAILED`, or `CANCELLED`. Terminal transitions remain exclusively protocol-driven (`StopTransaction`) or explicit administrative action. This remains unchanged and absolute.
+
+`ConnectivityCoordinator.handleConnectionClosed` now reconciles `ACTIVE`/`SUSPENDED` sessions to `OFFLINE` identically for both `reason: 'clean'` and `reason: 'stale'`, via one shared private method reusing `SessionLifecycleService.suspendSession(id, 'OFFLINE')` — no parallel lifecycle mechanism, no new timer. See [CAP-005 §4](./CAP-005_CONNECTIVITY_ENGINE.md#4-clean-disconnect-and-stale-disconnect-reconcile-sessions-identically-wo-argos-061) for the resolved implementation history.
