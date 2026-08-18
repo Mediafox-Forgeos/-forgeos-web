@@ -2,7 +2,10 @@ import { ConnectionRegistryService } from './connection-registry.service';
 import type { ConnectivityCoordinator } from '../connectivity/connectivity-coordinator.service';
 
 function fakeSocket() {
-  return { close: jest.fn() } as unknown as import('ws').WebSocket;
+  return {
+    close: jest.fn(),
+    send: jest.fn(),
+  } as unknown as import('ws').WebSocket;
 }
 
 function fakeConnectivityCoordinator(): jest.Mocked<
@@ -149,6 +152,40 @@ describe('ConnectionRegistryService', () => {
 
     expect(socket.close).toHaveBeenCalledWith(1000, 'revoked');
     expect(registry.isConnected('movos-abc123')).toBe(false);
+  });
+
+  // WO-ARGOS-059 — the one place a server-originated CALL reaches the wire.
+  it('send() serializes the frame onto the live socket and returns true', () => {
+    const socket = fakeSocket();
+    registry.register({
+      ocppIdentity: 'movos-abc123',
+      chargingStationId: 'cs1',
+      protocolVersion: 'OCPP1_6J',
+      socket,
+    });
+
+    const sent = registry.send('movos-abc123', {
+      raw: [2, 'msg-1', 'RemoteStartTransaction', { connectorId: 1 }],
+    });
+
+    expect(sent).toBe(true);
+    expect(socket.send).toHaveBeenCalledWith(
+      JSON.stringify([
+        2,
+        'msg-1',
+        'RemoteStartTransaction',
+        { connectorId: 1 },
+      ]),
+    );
+  });
+
+  it('send() returns false, never throws, for an identity that is not connected', () => {
+    expect(() =>
+      registry.send('never-connected', { raw: [2, 'msg-1', 'Reset', {}] }),
+    ).not.toThrow();
+    expect(
+      registry.send('never-connected', { raw: [2, 'msg-1', 'Reset', {}] }),
+    ).toBe(false);
   });
 
   it('listConnected never exposes the raw socket', () => {

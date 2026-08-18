@@ -257,6 +257,21 @@ export class OcppSimulator {
 
     const [messageTypeId, messageId, third] = parsed as unknown[];
     if (typeof messageId !== 'string') return;
+
+    // WO-ARGOS-059 — an incoming CALL (messageTypeId 2): a server-originated
+    // command (RemoteStartTransaction, etc). Distinct from 3/4 below, which
+    // are responses to calls THIS simulator sent — before WO-059 this
+    // branch didn't exist at all, so any incoming CALL fell through to the
+    // `pending.get(messageId)` lookup below, found nothing (that map only
+    // ever holds ids the simulator generated for its own outgoing calls),
+    // and was silently dropped. See respondToIncomingCall for the
+    // test-author-controlled response this now sends instead.
+    if (messageTypeId === 2) {
+      const action = typeof third === 'string' ? third : undefined;
+      if (action) this.respondToIncomingCall(messageId, action);
+      return;
+    }
+
     const pending = this.pending.get(messageId);
     if (!pending) return;
     this.pending.delete(messageId);
@@ -266,6 +281,52 @@ export class OcppSimulator {
     } else if (messageTypeId === 4) {
       pending.resolve({ kind: 'CALLERROR', payload: parsed.slice(2) });
     }
+  }
+
+  /**
+   * WO-ARGOS-059 — deterministic, test-author-controlled responses to an
+   * incoming server-originated CALL. This is infrastructure for testing
+   * the Remote Operations control-plane foundation (item 9 of that work
+   * order's scope) — it does NOT attempt to reproduce real charger
+   * decision-making (e.g. it never actually "starts charging"; a realistic
+   * end-to-end RemoteStart/RemoteStop validation still needs the test
+   * itself to separately call sendStartTransaction/sendStopTransaction, the
+   * same methods used for the ordinary inbound-flow tests).
+   *
+   * Config-driven per action name (e.g. 'RemoteStartTransaction'), so one
+   * simulator instance can be told "accept this, reject that, say nothing
+   * at all for a third" within a single test file — exercising
+   * RemoteCommandService's ACCEPTED/REJECTED/TIMED_OUT paths against a
+   * real WebSocket round trip, not just mocked Prisma/ConnectionRegistry.
+   * An action with no configured outcome defaults to a plain Accepted, so
+   * a simple happy-path test needs no boilerplate.
+   */
+  private respondToIncomingCall(messageId: string, action: string): void {
+    const outcome = this.config.commandResponses?.[action] ?? {
+      kind: 'accept',
+    };
+
+    if (outcome.kind === 'silent') {
+      return; // deliberately no response — exercises the server's own timeout path
+    }
+
+    if (outcome.kind === 'error') {
+      this.ws?.send(
+        JSON.stringify([
+          4,
+          messageId,
+          outcome.errorCode,
+          outcome.errorDescription ?? '',
+          {},
+        ]),
+      );
+      return;
+    }
+
+    const payload = outcome.payload ?? {
+      status: outcome.kind === 'reject' ? 'Rejected' : 'Accepted',
+    };
+    this.ws?.send(JSON.stringify([3, messageId, payload]));
   }
 }
 

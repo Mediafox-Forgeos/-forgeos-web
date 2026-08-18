@@ -72,6 +72,10 @@ export async function resetDatabase(prisma: PrismaService): Promise<void> {
   // than silently cascading.
   await prisma.auditEvent.deleteMany();
   await prisma.refreshSession.deleteMany();
+  // WO-ARGOS-059 — RemoteCommand is RESTRICT-on-delete against
+  // ChargingStation/Connector/ChargingSession/Organization/User, so it must
+  // go before all of them.
+  await prisma.remoteCommand.deleteMany();
   await prisma.meterValue.deleteMany();
   await prisma.tariffSnapshot.deleteMany();
   await prisma.chargingSession.deleteMany();

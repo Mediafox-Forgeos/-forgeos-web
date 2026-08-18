@@ -175,13 +175,35 @@ export interface ProtocolAdapter {
     context: ParseContext,
   ): NormalizedInboundEvent | UnsupportedMessage | MalformedFrame;
 
+  /** The wire action name for a CALL frame (e.g. 'RemoteStartTransaction')
+   * — kept in the protocol layer, never guessed/mapped by a caller, per
+   * this file's "only seam" rule. Throws CapabilityNotSupportedError for
+   * any command type this adapter doesn't implement. */
+  outboundActionName(commandType: NormalizedOutboundCommand['type']): string;
+
   /** Throws CapabilityNotSupportedError if `command.type` isn't in
    * `capabilities.supportedOutbound` — callers must check capabilities
-   * first; this is a defensive backstop, not the primary control. Not
-   * implemented by any CAP-003 adapter (both declare an empty
-   * supportedOutbound set), reserved for the first outbound command
-   * (Architecture Backlog #36-39). */
+   * first; this is a defensive backstop, not the primary control. Returns
+   * only the CALL's payload object (as RawFrame.raw) — NOT the full
+   * [2, messageId, action, payload] envelope, since formatOutbound doesn't
+   * receive a messageId (the caller generates and tracks that via
+   * PendingCallRegistryService); the caller wraps this payload with
+   * formatCall(messageId, outboundActionName(...), payload.raw) to build
+   * the actual frame to send. Implemented for RemoteStart/RemoteStop only,
+   * by Ocpp16Adapter (WO-ARGOS-059, Architecture Backlog #36-37) — every
+   * other command and the whole of Ocpp201Adapter still throw. */
   formatOutbound(command: NormalizedOutboundCommand): RawFrame;
+
+  /** The decode side of formatOutbound — interprets a CALLRESULT payload
+   * for the outbound command that produced it. Kept in the protocol layer
+   * rather than left to the caller to interpret raw OCPP vocabulary
+   * directly, per this file's own "only seam" rule. Throws
+   * CapabilityNotSupportedError for any command type this adapter doesn't
+   * implement, same discipline as formatOutbound. */
+  parseOutboundResult(
+    command: NormalizedOutboundCommand,
+    payload: Record<string, unknown>,
+  ): { accepted: boolean };
 
   /** `messageId` is the original CALL's OCPP-J message id, extracted by the
    * router when it parsed the inbound frame — threaded through explicitly

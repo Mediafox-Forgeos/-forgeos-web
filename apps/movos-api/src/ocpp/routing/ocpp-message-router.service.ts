@@ -14,6 +14,7 @@ import type {
   RawFrame,
 } from '../protocol/common/normalized-events';
 import { ConnectionRegistryService } from '../connection-registry/connection-registry.service';
+import { PendingCallRegistryService } from '../outbound/pending-call-registry.service';
 import { OcppProtocolEventService } from '../persistence/ocpp-protocol-event.service';
 import { BootNotificationHandler } from '../handlers/boot-notification.handler';
 import { HeartbeatHandler } from '../handlers/heartbeat.handler';
@@ -35,6 +36,7 @@ export class OcppMessageRouterService {
 
   constructor(
     private readonly connectionRegistry: ConnectionRegistryService,
+    private readonly pendingCalls: PendingCallRegistryService,
     private readonly protocolEvents: OcppProtocolEventService,
     private readonly bootHandler: BootNotificationHandler,
     private readonly heartbeatHandler: HeartbeatHandler,
@@ -75,9 +77,50 @@ export class OcppMessageRouterService {
     }
 
     if (envelope.kind !== 'CALL') {
-      // A device sending us a CALLRESULT/CALLERROR implies we sent a CALL —
-      // no CAP-003 adapter has any supportedOutbound entries, so this is
-      // always unexpected. Log it; OCPP never responds to a response.
+      // WO-ARGOS-059 — a CALLRESULT/CALLERROR now legitimately correlates
+      // to a RemoteCommand's outbound CALL (Ocpp16Adapter's
+      // supportedOutbound is no longer always empty). Check the pending-call
+      // registry FIRST — only an unmatched messageId is still the
+      // pre-WO-059 "unexpected response" case.
+      if (this.pendingCalls.has(envelope.messageId)) {
+        // This router never interprets the payload itself
+        // (Accepted/Rejected/etc is a domain concern for whoever registered
+        // the pending call, e.g. RemoteCommandService) — it only forwards
+        // the raw resolution and records the protocol event, preserving the
+        // WO-056/058 principle that protocol acknowledgement is never
+        // conflated with domain state here either.
+        if (envelope.kind === 'CALLRESULT') {
+          this.pendingCalls.resolve(envelope.messageId, {
+            kind: 'CALLRESULT',
+            payload: envelope.payload,
+          });
+        } else {
+          this.pendingCalls.resolve(envelope.messageId, {
+            kind: 'CALLERROR',
+            errorCode: envelope.errorCode,
+            errorDescription: envelope.errorDescription,
+            details: envelope.details,
+          });
+        }
+        await this.protocolEvents.record({
+          chargingStationId: station.id,
+          protocolVersion: adapter.version,
+          direction: OcppMessageDirection.INBOUND,
+          messageType:
+            envelope.kind === 'CALLRESULT'
+              ? OcppMessageType.CALLRESULT
+              : OcppMessageType.CALLERROR,
+          protocolMessageId: envelope.messageId,
+          payload: frame.raw,
+          processingStatus: OcppProcessingStatus.PROCESSED,
+          correlationId: envelope.messageId,
+        });
+        return null; // OCPP never responds to a response, correlated or not.
+      }
+
+      // Unmatched — an unknown/stale response id (WO-059 scope item 4:
+      // "handled safely and audibly," never thrown). Log it; OCPP never
+      // responds to a response.
       await this.protocolEvents.record({
         chargingStationId: station.id,
         protocolVersion: adapter.version,

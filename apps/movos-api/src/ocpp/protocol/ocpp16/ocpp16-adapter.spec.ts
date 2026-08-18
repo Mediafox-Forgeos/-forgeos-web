@@ -506,7 +506,7 @@ describe('Ocpp16Adapter', () => {
     }
   });
 
-  it('declares its capabilities as exactly Boot/Heartbeat/Status/Authorization/Transaction* inbound and no outbound', () => {
+  it('declares its capabilities as exactly Boot/Heartbeat/Status/Authorization/Transaction* inbound, and RemoteStart/RemoteStop outbound (WO-ARGOS-059 Phase A)', () => {
     expect(Array.from(adapter.capabilities.supportedInbound).sort()).toEqual(
       [
         'Authorization',
@@ -518,6 +518,102 @@ describe('Ocpp16Adapter', () => {
         'TransactionUpdate',
       ].sort(),
     );
-    expect(adapter.capabilities.supportedOutbound.size).toBe(0);
+    expect(Array.from(adapter.capabilities.supportedOutbound).sort()).toEqual(
+      ['RemoteStart', 'RemoteStop'].sort(),
+    );
+  });
+
+  // WO-ARGOS-059 — Remote Operations / Control Plane Foundation. Only
+  // RemoteStart/RemoteStop are implemented (ARGOS's WO-058 review, Phase A);
+  // Reset/UnlockConnector/ChangeAvailability remain reserved-but-unbuilt.
+  describe('outbound commands (WO-ARGOS-059)', () => {
+    it('formats a RemoteStart command as RemoteStartTransaction.req', () => {
+      const frame = adapter.formatOutbound({
+        type: 'RemoteStart',
+        stationIdentity: 'movos-abc123',
+        connectorExternalId: '1',
+        idTag: 'ABC123',
+      });
+      expect(frame.raw).toEqual({ connectorId: 1, idTag: 'ABC123' });
+      expect(adapter.outboundActionName('RemoteStart')).toBe(
+        'RemoteStartTransaction',
+      );
+    });
+
+    it('formats a RemoteStop command as RemoteStopTransaction.req', () => {
+      const frame = adapter.formatOutbound({
+        type: 'RemoteStop',
+        stationIdentity: 'movos-abc123',
+        transactionRef: '55526',
+      });
+      expect(frame.raw).toEqual({ transactionId: 55526 });
+      expect(adapter.outboundActionName('RemoteStop')).toBe(
+        'RemoteStopTransaction',
+      );
+    });
+
+    it('parses an Accepted RemoteStart/RemoteStop CALLRESULT as accepted: true', () => {
+      expect(
+        adapter.parseOutboundResult(
+          {
+            type: 'RemoteStart',
+            stationIdentity: 'x',
+            connectorExternalId: '1',
+            idTag: 'A',
+          },
+          { status: 'Accepted' },
+        ),
+      ).toEqual({ accepted: true });
+      expect(
+        adapter.parseOutboundResult(
+          { type: 'RemoteStop', stationIdentity: 'x', transactionRef: '1' },
+          { status: 'Accepted' },
+        ),
+      ).toEqual({ accepted: true });
+    });
+
+    it('parses a Rejected CALLRESULT as accepted: false — never inferred as physical outcome, only protocol acceptance', () => {
+      expect(
+        adapter.parseOutboundResult(
+          {
+            type: 'RemoteStart',
+            stationIdentity: 'x',
+            connectorExternalId: '1',
+            idTag: 'A',
+          },
+          { status: 'Rejected' },
+        ),
+      ).toEqual({ accepted: false });
+    });
+
+    it.each(['Reset', 'UnlockConnector', 'ChangeAvailability'] as const)(
+      '%s remains unimplemented — formatOutbound/outboundActionName/parseOutboundResult all throw CapabilityNotSupportedError',
+      (type) => {
+        const command =
+          type === 'Reset'
+            ? ({ type, stationIdentity: 'x', mode: 'Soft' } as const)
+            : type === 'UnlockConnector'
+              ? ({
+                  type,
+                  stationIdentity: 'x',
+                  connectorExternalId: '1',
+                } as const)
+              : ({
+                  type,
+                  stationIdentity: 'x',
+                  availability: 'Operative',
+                } as const);
+
+        expect(() => adapter.formatOutbound(command)).toThrow(
+          'is not supported by the OCPP1_6J adapter',
+        );
+        expect(() => adapter.outboundActionName(type)).toThrow(
+          'is not supported by the OCPP1_6J adapter',
+        );
+        expect(() => adapter.parseOutboundResult(command, {})).toThrow(
+          'is not supported by the OCPP1_6J adapter',
+        );
+      },
+    );
   });
 });

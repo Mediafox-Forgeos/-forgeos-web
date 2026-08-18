@@ -69,4 +69,23 @@ describe('Ocpp201Adapter', () => {
       }),
     ).toThrow(/not supported/);
   });
+
+  // WO-ARGOS-059 — 2.0.1 implements nothing outbound either, consistent
+  // with formatOutbound above (Phase A is 1.6J-only).
+  it('throws CapabilityNotSupportedError for outboundActionName and parseOutboundResult too', () => {
+    expect(() => adapter.outboundActionName('RemoteStart')).toThrow(
+      /not supported/,
+    );
+    expect(() =>
+      adapter.parseOutboundResult(
+        {
+          type: 'RemoteStart',
+          stationIdentity: 'movos-abc123',
+          connectorExternalId: '1',
+          idTag: 'ABC',
+        },
+        {},
+      ),
+    ).toThrow(/not supported/);
+  });
 });
