@@ -1,21 +1,29 @@
 'use client';
 
+import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import * as React from 'react';
 import { X } from 'lucide-react';
-import type { ApiChargingStation, ApiSite } from '@mediafox/shared-types';
+import type {
+  ApiChargingSession,
+  ApiChargingStation,
+  ApiSite,
+  ApiWorkOrder,
+} from '@mediafox/shared-types';
 
 import { PageContainer } from '@/components/layout/page-container';
 import { PageHeader } from '@/components/layout/page-header';
 import { EmptyState } from '@/components/movos/empty-state';
 import {
+  ApiChargingSessionStatusBadge,
   ApiChargingStationStatusBadge,
   ApiConnectivityStatusBadge,
 } from '@/components/movos/api-charging-status-badges';
+import { WorkOrderStatusBadge } from '@/components/work-orders/work-order-badges';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { apiClient, ApiError } from '@/lib/api-client';
-import { formatDateTime } from '@/lib/format';
+import { formatDateTime, formatRelative } from '@/lib/format';
 import { getChargingStation } from '@/lib/charging-api';
 import { useAuth } from '@/context/auth-context';
 import { EvseList } from '@/components/charging/evse-list';
@@ -34,6 +42,8 @@ export default function ChargingStationDetailPage() {
 
   const [station, setStation] = React.useState<ApiChargingStation | null>(null);
   const [site, setSite] = React.useState<ApiSite | null>(null);
+  const [sessions, setSessions] = React.useState<ApiChargingSession[]>([]);
+  const [workOrders, setWorkOrders] = React.useState<ApiWorkOrder[]>([]);
   const [state, setState] = React.useState<LoadState>('loading');
   const [editOpen, setEditOpen] = React.useState(false);
   const [isProvisioning, setIsProvisioning] = React.useState(false);
@@ -52,6 +62,27 @@ export default function ChargingStationDetailPage() {
         setSite(await apiClient.get<ApiSite>(`/sites/${data.siteId}`));
       } catch {
         // Breadcrumb enrichment only — the station itself already loaded.
+      }
+      try {
+        setSessions(
+          await apiClient.get<ApiChargingSession[]>(
+            `/sessions?chargingStationId=${encodeURIComponent(stationId)}`,
+          ),
+        );
+      } catch {
+        // Optional context only — the station itself already loaded.
+      }
+      try {
+        // WO-ARGOS-057 — GET /work-orders has no stationId filter (only
+        // status/priority/assignedMemberId/unassigned/scheduledFrom/
+        // scheduledTo — see ListWorkOrdersQueryDto), so this reuses the
+        // existing capped (take: 100) list and narrows client-side rather
+        // than adding a new backend filter for one drill-down link.
+        const allWorkOrders =
+          await apiClient.get<ApiWorkOrder[]>('/work-orders');
+        setWorkOrders(allWorkOrders.filter((wo) => wo.stationId === stationId));
+      } catch {
+        // Optional context only — the station itself already loaded.
       }
       setState('ready');
     } catch (err) {
@@ -188,6 +219,64 @@ export default function ChargingStationDetailPage() {
           siteId={siteId}
           canManage={canManage}
         />
+      </div>
+
+      <div className="mt-8 grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              Sesiones{sessions.length > 0 ? ` (${sessions.length})` : ''}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {sessions.length === 0 && (
+              <p className="text-muted-foreground text-sm">
+                Sin sesiones registradas para esta estación.
+              </p>
+            )}
+            {sessions.slice(0, 5).map((session) => (
+              <Link
+                key={session.id}
+                href={`/sessions/${session.id}`}
+                className="border-border hover:bg-accent/40 flex items-center justify-between rounded-lg border px-3 py-2 text-sm transition-colors"
+              >
+                <div>
+                  <p className="font-medium">
+                    {(session.energyWh / 1000).toFixed(1)} kWh · iniciada{' '}
+                    {formatRelative(session.startedAt)}
+                  </p>
+                </div>
+                <ApiChargingSessionStatusBadge status={session.status} />
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              Órdenes de trabajo
+              {workOrders.length > 0 ? ` (${workOrders.length})` : ''}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {workOrders.length === 0 && (
+              <p className="text-muted-foreground text-sm">
+                Sin órdenes de trabajo para esta estación.
+              </p>
+            )}
+            {workOrders.slice(0, 5).map((wo) => (
+              <Link
+                key={wo.id}
+                href={`/work-orders/${wo.id}`}
+                className="border-border hover:bg-accent/40 flex items-center justify-between rounded-lg border px-3 py-2 text-sm transition-colors"
+              >
+                <p className="truncate font-medium">{wo.title}</p>
+                <WorkOrderStatusBadge status={wo.status} />
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
       </div>
 
       <ChargingStationFormModal

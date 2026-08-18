@@ -1,4 +1,5 @@
 import { Test } from '@nestjs/testing';
+import type { ConnectivityStatus, ConnectorStatus } from '@prisma/client';
 
 import { StationHealthService } from './station-health.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -17,20 +18,47 @@ function createPrismaMock(): PrismaMock {
   };
 }
 
+// WO-ARGOS-057 — station() builds the shape computeHealth() itself takes
+// (StationWithTopology: connectors already carry a resolved
+// `hasActiveSession` boolean). summarizeFleet/summarizeBySite instead go
+// through Prisma, whose raw rows carry a `chargingSessions` relation array
+// (see TOPOLOGY_INCLUDE/toStationWithTopology in the service) — toPrismaRow
+// converts one into the other so those tests mock exactly what Prisma would
+// actually return.
 function station(overrides: {
   id?: string;
-  connectivityStatus?: string;
-  evses?: Array<{ status?: string; connectors?: Array<{ status?: string }> }>;
+  connectivityStatus?: ConnectivityStatus;
+  evses?: Array<{
+    connectors?: Array<{
+      status?: ConnectorStatus;
+      hasActiveSession?: boolean;
+    }>;
+  }>;
 }) {
   return {
     id: overrides.id ?? 'station-1',
     connectivityStatus: overrides.connectivityStatus ?? 'ONLINE',
     evses: (overrides.evses ?? []).map((evse, i) => ({
       id: `evse-${i}`,
-      status: evse.status ?? 'AVAILABLE',
       connectors: (evse.connectors ?? []).map((connector, j) => ({
         id: `connector-${i}-${j}`,
         status: connector.status ?? 'AVAILABLE',
+        hasActiveSession: connector.hasActiveSession ?? false,
+      })),
+    })),
+  };
+}
+
+function toPrismaRow(s: ReturnType<typeof station>) {
+  return {
+    id: s.id,
+    connectivityStatus: s.connectivityStatus,
+    evses: s.evses.map((evse) => ({
+      connectors: evse.connectors.map((connector) => ({
+        status: connector.status,
+        chargingSessions: connector.hasActiveSession
+          ? [{ id: `${connector.id}-session` }]
+          : [],
       })),
     })),
   };
@@ -76,6 +104,18 @@ describe('StationHealthService', () => {
       expect(service.computeHealth(s).status).toBe('offline');
     });
 
+    it('is healthy when ONLINE with zero connectors (freshly created station)', () => {
+      const s = station({ connectivityStatus: 'ONLINE', evses: [] });
+      expect(service.computeHealth(s).status).toBe('healthy');
+    });
+  });
+
+  // WO-ARGOS-057 — StationHealth reconciliation with WO-056 Operational
+  // Status: "degraded" must be driven exclusively by
+  // computeEvseOperationalStatus()'s requiresAttention, the same OBSERVED
+  // evidence every other surface (GET /evses, EVSE detail) already uses —
+  // never by the administrative Evse.status field.
+  describe('computeHealth — reconciled with WO-056 Operational Status', () => {
     it('is degraded when ONLINE with a single faulted connector among several', () => {
       const s = station({
         connectivityStatus: 'ONLINE',
@@ -85,7 +125,7 @@ describe('StationHealthService', () => {
       });
       const result = service.computeHealth(s);
       expect(result.status).toBe('degraded');
-      expect(result.reason).toContain('1 de 2');
+      expect(result.reason).toContain('1 de 1');
     });
 
     it('is degraded, not offline, when ALL connectors are faulted but connectivity is ONLINE', () => {
@@ -96,15 +136,39 @@ describe('StationHealthService', () => {
       expect(service.computeHealth(s).status).toBe('degraded');
     });
 
-    it('is degraded when the EVSE itself is FAULTED even if its connector is not', () => {
+    it('is degraded when a ChargingSession is active on a connector whose raw status disagrees (ACTIVE_SESSION_CONNECTOR_NOT_IN_USE)', () => {
+      // The scenario evse-operational-status.ts exists to catch: real
+      // session evidence outranks a stale connector status. Station-level
+      // health must inherit this, not just the plain FAULTED case.
       const s = station({
         connectivityStatus: 'ONLINE',
-        evses: [{ status: 'FAULTED', connectors: [{ status: 'AVAILABLE' }] }],
+        evses: [
+          {
+            connectors: [
+              { status: 'AVAILABLE', hasActiveSession: true },
+              { status: 'AVAILABLE' },
+            ],
+          },
+        ],
       });
       expect(service.computeHealth(s).status).toBe('degraded');
     });
 
-    it('is healthy when ONLINE with no faulted connector or EVSE', () => {
+    it('is healthy when ONLINE with a connector plainly UNAVAILABLE next to an AVAILABLE one (no fault, no session mismatch)', () => {
+      // Mirrors the exact WO-056 Digital Twin validation scenario
+      // (Connector 1 AVAILABLE, Connector 2 UNAVAILABLE -> AVAILABLE, not
+      // degraded) — a plain out-of-service connector must not itself read
+      // as a station health problem.
+      const s = station({
+        connectivityStatus: 'ONLINE',
+        evses: [
+          { connectors: [{ status: 'AVAILABLE' }, { status: 'UNAVAILABLE' }] },
+        ],
+      });
+      expect(service.computeHealth(s).status).toBe('healthy');
+    });
+
+    it('is healthy when ONLINE with no faulted connector and no session mismatch', () => {
       const s = station({
         connectivityStatus: 'ONLINE',
         evses: [
@@ -114,23 +178,34 @@ describe('StationHealthService', () => {
       expect(service.computeHealth(s).status).toBe('healthy');
     });
 
-    it('is healthy when ONLINE with zero connectors (freshly created station)', () => {
-      const s = station({ connectivityStatus: 'ONLINE', evses: [] });
-      expect(service.computeHealth(s).status).toBe('healthy');
+    it('counts across multiple EVSEs, not just the first', () => {
+      const s = station({
+        connectivityStatus: 'ONLINE',
+        evses: [
+          { connectors: [{ status: 'AVAILABLE' }] },
+          { connectors: [{ status: 'FAULTED' }] },
+          { connectors: [{ status: 'AVAILABLE' }] },
+        ],
+      });
+      const result = service.computeHealth(s);
+      expect(result.status).toBe('degraded');
+      expect(result.reason).toContain('1 de 3');
     });
   });
 
   describe('summarizeFleet', () => {
     it('tallies computed health across only ACTIVE stations, scoped to the organization', async () => {
-      prisma.chargingStation.findMany.mockResolvedValue([
-        station({ id: 's1', connectivityStatus: 'ONLINE' }),
-        station({ id: 's2', connectivityStatus: 'OFFLINE' }),
-        station({
-          id: 's3',
-          connectivityStatus: 'ONLINE',
-          evses: [{ connectors: [{ status: 'FAULTED' }] }],
-        }),
-      ]);
+      prisma.chargingStation.findMany.mockResolvedValue(
+        [
+          station({ id: 's1', connectivityStatus: 'ONLINE' }),
+          station({ id: 's2', connectivityStatus: 'OFFLINE' }),
+          station({
+            id: 's3',
+            connectivityStatus: 'ONLINE',
+            evses: [{ connectors: [{ status: 'FAULTED' }] }],
+          }),
+        ].map(toPrismaRow),
+      );
 
       const summary = await service.summarizeFleet('org-1');
 
@@ -196,7 +271,7 @@ describe('StationHealthService', () => {
           chargingStations: [
             station({ id: 's1', connectivityStatus: 'ONLINE' }),
             station({ id: 's2', connectivityStatus: 'OFFLINE' }),
-          ],
+          ].map(toPrismaRow),
         },
         {
           id: 'site-2',

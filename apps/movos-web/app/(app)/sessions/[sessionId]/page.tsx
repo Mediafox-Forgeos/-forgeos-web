@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import * as React from 'react';
 
@@ -94,18 +95,28 @@ export default function SessionDetailPage() {
     );
   }
 
-  const summary: Array<[string, string]> = [
+  // WO-ARGOS-057 — navigation gap closed: Session detail previously had no
+  // link back down to the Site/Station/EVSE/Connector it belongs to, even
+  // though ApiChargingSession already carries every id needed. Connector
+  // has no detail route in this app (WO-054 never built one — see
+  // WO_057_OPERATIONS_CONSOLE_DISCOVERY §7), so its row links to the parent
+  // EVSE detail page instead of inventing a new route.
+  const stationHref = `/sites/${session.siteId}/charging-stations/${session.chargingStationId}`;
+  const evseHref = `${stationHref}/evses/${session.evseId}`;
+
+  const summary: Array<[string, string, string?]> = [
     ['Energía entregada', `${(session.energyWh / 1000).toFixed(2)} kWh`],
     ['Inicio', formatDateTime(session.startedAt)],
     ['Fin', session.endedAt ? formatDateTime(session.endedAt) : 'En curso'],
-    ['Sitio', session.siteName],
-    ['Estación', session.chargingStationName],
-    ['Conector', session.connectorId],
+    ['Sitio', session.siteName, `/sites/${session.siteId}`],
+    ['Estación', session.chargingStationName, stationHref],
+    ['EVSE', session.evseId, evseHref],
+    ['Conector', session.connectorId, evseHref],
     ['Protocolo', session.protocolVersion],
     ['ID de transacción', session.protocolTransactionId],
     ...(session.terminationReason
       ? ([['Motivo de finalización', session.terminationReason]] as Array<
-          [string, string]
+          [string, string, string?]
         >)
       : []),
   ];
@@ -128,10 +139,19 @@ export default function SessionDetailPage() {
             <CardTitle>Resumen</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-2 gap-4">
-            {summary.map(([label, value]) => (
+            {summary.map(([label, value, href]) => (
               <div key={label}>
                 <p className="text-muted-foreground text-xs">{label}</p>
-                <p className="mt-1 text-sm font-medium">{value}</p>
+                {href ? (
+                  <Link
+                    href={href}
+                    className="mt-1 block text-sm font-medium hover:underline"
+                  >
+                    {value}
+                  </Link>
+                ) : (
+                  <p className="mt-1 text-sm font-medium">{value}</p>
+                )}
               </div>
             ))}
           </CardContent>

@@ -154,7 +154,11 @@ export function OperationalStatusBadge({ status }: { status: string }) {
   return <Badge tone={descriptor.tone}>{descriptor.label}</Badge>;
 }
 
-const attentionReasonLabelMap: Record<string, string> = {
+// WO-ARGOS-057 — exported (not module-private) so the Unified Attention
+// widget can render the same wording this indicator uses, rather than
+// restating these strings — same reasoning as ATTENTION_REASON_LABEL in
+// work-order-badges.tsx for the WorkOrder-level reason set.
+export const EVSE_ATTENTION_REASON_LABEL: Record<string, string> = {
   CONNECTOR_FAULTED: 'Un conector reporta falla',
   ACTIVE_SESSION_CONNECTOR_NOT_IN_USE:
     'Hay una sesión activa que el estado del conector no refleja',
@@ -166,7 +170,9 @@ const attentionReasonLabelMap: Record<string, string> = {
  */
 export function RequiresAttentionIndicator({ reasons }: { reasons: string[] }) {
   if (reasons.length === 0) return null;
-  const title = reasons.map((r) => attentionReasonLabelMap[r] ?? r).join(' · ');
+  const title = reasons
+    .map((r) => EVSE_ATTENTION_REASON_LABEL[r] ?? r)
+    .join(' · ');
   return (
     <span title={title} className="inline-flex text-amber-500">
       <TriangleAlert className="size-4" aria-hidden="true" />

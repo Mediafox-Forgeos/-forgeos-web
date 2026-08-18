@@ -1,8 +1,10 @@
 'use client';
 
+import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import * as React from 'react';
 import type {
+  ApiChargingSession,
   ApiChargingStation,
   ApiEvseListItem,
   ApiSite,
@@ -12,18 +14,25 @@ import { PageContainer } from '@/components/layout/page-container';
 import { PageHeader } from '@/components/layout/page-header';
 import { EmptyState } from '@/components/movos/empty-state';
 import {
+  ApiChargingSessionStatusBadge,
   ApiEvseStatusBadge,
   OperationalStatusBadge,
   RequiresAttentionIndicator,
 } from '@/components/movos/api-charging-status-badges';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { apiClient, ApiError } from '@/lib/api-client';
-import { formatConnectorAvailability } from '@/lib/format';
+import { formatConnectorAvailability, formatRelative } from '@/lib/format';
 import { getChargingStation, getEvse } from '@/lib/charging-api';
 import { useAuth } from '@/context/auth-context';
 import { ConnectorList } from '@/components/charging/connector-list';
 import { EvseFormModal } from '@/components/charging/evse-form-modal';
+
+// WO-ARGOS-057 — mirrors the exact non-terminal set evse-operational-
+// status.ts's ConnectorEvidence.hasActiveSession already treats as "in
+// progress" (see EVSE_WITH_NAMES_INCLUDE in evses.service.ts) — one
+// definition of "active session," not a second one invented here.
+const ACTIVE_SESSION_STATUSES = new Set(['ACTIVE', 'SUSPENDED', 'OFFLINE']);
 
 type LoadState = 'loading' | 'ready' | 'notfound' | 'error';
 
@@ -43,6 +52,8 @@ export default function EvseDetailPage() {
   const [evse, setEvse] = React.useState<ApiEvseListItem | null>(null);
   const [station, setStation] = React.useState<ApiChargingStation | null>(null);
   const [site, setSite] = React.useState<ApiSite | null>(null);
+  const [activeSession, setActiveSession] =
+    React.useState<ApiChargingSession | null>(null);
   const [state, setState] = React.useState<LoadState>('loading');
   const [editOpen, setEditOpen] = React.useState(false);
 
@@ -57,6 +68,22 @@ export default function EvseDetailPage() {
         setSite(await apiClient.get<ApiSite>(`/sites/${stationData.siteId}`));
       } catch {
         // Breadcrumb enrichment only — the EVSE itself already loaded.
+      }
+      try {
+        // WO-ARGOS-057 — no evseId filter exists on GET /sessions, so this
+        // reuses the existing chargingStationId filter (already built for
+        // the station list/filter UI) and narrows to this EVSE client-side
+        // — the station's session list is small, no new backend endpoint.
+        const stationSessions = await apiClient.get<ApiChargingSession[]>(
+          `/sessions?chargingStationId=${encodeURIComponent(data.chargingStationId)}`,
+        );
+        setActiveSession(
+          stationSessions.find(
+            (s) => s.evseId === evseId && ACTIVE_SESSION_STATUSES.has(s.status),
+          ) ?? null,
+        );
+      } catch {
+        // Optional context only — the EVSE itself already loaded.
       }
       setState('ready');
     } catch (err) {
@@ -151,6 +178,32 @@ export default function EvseDetailPage() {
           badge={<ApiEvseStatusBadge status={evse.status} />}
         />
       </div>
+
+      {activeSession && (
+        <div className="mt-8">
+          <Card>
+            <CardHeader>
+              <CardTitle>Sesión en curso</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Link
+                href={`/sessions/${activeSession.id}`}
+                className="border-border hover:bg-accent/40 flex items-center justify-between rounded-lg border px-3 py-2 text-sm transition-colors"
+              >
+                <div>
+                  <p className="font-medium">
+                    {(activeSession.energyWh / 1000).toFixed(1)} kWh entregados
+                  </p>
+                  <p className="text-muted-foreground text-xs">
+                    Iniciada {formatRelative(activeSession.startedAt)}
+                  </p>
+                </div>
+                <ApiChargingSessionStatusBadge status={activeSession.status} />
+              </Link>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       <div className="mt-8">
         <ConnectorList evseId={evse.id} canManage={canManage} />
