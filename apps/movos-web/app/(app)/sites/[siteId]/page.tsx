@@ -1,18 +1,21 @@
 'use client';
 
+import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import * as React from 'react';
-import type { ApiSite } from '@mediafox/shared-types';
+import type { ApiSite, ApiWorkOrder } from '@mediafox/shared-types';
 
 import { PageContainer } from '@/components/layout/page-container';
 import { PageHeader } from '@/components/layout/page-header';
 import { EmptyState } from '@/components/movos/empty-state';
 import { Tabs } from '@/components/movos/tabs';
 import { ApiSiteStatusBadge } from '@/components/movos/api-site-status-badge';
+import { WorkOrderStatusBadge } from '@/components/work-orders/work-order-badges';
 import { Card, CardContent } from '@/components/ui/card';
 import { apiClient, ApiError } from '@/lib/api-client';
 import { SiteMap } from '@/components/location/site-map';
 import { ChargingStationList } from '@/components/charging/charging-station-list';
+import { listChargingStationsBySite } from '@/lib/charging-api';
 import { useAuth } from '@/context/auth-context';
 
 type LoadState = 'loading' | 'ready' | 'notfound' | 'error';
@@ -39,6 +42,7 @@ export default function SiteDetailPage() {
   const canManage =
     membership?.role === 'OWNER' || membership?.role === 'ADMIN';
   const [site, setSite] = React.useState<ApiSite | null>(null);
+  const [workOrders, setWorkOrders] = React.useState<ApiWorkOrder[]>([]);
   const [state, setState] = React.useState<LoadState>('loading');
 
   React.useEffect(() => {
@@ -56,6 +60,25 @@ export default function SiteDetailPage() {
         setState(
           err instanceof ApiError && err.status === 404 ? 'notfound' : 'error',
         );
+        return;
+      }
+      // WO-ARGOS-057 — WorkOrder carries no siteId (only stationId), and
+      // GET /work-orders has no site-scoped filter, so this resolves the
+      // site's real stations first (existing per-site endpoint) and
+      // narrows the existing capped work-orders list client-side — no new
+      // backend endpoint for one drill-down tab.
+      try {
+        const stations = await listChargingStationsBySite(siteId);
+        const stationIds = new Set(stations.map((s) => s.id));
+        const allWorkOrders =
+          await apiClient.get<ApiWorkOrder[]>('/work-orders');
+        if (!cancelled) {
+          setWorkOrders(
+            allWorkOrders.filter((wo) => stationIds.has(wo.stationId)),
+          );
+        }
+      } catch {
+        // Optional context only — the site itself already loaded.
       }
     }
     void load();
@@ -223,6 +246,36 @@ export default function SiteDetailPage() {
               content: (
                 <ChargingStationList siteId={site.id} canManage={canManage} />
               ),
+            },
+            {
+              id: 'work-orders',
+              label: `Órdenes de trabajo${
+                workOrders.length > 0 ? ` (${workOrders.length})` : ''
+              }`,
+              content:
+                workOrders.length === 0 ? (
+                  <p className="text-muted-foreground text-sm">
+                    Sin órdenes de trabajo para este sitio.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {workOrders.map((wo) => (
+                      <Link
+                        key={wo.id}
+                        href={`/work-orders/${wo.id}`}
+                        className="border-border hover:bg-accent/40 flex items-center justify-between rounded-lg border px-3 py-2 text-sm transition-colors"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate font-medium">{wo.title}</p>
+                          <p className="text-muted-foreground truncate text-xs">
+                            {wo.stationName}
+                          </p>
+                        </div>
+                        <WorkOrderStatusBadge status={wo.status} />
+                      </Link>
+                    ))}
+                  </div>
+                ),
             },
           ]}
         />

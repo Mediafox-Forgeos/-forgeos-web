@@ -21,7 +21,12 @@ import type { ListEvsesQueryDto } from './dto/list-evses-query.dto';
 // ChargingSession currently exists on it. One query, no N+1. This include
 // never reads/writes Evse.status or Connector.status beyond the plain
 // select already needed for display — nothing here mutates anything.
-const SESSION_IN_PROGRESS_STATUSES: Prisma.ChargingSessionWhereInput['status'] =
+// Exported for reuse by StationHealthService (WO-ARGOS-057) — station-level
+// health is now computed by aggregating each EVSE's real
+// computeEvseOperationalStatus() result, which needs the exact same
+// active-session evidence this include already fetches. One definition of
+// "in progress," not two.
+export const SESSION_IN_PROGRESS_STATUSES: Prisma.ChargingSessionWhereInput['status'] =
   {
     in: ['ACTIVE', 'SUSPENDED', 'OFFLINE'],
   };

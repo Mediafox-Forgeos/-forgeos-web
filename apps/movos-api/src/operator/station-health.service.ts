@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { ConnectivityStatus, ConnectorStatus } from '@prisma/client';
 import type {
   ApiConnectivitySummary,
   ApiConnectorStatusCounts,
@@ -11,18 +12,75 @@ import type {
 } from '@mediafox/shared-types';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { computeEvseOperationalStatus } from '../evses/evse-operational-status';
+import { SESSION_IN_PROGRESS_STATUSES } from '../evses/evses.service';
 
 // Deliberately the minimal field set computeHealth() actually reads, not
 // the full Prisma Evse/Connector shape — callers (including tests) only
-// need to provide id/status, not every column.
+// need to provide connectivityStatus + each connector's status/active-session
+// evidence, not every column.
+//
+// WO-ARGOS-057 — no more raw `evse.status === 'FAULTED'` here. Station
+// "degraded" is now reconciled with WO-056's Operational Status: an EVSE's
+// requiresAttention (computed by the same evse-operational-status.ts every
+// other surface uses) is what makes its parent station degraded. This is
+// the OBSERVED-evidence-only signal WO-056 already validated — Evse.status
+// (ADMINISTRATIVE) is never read here, matching the three-layer separation
+// (Administrative / Protocol-Observed / Operational) WO-056 established.
 type StationWithTopology = {
   id: string;
-  connectivityStatus: string;
+  connectivityStatus: ConnectivityStatus;
   evses: {
-    status: string;
-    connectors: { status: string }[];
+    connectors: { status: ConnectorStatus; hasActiveSession: boolean }[];
   }[];
 };
+
+// Shared Prisma include for computeHealth()'s evidence — mirrors
+// EVSE_WITH_NAMES_INCLUDE's connectors/chargingSessions shape in
+// evses.service.ts exactly, so "does this connector have an active
+// session" means the same thing everywhere in the codebase.
+const TOPOLOGY_INCLUDE = {
+  evses: {
+    select: {
+      connectors: {
+        select: {
+          status: true,
+          chargingSessions: {
+            where: { status: SESSION_IN_PROGRESS_STATUSES },
+            select: { id: true },
+            take: 1,
+          },
+        },
+      },
+    },
+  },
+} as const;
+
+type StationTopologyRow = {
+  connectivityStatus: ConnectivityStatus;
+  id: string;
+  evses: {
+    connectors: {
+      status: ConnectorStatus;
+      chargingSessions: { id: string }[];
+    }[];
+  }[];
+};
+
+function toStationWithTopology(
+  station: StationTopologyRow,
+): StationWithTopology {
+  return {
+    id: station.id,
+    connectivityStatus: station.connectivityStatus,
+    evses: station.evses.map((evse) => ({
+      connectors: evse.connectors.map((connector) => ({
+        status: connector.status,
+        hasActiveSession: connector.chargingSessions.length > 0,
+      })),
+    })),
+  };
+}
 
 const EMPTY_CONNECTOR_COUNTS: ApiConnectorStatusCounts = {
   AVAILABLE: 0,
@@ -75,23 +133,25 @@ export class StationHealthService {
       };
     }
 
-    const connectors = station.evses.flatMap((evse) =>
-      evse.connectors.map((connector) => ({
-        connector,
-        evseFaulted: evse.status === 'FAULTED',
-      })),
-    );
-    const totalConnectors = connectors.length;
-    const faultedConnectors = connectors.filter(
-      ({ connector, evseFaulted }) =>
-        connector.status === 'FAULTED' || evseFaulted,
+    // ONLINE from here — reuse evse-operational-status.ts's derivation
+    // per EVSE rather than duplicating fault logic. requiresAttention
+    // already covers both a FAULTED connector and a ChargingSession that
+    // disagrees with its own connector's status (see evse-operational-
+    // status.ts) — a strict superset of what this service checked before.
+    const totalEvses = station.evses.length;
+    const evsesRequiringAttention = station.evses.filter(
+      (evse) =>
+        computeEvseOperationalStatus({
+          connectivityStatus: station.connectivityStatus,
+          connectors: evse.connectors,
+        }).requiresAttention,
     ).length;
 
-    if (faultedConnectors > 0) {
+    if (evsesRequiringAttention > 0) {
       const reason =
-        totalConnectors > 0
-          ? `${faultedConnectors} de ${totalConnectors} conectores en falla.`
-          : 'Uno o más EVSE en falla.';
+        totalEvses > 0
+          ? `${evsesRequiringAttention} de ${totalEvses} cargadores requieren atención.`
+          : 'Uno o más cargadores requieren atención.';
       return { stationId: station.id, status: 'degraded', reason };
     }
 
@@ -111,7 +171,7 @@ export class StationHealthService {
         status: 'ACTIVE',
         site: { organizationId, ...(siteId ? { id: siteId } : {}) },
       },
-      include: { evses: { include: { connectors: true } } },
+      include: TOPOLOGY_INCLUDE,
     });
 
     const counts: Record<StationHealthStatus, number> = {
@@ -121,7 +181,7 @@ export class StationHealthService {
       unknown: 0,
     };
     for (const station of stations) {
-      counts[this.computeHealth(station).status] += 1;
+      counts[this.computeHealth(toStationWithTopology(station)).status] += 1;
     }
 
     return {
@@ -171,7 +231,7 @@ export class StationHealthService {
       include: {
         chargingStations: {
           where: { status: 'ACTIVE' },
-          include: { evses: { include: { connectors: true } } },
+          include: TOPOLOGY_INCLUDE,
         },
       },
       orderBy: { name: 'asc' },
@@ -185,7 +245,7 @@ export class StationHealthService {
         unknown: 0,
       };
       for (const station of site.chargingStations) {
-        counts[this.computeHealth(station).status] += 1;
+        counts[this.computeHealth(toStationWithTopology(station)).status] += 1;
       }
 
       const worstStatus: StationHealthStatus =

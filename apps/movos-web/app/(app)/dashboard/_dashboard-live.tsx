@@ -5,32 +5,38 @@ import * as React from 'react';
 import type { ApiSite, HealthResponse } from '@mediafox/shared-types';
 
 import { Card, CardContent } from '@/components/ui/card';
-import { apiClient } from '@/lib/api-client';
 import { useAuth } from '@/context/auth-context';
 import { tenant } from '@/config/tenant';
+import { usePolledResource } from '@/components/operator/use-polled-resource';
+
+const HEALTH_POLL_INTERVAL_MS = 30_000;
 
 /**
- * Live dashboard strip backed by the MOVOS API: organization name, persistent
- * site count and API health. Other dashboard cards remain demonstration data.
+ * Live dashboard strip backed by the MOVOS API: organization name,
+ * persistent site count and API health.
+ *
+ * WO-ARGOS-057 — brought onto the same polling discipline as every other
+ * Operations Console widget (this was previously the one dashboard card
+ * that never refreshed without a full page reload). Site count reuses
+ * usePolledResource like everything else; the health check keeps its own
+ * raw `fetch` (it hits `/health`, outside apiClient's authenticated
+ * `/api/v1` surface and doesn't need Authorization/X-Organization-Id
+ * headers) but now polls on the same interval/cleanup shape rather than a
+ * one-shot effect — no new fetching abstraction introduced.
  */
 export function DashboardLive() {
   const { currentOrg } = useAuth();
-  const [siteCount, setSiteCount] = React.useState<number | null>(null);
+  const { data: sites } = usePolledResource<ApiSite[]>(
+    '/sites',
+    HEALTH_POLL_INTERVAL_MS,
+  );
+  const siteCount = sites?.length ?? null;
   const [health, setHealth] = React.useState<'ok' | 'down' | 'unknown'>(
     'unknown',
   );
 
   React.useEffect(() => {
     let cancelled = false;
-
-    async function loadSites(): Promise<void> {
-      try {
-        const sites = await apiClient.get<ApiSite[]>('/sites');
-        if (!cancelled) setSiteCount(sites.length);
-      } catch {
-        if (!cancelled) setSiteCount(null);
-      }
-    }
 
     async function loadHealth(): Promise<void> {
       const base =
@@ -46,10 +52,11 @@ export function DashboardLive() {
       }
     }
 
-    void loadSites();
     void loadHealth();
+    const timer = setInterval(() => void loadHealth(), HEALTH_POLL_INTERVAL_MS);
     return () => {
       cancelled = true;
+      clearInterval(timer);
     };
   }, []);
 
