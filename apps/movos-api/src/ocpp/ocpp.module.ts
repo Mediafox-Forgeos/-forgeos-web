@@ -10,6 +10,8 @@ import { OcppProvisioningService } from './authentication/ocpp-provisioning.serv
 import { OcppProvisioningController } from './authentication/ocpp-provisioning.controller';
 import { ConnectionRegistryService } from './connection-registry/connection-registry.service';
 import { ConnectivityCoordinator } from './connectivity/connectivity-coordinator.service';
+import { PendingCallRegistryService } from './outbound/pending-call-registry.service';
+import { RemoteCommandService } from './remote-commands/remote-command.service';
 import { Ocpp16Adapter } from './protocol/ocpp16/ocpp16-adapter';
 import { Ocpp201Adapter } from './protocol/ocpp201/ocpp201-adapter';
 import { OcppProtocolEventService } from './persistence/ocpp-protocol-event.service';
@@ -40,6 +42,8 @@ import { OcppWebSocketServer } from './transport/ocpp-websocket.server';
     OcppProvisioningService,
     ConnectivityCoordinator,
     ConnectionRegistryService,
+    PendingCallRegistryService,
+    RemoteCommandService,
     Ocpp16Adapter,
     Ocpp201Adapter,
     OcppProtocolEventService,
@@ -53,6 +57,10 @@ import { OcppWebSocketServer } from './transport/ocpp-websocket.server';
     OcppMessageRouterService,
     OcppWebSocketServer,
   ],
-  exports: [OcppWebSocketServer, ConnectionRegistryService],
+  exports: [
+    OcppWebSocketServer,
+    ConnectionRegistryService,
+    RemoteCommandService,
+  ],
 })
 export class OcppModule {}

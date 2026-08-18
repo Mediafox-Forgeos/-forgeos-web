@@ -3,6 +3,7 @@ import { OcppProcessingStatus } from '@prisma/client';
 
 import { OcppMessageRouterService } from './ocpp-message-router.service';
 import { ConnectionRegistryService } from '../connection-registry/connection-registry.service';
+import { PendingCallRegistryService } from '../outbound/pending-call-registry.service';
 import { OcppProtocolEventService } from '../persistence/ocpp-protocol-event.service';
 import { BootNotificationHandler } from '../handlers/boot-notification.handler';
 import { HeartbeatHandler } from '../handlers/heartbeat.handler';
@@ -30,6 +31,7 @@ function call(
 describe('OcppMessageRouterService', () => {
   let router: OcppMessageRouterService;
   let connectionRegistry: { touch: jest.Mock };
+  let pendingCalls: { has: jest.Mock; resolve: jest.Mock };
   let protocolEvents: { record: jest.Mock };
   let bootHandler: { handle: jest.Mock };
   let heartbeatHandler: { handle: jest.Mock };
@@ -42,6 +44,10 @@ describe('OcppMessageRouterService', () => {
 
   beforeEach(async () => {
     connectionRegistry = { touch: jest.fn() };
+    pendingCalls = {
+      has: jest.fn().mockReturnValue(false),
+      resolve: jest.fn(),
+    };
     protocolEvents = { record: jest.fn().mockResolvedValue(undefined) };
     bootHandler = { handle: jest.fn().mockReturnValue({ status: 'Accepted' }) };
     heartbeatHandler = {
@@ -68,6 +74,7 @@ describe('OcppMessageRouterService', () => {
         OcppMessageRouterService,
         Ocpp16Adapter,
         { provide: ConnectionRegistryService, useValue: connectionRegistry },
+        { provide: PendingCallRegistryService, useValue: pendingCalls },
         { provide: OcppProtocolEventService, useValue: protocolEvents },
         { provide: BootNotificationHandler, useValue: bootHandler },
         { provide: HeartbeatHandler, useValue: heartbeatHandler },
@@ -184,14 +191,57 @@ describe('OcppMessageRouterService', () => {
     );
   });
 
-  it('does not respond to an unexpected CALLRESULT/CALLERROR from a device', async () => {
+  it('does not respond to an unexpected CALLRESULT/CALLERROR from a device (no pending call)', async () => {
+    pendingCalls.has.mockReturnValue(false);
     const response = await router.handleInboundFrame(adapter, station, {
       raw: [3, 'msg-1', {}],
     });
     expect(response).toBeNull();
+    expect(pendingCalls.resolve).not.toHaveBeenCalled();
     expect(protocolEvents.record).toHaveBeenCalledWith(
       expect.objectContaining({
         processingStatus: OcppProcessingStatus.UNSUPPORTED,
+      }),
+    );
+  });
+
+  // WO-ARGOS-059 — CALLRESULT/CALLERROR correlation. This router never
+  // interprets Accepted/Rejected itself — it only forwards the raw
+  // resolution to whoever registered the pending call.
+  it('correlates a CALLRESULT to a matching pending call and records PROCESSED, not UNSUPPORTED', async () => {
+    pendingCalls.has.mockReturnValue(true);
+    const response = await router.handleInboundFrame(adapter, station, {
+      raw: [3, 'msg-1', { status: 'Accepted' }],
+    });
+
+    expect(response).toBeNull(); // OCPP never responds to a response
+    expect(pendingCalls.resolve).toHaveBeenCalledWith('msg-1', {
+      kind: 'CALLRESULT',
+      payload: { status: 'Accepted' },
+    });
+    expect(protocolEvents.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        processingStatus: OcppProcessingStatus.PROCESSED,
+        correlationId: 'msg-1',
+      }),
+    );
+  });
+
+  it('correlates a CALLERROR to a matching pending call', async () => {
+    pendingCalls.has.mockReturnValue(true);
+    await router.handleInboundFrame(adapter, station, {
+      raw: [4, 'msg-1', 'NotSupported', 'nope', {}],
+    });
+
+    expect(pendingCalls.resolve).toHaveBeenCalledWith('msg-1', {
+      kind: 'CALLERROR',
+      errorCode: 'NotSupported',
+      errorDescription: 'nope',
+      details: {},
+    });
+    expect(protocolEvents.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        processingStatus: OcppProcessingStatus.PROCESSED,
       }),
     );
   });

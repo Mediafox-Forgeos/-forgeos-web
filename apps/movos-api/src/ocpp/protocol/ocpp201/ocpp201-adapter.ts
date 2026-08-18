@@ -45,7 +45,18 @@ export class Ocpp201Adapter implements ProtocolAdapter {
     return { kind: 'UnsupportedMessage', action, reason: 'not_implemented' };
   }
 
+  outboundActionName(commandType: NormalizedOutboundCommand['type']): string {
+    throw new CapabilityNotSupportedError(commandType, this.version);
+  }
+
   formatOutbound(command: NormalizedOutboundCommand): RawFrame {
+    throw new CapabilityNotSupportedError(command.type, this.version);
+  }
+
+  parseOutboundResult(
+    command: NormalizedOutboundCommand,
+    _payload: Record<string, unknown>,
+  ): { accepted: boolean } {
     throw new CapabilityNotSupportedError(command.type, this.version);
   }
 

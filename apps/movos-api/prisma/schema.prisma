@@ -191,6 +191,9 @@ model User {
 
   // WO-ARGOS-049 — Work Order V1 field hardening.
   uploadedAttachments WorkOrderAttachment[]
+
+  // WO-ARGOS-059 — Remote Operations / Control Plane Foundation.
+  requestedRemoteCommands RemoteCommand[]
 }
 
 model Organization {
@@ -201,9 +204,10 @@ model Organization {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  memberships Membership[]
-  sites       Site[]
-  auditEvents AuditEvent[]
+  memberships    Membership[]
+  sites          Site[]
+  auditEvents    AuditEvent[]
+  remoteCommands RemoteCommand[]
 
   // CAP-004 — denormalized directly onto ChargingSession/AuthorizationAttempt
   // (see schema comment on ChargingSession) rather than derived through the
@@ -363,6 +367,9 @@ model ChargingStation {
   // WO-ARGOS-035 — Work Order V1.
   workOrders WorkOrder[]
 
+  // WO-ARGOS-059 — Remote Operations / Control Plane Foundation.
+  remoteCommands RemoteCommand[]
+
   // Nullable-safe: Postgres treats multiple NULLs as distinct, so stations
   // without a business code never collide with each other.
   @@unique([siteId, code])
@@ -419,6 +426,9 @@ model Connector {
   // CAP-004
   chargingSessions      ChargingSession[]
   authorizationAttempts AuthorizationAttempt[]
+
+  // WO-ARGOS-059 — Remote Operations / Control Plane Foundation.
+  remoteCommands RemoteCommand[]
 
   @@unique([evseId, externalId])
 }
@@ -496,6 +506,101 @@ model OcppProtocolEvent {
   chargingStation ChargingStation? @relation(fields: [chargingStationId], references: [id])
 
   @@index([chargingStationId, receivedAt])
+}
+
+// WO-ARGOS-059 — Remote Operations / Control Plane Foundation. The
+// dedicated command-lifecycle store WO-058 discovery flagged as necessary:
+// AuditEvent's single-subject convention (subjectType/subjectId is one
+// pair) doesn't fit a command that targets a station, a connector, and
+// sometimes a session all at once, and a command has real intermediate
+// states over time, not just one fire-and-forget log line. Every
+// RemoteCommand still ALSO emits AuditEvent rows alongside it (both, not
+// either/or) — see RemoteCommandService.
+enum RemoteCommandType {
+  REMOTE_START
+  REMOTE_STOP
+  RESET
+  UNLOCK_CONNECTOR
+  CHANGE_AVAILABILITY
+}
+
+// WO-058's three-layer separation, as command state: REQUESTED/SENT are
+// transport-layer facts; ACCEPTED/REJECTED/TIMED_OUT are OCPP protocol
+// acceptance; CONFIRMED/UNCONFIRMED are real-world outcome confirmation,
+// reached only via a domain-specific corroborating signal (e.g. an inbound
+// StartTransaction) — never inferred from ACCEPTED alone. Terminal states:
+// REJECTED, TIMED_OUT, CONFIRMED, UNCONFIRMED.
+enum RemoteCommandState {
+  REQUESTED
+  SENT
+  ACCEPTED
+  CONFIRMED
+  REJECTED
+  TIMED_OUT
+  UNCONFIRMED
+}
+
+// A command's real-world outcome (CONFIRMED/UNCONFIRMED) is deliberately
+// NOT wired to any domain handler in WO-059 — RemoteStart/RemoteStop
+// production execution is out of scope for this work order. The state and
+// its transition exist and are tested at the state-machine level so the
+// next work order that exposes a real command doesn't have to touch this
+// model again.
+model RemoteCommand {
+  id             String @id @default(cuid())
+  // Denormalized directly onto the row (never re-derived through
+  // chargingStation.site.organizationId for a read) — same rationale as
+  // ChargingSession.organizationId: a single indexed WHERE, not a join, for
+  // what will be a frequently-queried, tenant-scoped entity. Resolved once,
+  // at creation time, from the already-verified owning station.
+  organizationId String
+
+  chargingStationId String
+  // Connector-scoped commands only (RemoteStart, UnlockConnector,
+  // connector-scoped ChangeAvailability) — null for station-wide commands
+  // (Reset, station-wide ChangeAvailability).
+  connectorId       String?
+  // RemoteStop only, for now — the session this command targets.
+  chargingSessionId String?
+
+  commandType RemoteCommandType
+  state       RemoteCommandState @default(REQUESTED)
+
+  requestedByUserId String
+
+  // Wire-format frame payloads — audit/debugging evidence, not domain data.
+  // Never used to answer "what is the device's current status," same
+  // discipline as OcppProtocolEvent.
+  requestPayload  Json?
+  responsePayload Json?
+
+  // The OCPP-J CALL's own message id, once SENT — meaningful only within
+  // one WebSocket connection's lifetime, same reasoning as
+  // OcppProtocolEvent.protocolMessageId.
+  protocolMessageId String?
+  // Set on REQUESTED -> REJECTED (pre-send guardrail failure) or
+  // SENT -> REJECTED (CALLERROR / a Rejected CALLRESULT) — human-readable,
+  // not a re-derivable enum, since rejection reasons come from several
+  // independent sources (guardrails, protocol responses).
+  rejectionReason   String?
+
+  requestedAt DateTime  @default(now())
+  sentAt      DateTime?
+  resolvedAt  DateTime?
+
+  organization    Organization     @relation(fields: [organizationId], references: [id])
+  chargingStation ChargingStation  @relation(fields: [chargingStationId], references: [id])
+  connector       Connector?       @relation(fields: [connectorId], references: [id])
+  chargingSession ChargingSession? @relation(fields: [chargingSessionId], references: [id])
+  requestedBy     User             @relation(fields: [requestedByUserId], references: [id])
+
+  // Tenant/station/state/time access patterns (WO-059 scope item 1):
+  // "commands for my org, filtered by state" and "commands for this
+  // station over time" are the two real query shapes a future operator UI
+  // and this WO's own concurrency guard both need.
+  @@index([organizationId, state])
+  @@index([chargingStationId, state])
+  @@index([chargingStationId, requestedAt])
 }
 
 // ============================================================================
@@ -705,6 +810,8 @@ model ChargingSession {
   authorizationCredential AuthorizationCredential @relation(fields: [authorizationCredentialId], references: [id])
   meterValues             MeterValue[]
   tariffSnapshots         TariffSnapshot[]
+  // WO-ARGOS-059 — Remote Operations / Control Plane Foundation.
+  remoteCommands          RemoteCommand[]
 
   // CAP-009 (WO-ARGOS-017A) — a composite FK, deliberately, not a plain
   // [billingAccountId] -> [id] reference. Pairing organizationId alongside

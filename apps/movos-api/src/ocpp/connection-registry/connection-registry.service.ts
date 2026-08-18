@@ -1,7 +1,10 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import type WebSocket from 'ws';
 
-import type { OcppProtocolVersion } from '../protocol/common/normalized-events';
+import type {
+  OcppProtocolVersion,
+  RawFrame,
+} from '../protocol/common/normalized-events';
 import { ConnectivityCoordinator } from '../connectivity/connectivity-coordinator.service';
 
 export interface ConnectionRecord {
@@ -117,6 +120,21 @@ export class ConnectionRegistryService implements OnModuleDestroy {
 
   get(ocppIdentity: string): ConnectionRecord | undefined {
     return this.connections.get(ocppIdentity);
+  }
+
+  /** WO-ARGOS-059 — the one place a server-originated frame (a RemoteCommand
+   * CALL) reaches the wire. Keeps direct socket access encapsulated here
+   * (never exposed via `get`'s ConnectionRecord to a domain-layer caller —
+   * see listConnected's own "never exposes the raw socket" precedent).
+   * Returns false, never throws, if the identity isn't currently connected
+   * — WO-058 Decision: offline/unknown stations fail immediately, no queue,
+   * no retry, and the caller (RemoteCommandService) is responsible for
+   * turning that into the REQUESTED -> REJECTED transition. */
+  send(ocppIdentity: string, frame: RawFrame): boolean {
+    const record = this.connections.get(ocppIdentity);
+    if (!record) return false;
+    record.socket.send(JSON.stringify(frame.raw));
+    return true;
   }
 
   isConnected(ocppIdentity: string): boolean {

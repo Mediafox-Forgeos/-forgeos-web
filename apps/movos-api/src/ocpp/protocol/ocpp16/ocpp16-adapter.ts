@@ -44,7 +44,10 @@ export class Ocpp16Adapter implements ProtocolAdapter {
       'TransactionUpdate',
       'TransactionEnd',
     ]),
-    supportedOutbound: new Set(),
+    // WO-ARGOS-059 — Phase A only (ARGOS's WO-058 review decision). Reset/
+    // UnlockConnector/ChangeAvailability remain unimplemented; formatOutbound
+    // still throws CapabilityNotSupportedError for those three.
+    supportedOutbound: new Set(['RemoteStart', 'RemoteStop']),
   };
 
   parseInbound(
@@ -91,8 +94,57 @@ export class Ocpp16Adapter implements ProtocolAdapter {
     }
   }
 
+  outboundActionName(commandType: NormalizedOutboundCommand['type']): string {
+    switch (commandType) {
+      case 'RemoteStart':
+        return 'RemoteStartTransaction';
+      case 'RemoteStop':
+        return 'RemoteStopTransaction';
+      default:
+        throw new CapabilityNotSupportedError(commandType, this.version);
+    }
+  }
+
+  /** WO-ARGOS-059 — RemoteStartTransaction.req/RemoteStopTransaction.req,
+   * the only two 1.6J outbound commands implemented. connectorId/
+   * transactionId travel as JSON integers per spec; MOVOS stores both as
+   * strings internally (Connector.externalId, ChargingSession.
+   * protocolTransactionId), converted here at the protocol boundary —
+   * never earlier, matching this file's own "only seam" rule. */
   formatOutbound(command: NormalizedOutboundCommand): RawFrame {
-    throw new CapabilityNotSupportedError(command.type, this.version);
+    switch (command.type) {
+      case 'RemoteStart':
+        return {
+          raw: {
+            connectorId: Number(command.connectorExternalId),
+            idTag: command.idTag,
+          },
+        };
+      case 'RemoteStop':
+        return {
+          raw: { transactionId: Number(command.transactionRef) },
+        };
+      default:
+        throw new CapabilityNotSupportedError(command.type, this.version);
+    }
+  }
+
+  /** RemoteStartTransaction.conf/RemoteStopTransaction.conf share the same
+   * `{status: 'Accepted'|'Rejected'}` shape in 1.6J — Accepted here means
+   * only "the charger will attempt it," never that the transaction actually
+   * started/stopped (WO-058 Decision: never inferred as physical outcome
+   * confirmation — see RemoteCommandService). */
+  parseOutboundResult(
+    command: NormalizedOutboundCommand,
+    payload: Record<string, unknown>,
+  ): { accepted: boolean } {
+    switch (command.type) {
+      case 'RemoteStart':
+      case 'RemoteStop':
+        return { accepted: payload.status === 'Accepted' };
+      default:
+        throw new CapabilityNotSupportedError(command.type, this.version);
+    }
   }
 
   formatResponse(
