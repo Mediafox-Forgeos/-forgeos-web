@@ -58,17 +58,15 @@ SessionLifecycleService (CAP-004) — only for STALE closes
 ### 3.2 On connection closed (`unregister()` — clean, or `sweepStale()` — stale)
 
 1. Station's `connectivityStatus` → `OFFLINE`, `lastDisconnectedAt` → now. This happens for **both** a clean disconnect and a stale-sweep eviction — the station-level field reflects "not currently connected," full stop.
-2. Only a **stale** close (reason `'stale'`) also finds every `ACTIVE`/`SUSPENDED` session on the station and moves it to `OFFLINE` via `SessionLifecycleService.suspendSession(id, 'OFFLINE')`.
-3. A **clean** close (reason `'clean'`) never touches a `ChargingSession` — see §4's known asymmetry.
+2. **Both** a clean close and a stale close find every `ACTIVE`/`SUSPENDED` session on the station and move it to `OFFLINE` via `SessionLifecycleService.suspendSession(id, 'OFFLINE')` — see §4 (updated by WO-ARGOS-061; previously only `'stale'` did this).
 
-## 4. Known, deliberate asymmetry: clean disconnect vs. stale
+## 4. Clean disconnect and stale disconnect reconcile sessions identically (WO-ARGOS-061)
 
-DEC-017's approved policy requires the OFFLINE session trigger to come from `ConnectionRegistryService`, coordinated with its existing stale-sweep — "do not create an independent competing timer." Read literally, the WO's Phase 5 spec distinguishes:
+**Resolved history, kept for context.** CAP-005 originally implemented session reconciliation only for `reason: 'stale'`, reading DEC-017's Phase 5 spec literally: "never immediately complete or fail a session" for a clean disconnect, versus stale's explicit "transition ... to OFFLINE." This produced a real, confirmed bug — WO-ARGOS-060 (a discovery-only work order, its report not committed to this repo) reproduced it directly against a real database: **a device that cleanly disconnects (a graceful WebSocket close) and never reconnects left its session stuck `ACTIVE` forever**, invisible to `handleConnectionEstablished`'s own `OFFLINE`-session lookup, and therefore never recoverable either.
 
-- **Clean disconnect (`DISCONNECTED`)**: "never immediately complete or fail a session" — does not say it may move a session to OFFLINE.
-- **Stale (`STALE`)**: "transition any current ACTIVE or SUSPENDED session ... to OFFLINE" — explicit authorization.
+WO-ARGOS-061 resolved this as ARGOS-approved discovery interpretation, not a new product-policy decision: DEC-017 item 5's "never immediately complete or fail a session" forbids inferring `COMPLETED`/`FAILED` from a bare disconnect — it does not forbid the already-legal `ACTIVE`/`SUSPENDED` → `OFFLINE` transition. `ConnectionRegistryService` is DEC-017 item 1's single source of connection-loss events for **both** reasons; a clean close is exactly as "verified" a connectivity-loss event as a stale one. `ConnectivityCoordinator.handleConnectionClosed` now calls one shared private method (`reconcileSessionsOffline`) for both reasons — no parallel lifecycle mechanism, no new timer, `SessionLifecycleService.suspendSession` reused exactly as the stale path already used it. The only externally-visible addition is an audit metadata field (`reason: 'clean-disconnect' | 'stale-connection'`) distinguishing which detection mechanism triggered the reconciliation — no schema change.
 
-CAP-005 implements this literally: only `STALE` moves a session to `OFFLINE`. This produces a real, known limitation — **a device that cleanly disconnects (a graceful WebSocket close) and never reconnects leaves its session stuck `ACTIVE` forever**, because a de-registered connection is removed from `ConnectionRegistryService`'s map and can never again be swept as stale (`sweepStale()` only iterates currently-registered connections). This was not fixed with a second timer, because the WO explicitly forbids an independent competing timer, and a cleanly-closed connection has no natural periodic re-check without inventing one. It is recorded here as a limitation for a future work order to close (e.g., a periodic sweep of `ACTIVE` sessions whose station `connectivityStatus` is `OFFLINE` and has been for longer than the recovery window — not implemented by this capability).
+A side effect: because a clean-disconnect-created `OFFLINE` session is now indistinguishable in storage from a stale-created one, it becomes visible to the existing reconnect recovery path (§6) automatically, with no changes to that path itself.
 
 ## 5. Persisted state and startup reconciliation
 
@@ -104,15 +102,15 @@ Recovery never creates a new `ChargingSession` — it only ever resumes the exis
 
 All emitted via `AuditService.record` (never throws; failures are logged, not propagated):
 
-| Action                              | Subject         | When                                                               |
-| ----------------------------------- | --------------- | ------------------------------------------------------------------ |
-| `STATION_CONNECTIVITY_CONNECTED`    | ChargingStation | First connection, no prior OFFLINE session                         |
-| `STATION_CONNECTIVITY_RECONNECTED`  | ChargingStation | Connection established with a prior OFFLINE session on the station |
-| `STATION_CONNECTIVITY_DISCONNECTED` | ChargingStation | Clean close                                                        |
-| `STATION_CONNECTIVITY_STALE`        | ChargingStation | Stale-sweep close                                                  |
-| `SESSION_MOVED_OFFLINE`             | ChargingSession | An ACTIVE/SUSPENDED session moved to OFFLINE on a stale close      |
-| `SESSION_RECOVERED`                 | ChargingSession | An OFFLINE session successfully resumed to ACTIVE                  |
-| `SESSION_RECOVERY_REJECTED`         | ChargingSession | Recovery attempted but rejected (conflict or window expiry)        |
+| Action                              | Subject         | When                                                                                                                                                                       |
+| ----------------------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `STATION_CONNECTIVITY_CONNECTED`    | ChargingStation | First connection, no prior OFFLINE session                                                                                                                                 |
+| `STATION_CONNECTIVITY_RECONNECTED`  | ChargingStation | Connection established with a prior OFFLINE session on the station                                                                                                         |
+| `STATION_CONNECTIVITY_DISCONNECTED` | ChargingStation | Clean close                                                                                                                                                                |
+| `STATION_CONNECTIVITY_STALE`        | ChargingStation | Stale-sweep close                                                                                                                                                          |
+| `SESSION_MOVED_OFFLINE`             | ChargingSession | An ACTIVE/SUSPENDED session moved to OFFLINE on a clean **or** stale close (WO-ARGOS-061) — `metadata.reason` distinguishes `'clean-disconnect'` from `'stale-connection'` |
+| `SESSION_RECOVERED`                 | ChargingSession | An OFFLINE session successfully resumed to ACTIVE                                                                                                                          |
+| `SESSION_RECOVERY_REJECTED`         | ChargingSession | Recovery attempted but rejected (conflict or window expiry)                                                                                                                |
 
 Every metadata payload is limited to `ocppIdentity`, `protocolVersion`, `chargingStationId`, `protocolTransactionId`, and `reason` — **no credentials, secrets, or Authorization headers are ever logged** by this capability.
 
@@ -122,7 +120,7 @@ Every metadata payload is limited to `ocppIdentity`, `protocolVersion`, `chargin
 
 ## 9. Out of scope (implementation limits, not architectural omissions)
 
-RFID-specific behavior · billing/tariffs/invoices/payments · remote start/stop · OCPP 2.0.1 functional messages · smart charging/vendor profiles · Redis or any message broker · high-availability multi-instance connection routing · SLA analytics/alerting workflows · the clean-disconnect-to-OFFLINE gap noted in §4 · per-station-configurable heartbeat intervals (still a single hardcoded global 300s, per DEC-017's own noted limitation).
+RFID-specific behavior · billing/tariffs/invoices/payments · remote start/stop · OCPP 2.0.1 functional messages · smart charging/vendor profiles · Redis or any message broker · high-availability multi-instance connection routing · SLA analytics/alerting workflows · per-station-configurable heartbeat intervals (still a single hardcoded global 300s, per DEC-017's own noted limitation). The clean-disconnect-to-OFFLINE gap formerly noted here was resolved by WO-ARGOS-061 (see §4) — still explicitly out of scope, and tracked as separate follow-up items, not this capability: `MOVOS_OFFLINE_SESSION_NEW_STARTTRANSACTION_COLLISION` (an `OFFLINE` session outside the recovery window can absorb a genuinely new `StartTransaction` on the same connector — `SessionLifecycleService.createSession`'s occupancy guard was deliberately not touched by WO-ARGOS-061) and `MOVOS_SUSPENDED_SESSION_REACHABILITY` (`ChargingSessionStatus.SUSPENDED` is modeled but unreachable from any real production message flow today).
 
 ## 10. Runtime validation
 

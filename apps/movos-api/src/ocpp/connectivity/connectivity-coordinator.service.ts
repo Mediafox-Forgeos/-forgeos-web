@@ -30,7 +30,10 @@ export interface ConnectionClosedInput {
  * A disconnect alone (clean or stale) never completes or fails a
  * ChargingSession — only an explicit protocol event (StopTransaction) or
  * administrative action does that. This class only ever moves a session
- * into or out of OFFLINE.
+ * into or out of OFFLINE. As of WO-ARGOS-061, clean and stale disconnects
+ * both reconcile ACTIVE/SUSPENDED sessions to OFFLINE identically (see
+ * `reconcileSessionsOffline`) — see
+ * docs/domain/CAP-005_CONNECTIVITY_ENGINE.md §4 for the resolved history.
  */
 @Injectable()
 export class ConnectivityCoordinator implements OnModuleInit {
@@ -115,12 +118,14 @@ export class ConnectivityCoordinator implements OnModuleInit {
   }
 
   /** Called by ConnectionRegistryService for both a clean close
-   * (unregister) and a stale-sweep eviction. Only `reason: 'stale'`
-   * touches ChargingSession — a clean disconnect updates station
-   * connectivity only, per DEC-017 item 5 ("a disconnect alone must never
-   * complete or fail a session") and the Phase 5 spec's explicit
-   * distinction between DISCONNECTED (no session change) and STALE
-   * (ACTIVE/SUSPENDED -> OFFLINE). */
+   * (unregister) and a stale-sweep eviction. WO-ARGOS-061: both reasons now
+   * reconcile session state identically — a station disconnect, however
+   * it's detected, is an equally verified connectivity-loss event per
+   * DEC-017 item 1 (ConnectionRegistryService is the single source of
+   * connection-loss events). Fixes the WO-ARGOS-060-confirmed stranding
+   * bug: a clean disconnect previously left an ACTIVE/SUSPENDED session
+   * stuck forever, invisible to reconnect recovery. Still never completes
+   * or fails a session (DEC-017 item 5) — only ever moves it to OFFLINE. */
   async handleConnectionClosed(input: ConnectionClosedInput): Promise<void> {
     await this.prisma.chargingStation.update({
       where: { id: input.chargingStationId },
@@ -140,11 +145,27 @@ export class ConnectivityCoordinator implements OnModuleInit {
       metadata: { ocppIdentity: input.ocppIdentity },
     });
 
-    if (input.reason !== 'stale') return;
+    await this.reconcileSessionsOffline(input.chargingStationId, input.reason);
+  }
 
+  /**
+   * The shared connectivity-loss reconciliation path (WO-ARGOS-061) —
+   * station-scoped by design (§4 of the WO): every logically-active session
+   * across every connector/EVSE on the station is moved to OFFLINE, not
+   * just one. Reuses SessionLifecycleService.suspendSession exactly as the
+   * pre-existing stale path already did; no parallel lifecycle mechanism.
+   * Naturally idempotent — a session already reconciled to OFFLINE by a
+   * prior call no longer matches the ACTIVE/SUSPENDED filter, so a
+   * duplicate or overlapping disconnect signal for the same station is a
+   * safe no-op here, never a re-transition or a thrown error.
+   */
+  private async reconcileSessionsOffline(
+    chargingStationId: string,
+    reason: 'clean' | 'stale',
+  ): Promise<void> {
     const affected = await this.prisma.chargingSession.findMany({
       where: {
-        chargingStationId: input.chargingStationId,
+        chargingStationId,
         status: { in: ['ACTIVE', 'SUSPENDED'] },
       },
     });
@@ -156,9 +177,9 @@ export class ConnectivityCoordinator implements OnModuleInit {
         subjectType: 'ChargingSession',
         subjectId: session.id,
         metadata: {
-          chargingStationId: input.chargingStationId,
+          chargingStationId,
           protocolTransactionId: session.protocolTransactionId,
-          reason: 'stale-connection',
+          reason: reason === 'stale' ? 'stale-connection' : 'clean-disconnect',
         },
       });
     }

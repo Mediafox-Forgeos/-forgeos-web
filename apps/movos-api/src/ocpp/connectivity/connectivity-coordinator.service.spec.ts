@@ -202,6 +202,36 @@ describe('ConnectivityCoordinator', () => {
       );
     });
 
+    // WO-ARGOS-061 test H: reconnect after a clean-disconnect-created
+    // OFFLINE session — attemptRecovery's own lookup is keyed purely on
+    // `status: 'OFFLINE'`, with no dependency on which reason produced it,
+    // so a session reconciled via 'clean' is discovered and recovered
+    // exactly like one reconciled via 'stale'. This is the concrete
+    // evidence that the WO-061 fix closes WO-060's §5 "invisible to
+    // reconnect" gap as a side effect.
+    it('[H] discovers and recovers a session that was moved OFFLINE by a clean disconnect', async () => {
+      const session = offlineSession();
+      prisma.chargingSession.findFirst
+        .mockResolvedValueOnce(session)
+        .mockResolvedValueOnce(null);
+
+      await coordinator.handleConnectionEstablished({
+        chargingStationId: 'cs1',
+        ocppIdentity: 'movos-abc123',
+        protocolVersion: 'OCPP1_6J',
+      });
+
+      expect(audit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'STATION_CONNECTIVITY_RECONNECTED',
+        }),
+      );
+      expect(sessionLifecycle.resumeSession).toHaveBeenCalledWith(session.id);
+      expect(audit.record).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'SESSION_RECOVERED' }),
+      );
+    });
+
     // Scenario 13: the station update is always scoped to the exact
     // chargingStationId the connection reported — never a broader/cross-
     // tenant write. (Org scoping itself happens upstream in provisioning;
@@ -220,9 +250,18 @@ describe('ConnectivityCoordinator', () => {
   });
 
   describe('handleConnectionClosed', () => {
-    // Scenario 2: a clean disconnect updates station connectivity and
-    // records DISCONNECTED, but never touches any ChargingSession.
-    it('marks the station OFFLINE and records DISCONNECTED on a clean close, without touching sessions', async () => {
+    // WO-ARGOS-061 test A: ACTIVE + clean disconnect -> station OFFLINE,
+    // session OFFLINE. This is the core stranding-bug fix confirmed by
+    // WO-ARGOS-060 — a clean disconnect must reconcile sessions exactly
+    // like a stale one, not skip reconciliation.
+    it('[A] moves an ACTIVE session to OFFLINE on a clean close', async () => {
+      const active = {
+        id: 'session-1',
+        status: 'ACTIVE',
+        protocolTransactionId: '100',
+      };
+      prisma.chargingSession.findMany.mockResolvedValue([active]);
+
       await coordinator.handleConnectionClosed({
         chargingStationId: 'cs1',
         ocppIdentity: 'movos-abc123',
@@ -240,12 +279,67 @@ describe('ConnectivityCoordinator', () => {
           action: 'STATION_CONNECTIVITY_DISCONNECTED',
         }),
       );
-      expect(prisma.chargingSession.findMany).not.toHaveBeenCalled();
+      expect(sessionLifecycle.suspendSession).toHaveBeenCalledWith(
+        'session-1',
+        'OFFLINE',
+      );
+      // Audit metadata distinguishes detection mechanism per WO-061 item 10
+      // — no new AuditEvent model, just a metadata field.
+      expect(audit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'SESSION_MOVED_OFFLINE',
+          metadata: expect.objectContaining({ reason: 'clean-disconnect' }),
+        }),
+      );
+    });
+
+    // WO-ARGOS-061 test B: SUSPENDED + clean disconnect -> session OFFLINE.
+    it('[B] moves a SUSPENDED session to OFFLINE on a clean close', async () => {
+      const suspended = {
+        id: 'session-2',
+        status: 'SUSPENDED',
+        protocolTransactionId: '101',
+      };
+      prisma.chargingSession.findMany.mockResolvedValue([suspended]);
+
+      await coordinator.handleConnectionClosed({
+        chargingStationId: 'cs1',
+        ocppIdentity: 'movos-abc123',
+        reason: 'clean',
+      });
+
+      expect(sessionLifecycle.suspendSession).toHaveBeenCalledWith(
+        'session-2',
+        'OFFLINE',
+      );
+    });
+
+    // WO-ARGOS-061 test C: no session + clean disconnect -> safe no-op for
+    // session reconciliation, station still flips OFFLINE.
+    it('[C] is a safe no-op for session reconciliation when no session exists on a clean close', async () => {
+      await coordinator.handleConnectionClosed({
+        chargingStationId: 'cs1',
+        ocppIdentity: 'movos-abc123',
+        reason: 'clean',
+      });
+
+      expect(prisma.chargingStation.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ connectivityStatus: 'OFFLINE' }),
+        }),
+      );
+      expect(prisma.chargingSession.findMany).toHaveBeenCalledWith({
+        where: {
+          chargingStationId: 'cs1',
+          status: { in: ['ACTIVE', 'SUSPENDED'] },
+        },
+      });
       expect(sessionLifecycle.suspendSession).not.toHaveBeenCalled();
     });
 
-    // Scenarios 3 & 5: a stale close moves an ACTIVE session to OFFLINE.
-    it('moves an ACTIVE session to OFFLINE on a stale close', async () => {
+    // WO-ARGOS-061 test D: ACTIVE + stale disconnect -> existing behavior
+    // unchanged (regression guard for the pre-061 stale path).
+    it('[D] moves an ACTIVE session to OFFLINE on a stale close, unchanged from before', async () => {
       const active = {
         id: 'session-1',
         status: 'ACTIVE',
@@ -267,41 +361,76 @@ describe('ConnectivityCoordinator', () => {
         'OFFLINE',
       );
       expect(audit.record).toHaveBeenCalledWith(
-        expect.objectContaining({ action: 'SESSION_MOVED_OFFLINE' }),
+        expect.objectContaining({
+          action: 'SESSION_MOVED_OFFLINE',
+          metadata: expect.objectContaining({ reason: 'stale-connection' }),
+        }),
       );
     });
 
-    // Scenario 6: a SUSPENDED session is equally moved to OFFLINE — the
-    // query includes both ACTIVE and SUSPENDED by design (CAP-004 treats
-    // both as "logically active, temporarily not delivering energy").
-    it('moves a SUSPENDED session to OFFLINE on a stale close', async () => {
-      const suspended = {
-        id: 'session-2',
-        status: 'SUSPENDED',
-        protocolTransactionId: '101',
+    // WO-ARGOS-061 test E: duplicate clean disconnect -> second
+    // reconciliation call is a safe no-op, no duplicate lifecycle mutation.
+    // Mirrors the real query behavior: the first call's findMany result no
+    // longer includes a session it already moved to OFFLINE.
+    it('[E] a duplicate clean disconnect signal for the same station does not re-mutate an already-reconciled session', async () => {
+      const active = {
+        id: 'session-1',
+        status: 'ACTIVE',
+        protocolTransactionId: '100',
       };
-      prisma.chargingSession.findMany.mockResolvedValue([suspended]);
+      prisma.chargingSession.findMany
+        .mockResolvedValueOnce([active]) // first signal finds it ACTIVE
+        .mockResolvedValueOnce([]); // second signal: already OFFLINE, excluded
 
+      await coordinator.handleConnectionClosed({
+        chargingStationId: 'cs1',
+        ocppIdentity: 'movos-abc123',
+        reason: 'clean',
+      });
+      await coordinator.handleConnectionClosed({
+        chargingStationId: 'cs1',
+        ocppIdentity: 'movos-abc123',
+        reason: 'clean',
+      });
+
+      expect(sessionLifecycle.suspendSession).toHaveBeenCalledTimes(1);
+    });
+
+    // WO-ARGOS-061 test F: clean followed by stale for the same station is
+    // equally safe/idempotent — same reasoning as [E], different reasons.
+    it('[F] a clean close followed by a stale close for the same station is safe/idempotent', async () => {
+      const active = {
+        id: 'session-1',
+        status: 'ACTIVE',
+        protocolTransactionId: '100',
+      };
+      prisma.chargingSession.findMany
+        .mockResolvedValueOnce([active])
+        .mockResolvedValueOnce([]);
+
+      await coordinator.handleConnectionClosed({
+        chargingStationId: 'cs1',
+        ocppIdentity: 'movos-abc123',
+        reason: 'clean',
+      });
       await coordinator.handleConnectionClosed({
         chargingStationId: 'cs1',
         ocppIdentity: 'movos-abc123',
         reason: 'stale',
       });
 
-      expect(sessionLifecycle.suspendSession).toHaveBeenCalledWith(
-        'session-2',
-        'OFFLINE',
-      );
+      expect(sessionLifecycle.suspendSession).toHaveBeenCalledTimes(1);
     });
 
-    // Scenario 7: a COMPLETED session is never in the ACTIVE/SUSPENDED
-    // query result in the first place, so it is structurally impossible
-    // for a stale close to touch it.
-    it('queries only ACTIVE and SUSPENDED sessions, never terminal ones, on a stale close', async () => {
+    // WO-ARGOS-061 test G: a session already COMPLETED before the disconnect
+    // signal arrives is never in the ACTIVE/SUSPENDED query result, so it's
+    // structurally untouched — same guarantee for clean as previously
+    // verified for stale.
+    it('[G] a terminal (already-COMPLETED) session is untouched by a clean close', async () => {
       await coordinator.handleConnectionClosed({
         chargingStationId: 'cs1',
         ocppIdentity: 'movos-abc123',
-        reason: 'stale',
+        reason: 'clean',
       });
 
       expect(prisma.chargingSession.findMany).toHaveBeenCalledWith({
@@ -311,6 +440,75 @@ describe('ConnectivityCoordinator', () => {
         },
       });
       expect(sessionLifecycle.suspendSession).not.toHaveBeenCalled();
+    });
+
+    // WO-ARGOS-061 test I: multi-connector/multi-EVSE station — every
+    // ACTIVE/SUSPENDED session belonging to the station is reconciled, not
+    // only the first one. The query itself is station-scoped (not
+    // connector-scoped), so findMany naturally returns every affected
+    // session across every connector/EVSE.
+    it('[I] reconciles every ACTIVE/SUSPENDED session across a multi-connector station on a clean close', async () => {
+      const sessionA = {
+        id: 'session-a',
+        status: 'ACTIVE',
+        protocolTransactionId: '100',
+        connectorId: 'connector-a',
+      };
+      const sessionB = {
+        id: 'session-b',
+        status: 'SUSPENDED',
+        protocolTransactionId: '101',
+        connectorId: 'connector-b',
+      };
+      prisma.chargingSession.findMany.mockResolvedValue([sessionA, sessionB]);
+
+      await coordinator.handleConnectionClosed({
+        chargingStationId: 'cs1',
+        ocppIdentity: 'movos-abc123',
+        reason: 'clean',
+      });
+
+      expect(sessionLifecycle.suspendSession).toHaveBeenCalledWith(
+        'session-a',
+        'OFFLINE',
+      );
+      expect(sessionLifecycle.suspendSession).toHaveBeenCalledWith(
+        'session-b',
+        'OFFLINE',
+      );
+      expect(sessionLifecycle.suspendSession).toHaveBeenCalledTimes(2);
+    });
+
+    // WO-ARGOS-061 tests J & K: reconciliation must never touch
+    // Connector.status or Evse.status — WO-060 confirmed
+    // StatusNotificationHandler remains the sole writer of Connector.status,
+    // and Evse.status (administrative) is independent of connectivity.
+    // Asserted here via the Prisma mock surface: no connector/evse client
+    // is even provided to the coordinator, so any attempt to write either
+    // would throw as "not a function" — this test documents and locks in
+    // that the coordinator's write surface is exactly
+    // ChargingStation + ChargingSession, nothing else.
+    it('[J, K] never touches Connector.status or Evse.status — no connector/evse Prisma client is used', async () => {
+      const active = {
+        id: 'session-1',
+        status: 'ACTIVE',
+        protocolTransactionId: '100',
+      };
+      prisma.chargingSession.findMany.mockResolvedValue([active]);
+      expect(
+        (prisma as unknown as Record<string, unknown>).connector,
+      ).toBeUndefined();
+      expect(
+        (prisma as unknown as Record<string, unknown>).evse,
+      ).toBeUndefined();
+
+      await expect(
+        coordinator.handleConnectionClosed({
+          chargingStationId: 'cs1',
+          ocppIdentity: 'movos-abc123',
+          reason: 'clean',
+        }),
+      ).resolves.not.toThrow();
     });
   });
 });
