@@ -20,11 +20,19 @@ export class AuditService {
 
   /**
    * Records an audit event. Failures are logged but never propagated: audit
-   * logging must not break the primary operation.
+   * logging must not break the primary operation. Accepts an optional
+   * interactive-transaction client (WO-ARGOS-063: SessionLifecycleService's
+   * createSession records SESSION_ABANDONED_ON_NEW_TRANSACTION from inside
+   * its own SERIALIZABLE transaction, so the audit write rolls back together
+   * with the FAILED transition on a serialization conflict) — defaults to
+   * the regular PrismaService for every other caller, unchanged.
    */
-  async record(input: AuditInput): Promise<void> {
+  async record(
+    input: AuditInput,
+    client: PrismaService | Prisma.TransactionClient = this.prisma,
+  ): Promise<void> {
     try {
-      await this.prisma.auditEvent.create({
+      await client.auditEvent.create({
         data: {
           action: input.action,
           organizationId: input.organizationId ?? null,

@@ -208,6 +208,14 @@ Every method validates the current status against the table in [§8](#8-session-
 
 Reusing the idempotency rule already stated in the CAP-003-era ChargingSession Architecture: every inbound normalized event that would mutate a `ChargingSession` is idempotent on `(chargingStationId, protocolTransactionId, eventType)`. A retransmitted `StartTransaction` for a transaction that already has a `ChargingSession` row is a no-op (returns the existing session), not a duplicate insert or an error — enforced by the `@@unique([chargingStationId, protocolTransactionId])` database constraint plus an application-level pre-check in `createSession()`.
 
+**WO-ARGOS-063 addendum — `EXPIRED_OFFLINE_SESSION_CANNOT_ABSORB_NEW_TRANSACTION`.** WO-ARGOS-062 discovered that `createSession()`'s connector-scoped occupancy check treated _any_ `OFFLINE` session as "the same transaction retrying," with no age limit — a genuinely new physical `StartTransaction` on a connector whose prior session was `OFFLINE` past `ConnectivityCoordinator`'s recovery window silently reattached to the abandoned row instead of creating a new one, corrupting `meterStart`, `authorizationCredentialId`, `startedAt`, and (on completion) `energyWh`. `createSession()` now distinguishes three cases:
+
+- **CASE A** — an existing non-`OFFLINE` non-terminal session (the original idempotency rule above): returned as-is.
+- **CASE B** — an existing `OFFLINE` session still inside `SessionLifecycleService.isOfflineSessionRecoverable`'s window: returned as-is, unchanged from the pre-WO-063 behavior.
+- **CASE C** — an existing `OFFLINE` session _outside_ that window: no longer treated as a retry. It is explicitly transitioned `OFFLINE → FAILED` (reason `NETWORK_FAILURE` — connectivity was lost and never recovered, not a user/administrative cancellation), audited as `SESSION_ABANDONED_ON_NEW_TRANSACTION`, and the incoming `StartTransaction` then creates a genuinely new `ChargingSession` row with its own identity, credential, `meterStart`, and `protocolTransactionId`.
+
+`isOfflineSessionRecoverable` is the single, shared definition of the recovery window — used by both `createSession` (this case split) and `ConnectivityCoordinator.attemptRecovery` (the reconnect path) — deliberately kept as one method so the two paths cannot diverge. See `apps/movos-api/test/offline-session-supersession.e2e-spec.ts` for the permanent regression coverage (mandatory billing scenario, StopTransaction A/B/C, idempotency matrix, concurrency, multi-connector, Digital Twin).
+
 ## 14. Failure scenarios
 
 | Scenario                                                                      | Behavior                                                                                                                                                                                                                                                  |

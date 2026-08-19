@@ -8,8 +8,26 @@ import {
 } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
 import { TransactionIdGeneratorService } from './transaction-id-generator.service';
 import { InvalidSessionTransitionError } from './session-lifecycle.errors';
+
+/** A regular PrismaService call or an interactive-transaction client — the
+ * subset of methods used throughout this service (chargingSession.*,
+ * billingAccount.*) is structurally identical on both, so private helpers
+ * that need to participate in createSession's WO-ARGOS-063 transaction
+ * accept either. */
+type Db = PrismaService | Prisma.TransactionClient;
+
+/** WO-ARGOS-063 — single source of truth for how long an OFFLINE session
+ * remains legitimately recoverable, shared by createSession's new-
+ * StartTransaction collision guard (isOfflineSessionRecoverable below) and
+ * ConnectivityCoordinator.attemptRecovery's reconnect path (which re-exports
+ * this value as its own static RECOVERY_WINDOW_MS, unchanged, for the
+ * existing public reference in its spec). Moved here, not duplicated —
+ * value itself is unchanged: 3x the current global heartbeat interval
+ * (BootNotification.conf's hardcoded 300s), per DEC-017's approved policy. */
+export const OFFLINE_RECOVERY_WINDOW_MS = 3 * 300_000;
 
 export interface CreateSessionInput {
   organizationId: string;
@@ -111,6 +129,7 @@ export class SessionLifecycleService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
     private readonly transactionIds: TransactionIdGeneratorService,
   ) {}
 
@@ -128,57 +147,206 @@ export class SessionLifecycleService {
    * by transaction id: if the target connector already has a non-terminal
    * session, that session is returned as-is rather than creating a second
    * concurrent one — the same response a genuine retransmission and a
-   * connector-already-occupied conflict both need.
+   * connector-already-occupied conflict both need. This is CASE A/B below.
+   *
+   * WO-ARGOS-063: an OFFLINE session outside the shared recovery window
+   * (isOfflineSessionRecoverable) is no longer treated as "the same
+   * transaction retrying" — it is explicitly superseded (CASE C) so a
+   * genuinely new StartTransaction on that connector gets its own row,
+   * identity, and billing, instead of silently corrupting the abandoned
+   * one's. See docs/domain/CAP-004_CHARGING_SESSIONS_FOUNDATION.md and
+   * MOVOS_OFFLINE_SESSION_NEW_STARTTRANSACTION_COLLISION for the discovery
+   * (WO-062) this closes.
+   *
+   * CASE A/B (an idempotent return, nothing written) is answered by a
+   * plain, non-transactional read — identical to this method's pre-
+   * WO-063 shape, zero new risk on that path. Only once a write is
+   * actually possible (a fresh session, or CASE C's supersede-then-create)
+   * does execution enter a SERIALIZABLE transaction — the narrowest locking
+   * this schema supports without a migration (no unique constraint exists
+   * to key a create-then-catch-P2002 pattern on, unlike BillingAccount's).
+   * Two genuinely concurrent createSession calls for the same connector
+   * will have one succeed and the other fail with a Postgres serialization
+   * conflict (Prisma P2034) rather than silently producing two rows or a
+   * corrupted one — a safe failure mode, not a full fix. See WO-063 §8/§21
+   * for what this does and does not guarantee.
+   *
+   * Billing-account resolution always happens on `this.prisma` — its own
+   * connection, strictly *before* the transaction below opens — never on
+   * `tx`. Two reasons, both confirmed during WO-ARGOS-063 validation: (1)
+   * a BillingAccount committed on a different connection *after* `tx`'s own
+   * SERIALIZABLE snapshot was established is invisible to `tx`'s FK check
+   * on ChargingSession.billingAccountId, producing a spurious FK violation
+   * on an organization's first-ever session; (2) resolving it inside `tx`
+   * collapses its existing create-then-catch-P2002 concurrent-first-session
+   * tolerance (CAP-009/WO-ARGOS-017A, locked in by
+   * billing-foundation.e2e-spec.ts) into an unhandled serialization-
+   * conflict error under real concurrent load. Resolving it beforehand,
+   * on its own connection, preserves that guarantee exactly as before.
    */
   async createSession(input: CreateSessionInput): Promise<ChargingSession> {
-    const existing = await this.prisma.chargingSession.findFirst({
+    const precheck = await this.prisma.chargingSession.findFirst({
       where: {
         connectorId: input.connectorId,
         status: { in: NON_TERMINAL_STATUSES },
       },
     });
-    if (existing) {
+    if (
+      precheck &&
+      (precheck.status !== ChargingSessionStatus.OFFLINE ||
+        this.isOfflineSessionRecoverable(precheck))
+    ) {
+      // CASE A (any other non-terminal status) or CASE B (OFFLINE, still
+      // inside the recovery window) — preserve the existing idempotency/
+      // recovery behavior unchanged, no transaction, no billing-account
+      // touch, exactly as before WO-063.
       this.logger.log(
-        `createSession: connector ${input.connectorId} already has a non-terminal session (${existing.id}) — returning it, not creating a duplicate`,
+        `createSession: connector ${input.connectorId} already has a non-terminal session (${precheck.id}) — returning it, not creating a duplicate`,
       );
-      return existing;
+      return precheck;
     }
 
     // CAP-009 (WO-ARGOS-017A): every ChargingSession now requires a
-    // BillingAccount (Objective 1, Option A). This handler has no concept
-    // of billing/debt ownership — it only knows which organization the
-    // session belongs to — so it resolves (or, on an organization's very
-    // first session, creates) that organization's SYSTEM_DEFAULT
-    // placeholder account. A real BillingAccount can be assigned later by
-    // a future capability; nothing here forecloses that.
+    // BillingAccount (Objective 1, Option A) — resolved once we know a
+    // write is coming, before entering the transaction below (see the
+    // method doc comment for why).
     const billingAccountId = await this.resolveSystemDefaultBillingAccountId(
       input.organizationId,
     );
 
-    // The PENDING -> AUTHORIZED -> STARTING -> ACTIVE walk (§8) collapses
-    // into a single insert here: 1.6J's StartTransaction already implies a
-    // validated, physically-connecting device, and no other process ever
-    // observes this row between PENDING and ACTIVE within one handler
-    // invocation. See ALLOWED_TRANSITIONS above for proof each hop in that
-    // walk is independently valid — verified directly in this service's
-    // spec, not just asserted here.
-    return this.prisma.chargingSession.create({
-      data: {
-        organizationId: input.organizationId,
-        siteId: input.siteId,
-        chargingStationId: input.chargingStationId,
-        evseId: input.evseId,
-        connectorId: input.connectorId,
-        authorizationCredentialId: input.authorizationCredentialId,
-        protocolVersion: input.protocolVersion,
-        protocolTransactionId: this.transactionIds.next(),
-        status: ChargingSessionStatus.ACTIVE,
-        meterStart: input.meterStart,
-        energyWh: 0,
-        startedAt: input.startedAt,
-        billingAccountId,
+    return this.prisma.$transaction(
+      async (tx) => {
+        // Re-checked inside the transaction: the precheck above is purely
+        // an optimization to decide whether billing resolution was needed
+        // — it is not the source of truth. Something may have changed
+        // between the precheck and here (another caller created or
+        // recovered a session on this connector); this is the real,
+        // transactionally-consistent decision point.
+        const existing = await tx.chargingSession.findFirst({
+          where: {
+            connectorId: input.connectorId,
+            status: { in: NON_TERMINAL_STATUSES },
+          },
+        });
+
+        if (existing) {
+          if (
+            existing.status !== ChargingSessionStatus.OFFLINE ||
+            this.isOfflineSessionRecoverable(existing)
+          ) {
+            // Same as CASE A/B above, just re-confirmed post-race. The
+            // billingAccountId resolved above goes unused this time —
+            // harmless, the same "occasionally wasted work under a race"
+            // CAP-009's own P2002 pattern already tolerates.
+            this.logger.log(
+              `createSession: connector ${input.connectorId} already has a non-terminal session (${existing.id}) — returning it, not creating a duplicate`,
+            );
+            return existing;
+          }
+
+          // CASE C — OFFLINE, outside the recovery window: no longer
+          // legitimately recoverable. Terminalize it explicitly instead of
+          // letting the incoming StartTransaction silently absorb it.
+          await this.supersedeExpiredOfflineSession(tx, existing, input);
+        }
+
+        // The PENDING -> AUTHORIZED -> STARTING -> ACTIVE walk (§8)
+        // collapses into a single insert here: 1.6J's StartTransaction
+        // already implies a validated, physically-connecting device, and no
+        // other process ever observes this row between PENDING and ACTIVE
+        // within one handler invocation. See ALLOWED_TRANSITIONS above for
+        // proof each hop in that walk is independently valid — verified
+        // directly in this service's spec, not just asserted here.
+        return tx.chargingSession.create({
+          data: {
+            organizationId: input.organizationId,
+            siteId: input.siteId,
+            chargingStationId: input.chargingStationId,
+            evseId: input.evseId,
+            connectorId: input.connectorId,
+            authorizationCredentialId: input.authorizationCredentialId,
+            protocolVersion: input.protocolVersion,
+            protocolTransactionId: this.transactionIds.next(),
+            status: ChargingSessionStatus.ACTIVE,
+            meterStart: input.meterStart,
+            energyWh: 0,
+            startedAt: input.startedAt,
+            billingAccountId,
+          },
+        });
       },
-    });
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  }
+
+  /**
+   * WO-ARGOS-063 — the single, shared definition of "is this OFFLINE session
+   * still legitimately recoverable," used by both createSession's CASE B/C
+   * split above and ConnectivityCoordinator.attemptRecovery's reconnect
+   * path. Must not diverge (WO-063 §2).
+   *
+   * Uses `updatedAt` as the clock. Investigated whether that's safe: the
+   * only writes that ever touch a session's `updatedAt` while it stays
+   * OFFLINE are (a) transitions that move it OUT of OFFLINE — which
+   * disqualifies it from this check by the status guard below anyway, so
+   * they can't silently extend the window — or (b) a MeterValues sample
+   * landing in the same event-loop tick as the connectivity-loss
+   * transition (a live connection is required to deliver MeterValues at
+   * all, so once genuinely disconnected nothing can touch this row's
+   * `updatedAt` again). That race is bounded to milliseconds around the
+   * disconnect moment, not an arbitrary later extension — not a meaningful
+   * threat to the invariant this method exists to enforce. No existing
+   * field better represents "when did this session enter OFFLINE," and no
+   * new persistence field was introduced for this — `updatedAt` is reused
+   * as-is, exactly as ConnectivityCoordinator.attemptRecovery already relied
+   * on it before this WO.
+   */
+  isOfflineSessionRecoverable(session: ChargingSession): boolean {
+    if (session.status !== ChargingSessionStatus.OFFLINE) {
+      return false;
+    }
+    return (
+      Date.now() - session.updatedAt.getTime() <= OFFLINE_RECOVERY_WINDOW_MS
+    );
+  }
+
+  /**
+   * WO-ARGOS-063 CASE C — terminalizes an OFFLINE session that fell outside
+   * the recovery window and is being superseded by a genuinely new
+   * StartTransaction on the same connector. Reuses failSession's existing
+   * OFFLINE -> FAILED transition machinery (no parallel state engine).
+   * `NETWORK_FAILURE` is used as the termination reason: the session's
+   * continuity was lost to connectivity, and it was never recovered — not a
+   * user/administrative cancellation (explicitly not CANCELLED, per
+   * WO-063 decision 3). Never touches meterStart, meterStop, energyWh,
+   * authorizationCredentialId, or protocolTransactionId — those remain
+   * exactly as the abandoned transaction left them, for historical audit.
+   * The audit event is recorded inside the same transaction as the FAILED
+   * transition so both roll back together on a serialization conflict.
+   */
+  private async supersedeExpiredOfflineSession(
+    tx: Prisma.TransactionClient,
+    expired: ChargingSession,
+    input: CreateSessionInput,
+  ): Promise<void> {
+    await this.failSession(expired.id, 'NETWORK_FAILURE', tx);
+    await this.audit.record(
+      {
+        action: 'SESSION_ABANDONED_ON_NEW_TRANSACTION',
+        subjectType: 'ChargingSession',
+        subjectId: expired.id,
+        metadata: {
+          chargingStationId: input.chargingStationId,
+          connectorId: input.connectorId,
+          protocolTransactionId: expired.protocolTransactionId,
+          reason: 'expired-offline-superseded-by-new-transaction',
+        },
+      },
+      tx,
+    );
+    this.logger.warn(
+      `createSession: connector ${input.connectorId}'s OFFLINE session ${expired.id} was outside the recovery window — superseded to FAILED; a new ChargingSession will be created for the incoming StartTransaction`,
+    );
   }
 
   /**
@@ -196,8 +364,9 @@ export class SessionLifecycleService {
    */
   private async resolveSystemDefaultBillingAccountId(
     organizationId: string,
+    client: Db = this.prisma,
   ): Promise<string> {
-    const existing = await this.prisma.billingAccount.findFirst({
+    const existing = await client.billingAccount.findFirst({
       where: { organizationId, type: 'SYSTEM_DEFAULT' },
     });
     if (existing) {
@@ -205,7 +374,7 @@ export class SessionLifecycleService {
     }
 
     try {
-      const created = await this.prisma.billingAccount.create({
+      const created = await client.billingAccount.create({
         data: {
           organizationId,
           type: 'SYSTEM_DEFAULT',
@@ -220,7 +389,7 @@ export class SessionLifecycleService {
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'
       ) {
-        const winner = await this.prisma.billingAccount.findFirst({
+        const winner = await client.billingAccount.findFirst({
           where: { organizationId, type: 'SYSTEM_DEFAULT' },
         });
         if (winner) {
@@ -303,14 +472,18 @@ export class SessionLifecycleService {
     });
   }
 
-  /** Any non-terminal status -> FAILED. */
+  /** Any non-terminal status -> FAILED. Accepts an optional interactive-
+   * transaction client (WO-ARGOS-063: createSession's CASE C supersession
+   * calls this from inside its own SERIALIZABLE transaction) — defaults to
+   * the regular PrismaService for every other caller, unchanged. */
   async failSession(
     id: string,
     reason: ChargingSessionTerminationReason,
+    client: Db = this.prisma,
   ): Promise<ChargingSession> {
-    const session = await this.requireSession(id);
+    const session = await this.requireSession(id, client);
     this.assertTransitionAllowed(session.status, ChargingSessionStatus.FAILED);
-    return this.prisma.chargingSession.update({
+    return client.chargingSession.update({
       where: { id },
       data: {
         status: ChargingSessionStatus.FAILED,
@@ -388,8 +561,11 @@ export class SessionLifecycleService {
     }
   }
 
-  private async requireSession(id: string): Promise<ChargingSession> {
-    const session = await this.prisma.chargingSession.findUnique({
+  private async requireSession(
+    id: string,
+    client: Db = this.prisma,
+  ): Promise<ChargingSession> {
+    const session = await client.chargingSession.findUnique({
       where: { id },
     });
     if (!session) {
