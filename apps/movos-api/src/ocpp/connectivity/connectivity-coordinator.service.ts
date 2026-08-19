@@ -3,7 +3,10 @@ import type { ChargingSession } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../../audit/audit.service';
-import { SessionLifecycleService } from '../../sessions/session-lifecycle.service';
+import {
+  OFFLINE_RECOVERY_WINDOW_MS,
+  SessionLifecycleService,
+} from '../../sessions/session-lifecycle.service';
 import type { OcppProtocolVersion } from '../protocol/common/normalized-events';
 
 export interface ConnectionEstablishedInput {
@@ -41,8 +44,12 @@ export class ConnectivityCoordinator implements OnModuleInit {
 
   /** 3x the current global heartbeat interval (BootNotification.conf's
    * hardcoded 300s), per DEC-017's approved policy. Not yet per-station —
-   * see docs/domain/CAP-005_CONNECTIVITY_ENGINE.md's known limitations. */
-  static readonly RECOVERY_WINDOW_MS = 3 * 300_000;
+   * see docs/domain/CAP-005_CONNECTIVITY_ENGINE.md's known limitations.
+   * WO-ARGOS-063: the value now lives at
+   * SessionLifecycleService.OFFLINE_RECOVERY_WINDOW_MS as the single shared
+   * definition (also used by createSession's collision guard) — re-exported
+   * here unchanged so this class's existing public reference keeps working. */
+  static readonly RECOVERY_WINDOW_MS = OFFLINE_RECOVERY_WINDOW_MS;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -218,9 +225,12 @@ export class ConnectivityCoordinator implements OnModuleInit {
       },
     });
 
+    // WO-ARGOS-063: delegates to SessionLifecycleService's shared
+    // definition rather than computing this inline — the same rule
+    // createSession's collision guard uses, so the two paths can never
+    // diverge.
     const withinWindow =
-      Date.now() - session.updatedAt.getTime() <=
-      ConnectivityCoordinator.RECOVERY_WINDOW_MS;
+      this.sessionLifecycle.isOfflineSessionRecoverable(session);
 
     if (conflicting || !withinWindow) {
       this.logger.warn(

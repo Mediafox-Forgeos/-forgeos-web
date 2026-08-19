@@ -1,7 +1,10 @@
 import { ConnectivityCoordinator } from './connectivity-coordinator.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { AuditService } from '../../audit/audit.service';
-import type { SessionLifecycleService } from '../../sessions/session-lifecycle.service';
+import {
+  OFFLINE_RECOVERY_WINDOW_MS,
+  type SessionLifecycleService,
+} from '../../sessions/session-lifecycle.service';
 
 type PrismaMock = {
   chargingStation: {
@@ -32,7 +35,10 @@ function createAuditMock(): jest.Mocked<Pick<AuditService, 'record'>> {
 }
 
 function createSessionLifecycleMock(): jest.Mocked<
-  Pick<SessionLifecycleService, 'suspendSession' | 'resumeSession'>
+  Pick<
+    SessionLifecycleService,
+    'suspendSession' | 'resumeSession' | 'isOfflineSessionRecoverable'
+  >
 > {
   return {
     suspendSession: jest
@@ -45,6 +51,18 @@ function createSessionLifecycleMock(): jest.Mocked<
       .mockImplementation((id: string) =>
         Promise.resolve({ id, status: 'ACTIVE' }),
       ),
+    // WO-ARGOS-063: the real implementation this mock mirrors now lives on
+    // SessionLifecycleService — attemptRecovery delegates to it rather than
+    // computing the window inline, so the mock must too, to keep this
+    // spec's "outside the recovery window" scenario meaningful.
+    isOfflineSessionRecoverable: jest
+      .fn()
+      .mockImplementation((session: { status: string; updatedAt: Date }) => {
+        if (session.status !== 'OFFLINE') return false;
+        return (
+          Date.now() - session.updatedAt.getTime() <= OFFLINE_RECOVERY_WINDOW_MS
+        );
+      }),
   };
 }
 
