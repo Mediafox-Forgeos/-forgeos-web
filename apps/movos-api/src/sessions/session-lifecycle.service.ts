@@ -280,6 +280,22 @@ export class SessionLifecycleService {
   }
 
   /**
+   * WO-ARGOS-064 — read-only precondition check for RemoteStart: a
+   * connector may not be targeted while it already has a non-terminal
+   * ChargingSession (same NON_TERMINAL_STATUSES set createSession's own
+   * occupancy guard uses — reused, not re-derived). Returns null when the
+   * connector is genuinely free. Callers must not infer OCPP-level
+   * connector availability from this alone (see Connector.status).
+   */
+  async findNonTerminalSessionForConnector(
+    connectorId: string,
+  ): Promise<ChargingSession | null> {
+    return this.prisma.chargingSession.findFirst({
+      where: { connectorId, status: { in: NON_TERMINAL_STATUSES } },
+    });
+  }
+
+  /**
    * WO-ARGOS-063 — the single, shared definition of "is this OFFLINE session
    * still legitimately recoverable," used by both createSession's CASE B/C
    * split above and ConnectivityCoordinator.attemptRecovery's reconnect

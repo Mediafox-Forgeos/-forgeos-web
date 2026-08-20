@@ -20,6 +20,7 @@ import type {
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../../audit/audit.service';
+import { SessionLifecycleService } from '../../sessions/session-lifecycle.service';
 import { ConnectionRegistryService } from '../connection-registry/connection-registry.service';
 import {
   PendingCallRegistryService,
@@ -85,6 +86,7 @@ export class RemoteCommandService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly sessionLifecycle: SessionLifecycleService,
     private readonly connectionRegistry: ConnectionRegistryService,
     private readonly pendingCalls: PendingCallRegistryService,
     private readonly ocpp16Adapter: Ocpp16Adapter,
@@ -147,10 +149,53 @@ export class RemoteCommandService {
         input.organizationId,
         input.authorizationCredentialId,
       );
+      // WO-ARGOS-064 §5 — RemoteStart-specific preconditions, all backend-
+      // enforced regardless of what the UI already validated.
+      if (connector.status !== 'AVAILABLE') {
+        throw new BadRequestException(
+          `El conector no está disponible para iniciar una carga remota (estado actual: ${connector.status}).`,
+        );
+      }
+      const conflictingSession =
+        await this.sessionLifecycle.findNonTerminalSessionForConnector(
+          connector.id,
+        );
+      if (conflictingSession) {
+        throw new ConflictException(
+          'El conector ya tiene una sesión de carga no finalizada.',
+        );
+      }
+      // OCPP 1.6J idTag is a CiString20Type — a credential identifier that
+      // doesn't fit cannot be sent as-is; fail clearly now rather than at
+      // the protocol adapter with a less actionable error.
+      if (credential.externalIdentifier.length > 20) {
+        throw new BadRequestException(
+          'El identificador de la credencial excede la longitud máxima soportada por OCPP 1.6J (20 caracteres).',
+        );
+      }
     }
 
-    if (input.commandType === RemoteCommandType.REMOTE_STOP && !session) {
-      throw new BadRequestException('RemoteStop requiere chargingSessionId.');
+    if (input.commandType === RemoteCommandType.REMOTE_STOP) {
+      if (!session) {
+        throw new BadRequestException('RemoteStop requiere chargingSessionId.');
+      }
+      // WO-ARGOS-064 §11 — "session is legitimately stoppable": the same
+      // set stopSession() itself accepts as a source state
+      // (ACTIVE/OFFLINE/SUSPENDED -> STOPPING, session-lifecycle.service.ts
+      // ALLOWED_TRANSITIONS). Checked here too, before ever sending a real
+      // RemoteStopTransaction.req for a session that's already terminal or
+      // not yet real (PENDING/AUTHORIZED/STARTING never occur on the 1.6J
+      // synchronous path, but are excluded for the same reason).
+      const STOPPABLE_SESSION_STATUSES = new Set([
+        'ACTIVE',
+        'OFFLINE',
+        'SUSPENDED',
+      ]);
+      if (!STOPPABLE_SESSION_STATUSES.has(session.status)) {
+        throw new BadRequestException(
+          `La sesión no está en un estado que permita detenerla de forma remota (estado actual: ${session.status}).`,
+        );
+      }
     }
 
     // 2. Concurrency guard (scope item 8) — application-level check first
@@ -327,11 +372,12 @@ export class RemoteCommandService {
     // CALLRESULT — interpreted through the SAME protocol seam, never a raw
     // payload.status read here. Accepted means only "the charger will
     // attempt it" (WO-058 Decision) — this is protocol acceptance, not
-    // physical outcome confirmation. This foundation stops here; real
-    // corroboration (ACCEPTED -> CONFIRMED/UNCONFIRMED) is wired by a
-    // future work order exposing an actual command to production — see
-    // confirmCommand/markUnconfirmed below, which exist and are tested at
-    // the state-machine level but are not called from anywhere yet.
+    // physical outcome confirmation. WO-ARGOS-064 wires the real
+    // corroboration (ACCEPTED -> CONFIRMED/UNCONFIRMED) via
+    // RemoteCommandConfirmationService, which the controller registers this
+    // command with immediately after this method returns — never inside
+    // this method itself, so requestCommand's own return timing (resolves
+    // at ACCEPTED, exactly as WO-059's tests already expect) is unchanged.
     const { accepted } = adapter.parseOutboundResult(
       normalizedCommand,
       resolution.payload,
@@ -343,7 +389,10 @@ export class RemoteCommandService {
         RemoteCommandState.ACCEPTED,
         input.actorUserId,
         'REMOTE_COMMAND_ACCEPTED',
-        { responsePayload: resolution.payload as Prisma.InputJsonValue },
+        {
+          responsePayload: resolution.payload as Prisma.InputJsonValue,
+          acceptedAt: new Date(),
+        },
         /* terminal */ false,
       );
     }
@@ -359,22 +408,33 @@ export class RemoteCommandService {
     );
   }
 
-  /** ACCEPTED -> CONFIRMED. Reserved for a future work order's
-   * domain-specific corroboration (e.g. an inbound StartTransaction
-   * confirming a RemoteStart) — see the state machine's own doc comment.
-   * Not called by anything in WO-059 itself. */
-  async confirmCommand(id: string): Promise<RemoteCommand> {
+  /** ACCEPTED -> CONFIRMED. WO-ARGOS-064 — called exclusively by
+   * RemoteCommandConfirmationService once a real, domain-specific
+   * corroborating signal is observed (an inbound StartTransaction for
+   * RemoteStart, an inbound StopTransaction/natural completion for
+   * RemoteStop). `linkedChargingSessionId` records, for a RemoteStart,
+   * which real ChargingSession the confirmation was matched to — RemoteStop
+   * already carries its target session from request time, so this is a
+   * no-op for that command type. Never called directly by a controller. */
+  async confirmCommand(
+    id: string,
+    linkedChargingSessionId?: string,
+  ): Promise<RemoteCommand> {
     const command = await this.requireCommand(id);
     return this.finalize(
       command,
       RemoteCommandState.CONFIRMED,
       command.requestedByUserId,
       'REMOTE_COMMAND_CONFIRMED',
-      {},
+      linkedChargingSessionId && !command.chargingSessionId
+        ? { chargingSession: { connect: { id: linkedChargingSessionId } } }
+        : {},
     );
   }
 
-  /** ACCEPTED -> UNCONFIRMED. Same reservation as confirmCommand. */
+  /** ACCEPTED -> UNCONFIRMED. Called exclusively by
+   * RemoteCommandConfirmationService when the confirmation window elapses
+   * with no corroborating signal observed. */
   async markUnconfirmed(id: string, reason: string): Promise<RemoteCommand> {
     const command = await this.requireCommand(id);
     return this.finalize(
@@ -588,6 +648,126 @@ export class RemoteCommandService {
         'La credencial de autorización no está activa.',
       );
     }
+    // WO-ARGOS-064 §5 — same expiry rule AuthorizationAttemptsService
+    // already applies to the ordinary inbound Authorize/StartTransaction
+    // path; a RemoteStart must not be able to use a credential the inbound
+    // path would itself reject.
+    if (credential.expiresAt && credential.expiresAt.getTime() < Date.now()) {
+      throw new BadRequestException(
+        'La credencial de autorización está vencida.',
+      );
+    }
     return credential;
+  }
+
+  // ==========================================================================
+  // WO-ARGOS-064 — Phase A API surface: connector-only / session-only
+  // targeting for the two operator-facing routes, plus command history
+  // reads. Both wrappers resolve the missing chargingStationId from the
+  // target itself (tenant-scoped) and delegate into the already-hardened
+  // requestCommand — ownership is verified again there too, deliberately
+  // (cheap, and consistent with WO-058/059's "never trust a caller-supplied
+  // id without a fresh tenant-scoped lookup" discipline).
+  // ==========================================================================
+
+  async requestRemoteStart(
+    organizationId: string,
+    actorUserId: string,
+    connectorId: string,
+    authorizationCredentialId: string,
+  ): Promise<RemoteCommand> {
+    const connector = await this.prisma.connector.findFirst({
+      where: {
+        id: connectorId,
+        evse: { chargingStation: { site: { organizationId } } },
+      },
+      include: { evse: true },
+    });
+    if (!connector) {
+      throw new NotFoundException('Conector no encontrado');
+    }
+    return this.requestCommand({
+      organizationId,
+      actorUserId,
+      chargingStationId: connector.evse.chargingStationId,
+      connectorId: connector.id,
+      authorizationCredentialId,
+      commandType: RemoteCommandType.REMOTE_START,
+    });
+  }
+
+  async requestRemoteStop(
+    organizationId: string,
+    actorUserId: string,
+    chargingSessionId: string,
+  ): Promise<RemoteCommand> {
+    const session = await this.prisma.chargingSession.findFirst({
+      where: { id: chargingSessionId, organizationId },
+    });
+    if (!session) {
+      throw new NotFoundException('Sesión de carga no encontrada');
+    }
+    return this.requestCommand({
+      organizationId,
+      actorUserId,
+      chargingStationId: session.chargingStationId,
+      chargingSessionId: session.id,
+      commandType: RemoteCommandType.REMOTE_STOP,
+    });
+  }
+
+  /** Command history for a connector — tenant ownership verified via the
+   * same connector lookup requestRemoteStart uses, before any RemoteCommand
+   * row is read. Cross-tenant targeting throws NotFoundException, same as
+   * everywhere else — a foreign connector is indistinguishable from one
+   * that doesn't exist. */
+  async listCommandsForConnector(
+    organizationId: string,
+    connectorId: string,
+  ): Promise<RemoteCommand[]> {
+    const connector = await this.prisma.connector.findFirst({
+      where: {
+        id: connectorId,
+        evse: { chargingStation: { site: { organizationId } } },
+      },
+    });
+    if (!connector) {
+      throw new NotFoundException('Conector no encontrado');
+    }
+    return this.prisma.remoteCommand.findMany({
+      where: { organizationId, connectorId },
+      orderBy: { requestedAt: 'desc' },
+      take: 20,
+    });
+  }
+
+  async listCommandsForSession(
+    organizationId: string,
+    chargingSessionId: string,
+  ): Promise<RemoteCommand[]> {
+    const session = await this.prisma.chargingSession.findFirst({
+      where: { id: chargingSessionId, organizationId },
+    });
+    if (!session) {
+      throw new NotFoundException('Sesión de carga no encontrada');
+    }
+    return this.prisma.remoteCommand.findMany({
+      where: { organizationId, chargingSessionId },
+      orderBy: { requestedAt: 'desc' },
+      take: 20,
+    });
+  }
+
+  async getCommandById(
+    organizationId: string,
+    id: string,
+  ): Promise<RemoteCommand> {
+    const command = await this.prisma.remoteCommand.findFirst({
+      where: { id, organizationId },
+    });
+    if (!command) {
+      throw new NotFoundException('Comando remoto no encontrado');
+    }
+    return command;
   }
 }

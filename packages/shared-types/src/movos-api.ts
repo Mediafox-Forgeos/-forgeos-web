@@ -713,3 +713,31 @@ export interface AttachmentViewUrl {
   url: string;
   expiresAt: string;
 }
+
+// WO-ARGOS-064 — Remote Operations Phase A (RemoteStart/RemoteStop). See
+// docs/domain/CAP-004_CHARGING_SESSIONS_FOUNDATION.md and the WO-058/059
+// Remote Operations decisions this builds on. `state` deliberately mirrors
+// RemoteCommandState's 7 values verbatim (REQUESTED/SENT/ACCEPTED/
+// CONFIRMED/REJECTED/TIMED_OUT/UNCONFIRMED) — the frontend must render
+// honest, state-specific language (never collapse ACCEPTED into "started"/
+// "stopped"), so the raw state string is intentionally exposed as-is rather
+// than pre-translated server-side.
+export interface ApiRemoteCommand {
+  id: string;
+  organizationId: string;
+  chargingStationId: string;
+  connectorId: string | null;
+  chargingSessionId: string | null;
+  commandType: string;
+  state: string;
+  requestedByUserId: string;
+  rejectionReason: string | null;
+  requestedAt: string;
+  sentAt: string | null;
+  acceptedAt: string | null;
+  resolvedAt: string | null;
+}
+
+export interface RequestRemoteStartRequest {
+  authorizationCredentialId: string;
+}

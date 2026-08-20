@@ -586,6 +586,13 @@ model RemoteCommand {
 
   requestedAt DateTime  @default(now())
   sentAt      DateTime?
+  // WO-ARGOS-064 — set on SENT -> ACCEPTED, the clock reference for the
+  // observed-outcome confirmation window (ACCEPTED -> CONFIRMED/
+  // UNCONFIRMED). Deliberately a separate field from resolvedAt: ACCEPTED
+  // is not terminal (resolvedAt stays null until CONFIRMED/UNCONFIRMED),
+  // and the confirmation window is a different clock than the SENT ->
+  // ACCEPTED response timeout (see RemoteCommandConfirmationService).
+  acceptedAt  DateTime?
   resolvedAt  DateTime?
 
   organization    Organization     @relation(fields: [organizationId], references: [id])

@@ -9,6 +9,7 @@ import { RemoteCommandState, RemoteCommandType } from '@prisma/client';
 import { RemoteCommandService } from './remote-command.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../../audit/audit.service';
+import { SessionLifecycleService } from '../../sessions/session-lifecycle.service';
 import { ConnectionRegistryService } from '../connection-registry/connection-registry.service';
 import { PendingCallRegistryService } from '../outbound/pending-call-registry.service';
 import { Ocpp16Adapter } from '../protocol/ocpp16/ocpp16-adapter';
@@ -30,22 +31,31 @@ function station(
 }
 
 function connector(
-  overrides: Partial<{ id: string; externalId: string }> = {},
+  overrides: Partial<{ id: string; externalId: string; status: string }> = {},
 ) {
-  return { id: CONNECTOR_ID, externalId: '1', ...overrides };
+  return {
+    id: CONNECTOR_ID,
+    externalId: '1',
+    status: 'AVAILABLE',
+    ...overrides,
+  };
 }
 
 function session(
   overrides: Partial<{
     id: string;
     connectorId: string;
+    chargingStationId: string;
     protocolTransactionId: string;
+    status: string;
   }> = {},
 ) {
   return {
     id: SESSION_ID,
     connectorId: CONNECTOR_ID,
+    chargingStationId: STATION_ID,
     protocolTransactionId: '55526',
+    status: 'ACTIVE',
     ...overrides,
   };
 }
@@ -95,12 +105,14 @@ describe('RemoteCommandService (WO-ARGOS-059)', () => {
     authorizationCredential: { findFirst: jest.Mock };
     remoteCommand: {
       findFirst: jest.Mock;
+      findMany: jest.Mock;
       create: jest.Mock;
       update: jest.Mock;
       findUnique: jest.Mock;
     };
   };
   let audit: { record: jest.Mock };
+  let sessionLifecycle: { findNonTerminalSessionForConnector: jest.Mock };
   let connectionRegistry: { get: jest.Mock; send: jest.Mock };
   let currentCommandState: RemoteCommandState;
 
@@ -119,6 +131,7 @@ describe('RemoteCommandService (WO-ARGOS-059)', () => {
       },
       remoteCommand: {
         findFirst: jest.fn().mockResolvedValue(null), // no conflicting command by default
+        findMany: jest.fn().mockResolvedValue([]),
         create: jest.fn().mockImplementation(({ data }) => {
           const row = remoteCommandRow(data);
           currentCommandState = row.state;
@@ -134,6 +147,9 @@ describe('RemoteCommandService (WO-ARGOS-059)', () => {
       },
     };
     audit = { record: jest.fn().mockResolvedValue(undefined) };
+    sessionLifecycle = {
+      findNonTerminalSessionForConnector: jest.fn().mockResolvedValue(null),
+    };
     connectionRegistry = {
       get: jest.fn().mockReturnValue({
         ocppIdentity: OCPP_IDENTITY,
@@ -151,6 +167,7 @@ describe('RemoteCommandService (WO-ARGOS-059)', () => {
         Ocpp201Adapter,
         { provide: PrismaService, useValue: prisma },
         { provide: AuditService, useValue: audit },
+        { provide: SessionLifecycleService, useValue: sessionLifecycle },
         { provide: ConnectionRegistryService, useValue: connectionRegistry },
       ],
     }).compile();
@@ -430,6 +447,78 @@ describe('RemoteCommandService (WO-ARGOS-059)', () => {
         }),
       ).rejects.toThrow(BadRequestException);
     });
+
+    // WO-ARGOS-064 §5 — RemoteStart-specific backend preconditions.
+    it('rejects RemoteStart when the connector is not AVAILABLE', async () => {
+      prisma.connector.findFirst.mockResolvedValue(
+        connector({ status: 'CHARGING' }),
+      );
+
+      await expect(
+        service.requestCommand({
+          organizationId: ORG,
+          actorUserId: ACTOR,
+          chargingStationId: STATION_ID,
+          connectorId: CONNECTOR_ID,
+          authorizationCredentialId: CREDENTIAL_ID,
+          commandType: RemoteCommandType.REMOTE_START,
+        }),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.remoteCommand.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects RemoteStart when a non-terminal ChargingSession already occupies the connector', async () => {
+      sessionLifecycle.findNonTerminalSessionForConnector.mockResolvedValue({
+        id: 'existing-session',
+        status: 'OFFLINE',
+      });
+
+      await expect(
+        service.requestCommand({
+          organizationId: ORG,
+          actorUserId: ACTOR,
+          chargingStationId: STATION_ID,
+          connectorId: CONNECTOR_ID,
+          authorizationCredentialId: CREDENTIAL_ID,
+          commandType: RemoteCommandType.REMOTE_START,
+        }),
+      ).rejects.toThrow(ConflictException);
+      expect(prisma.remoteCommand.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects an expired authorization credential', async () => {
+      prisma.authorizationCredential.findFirst.mockResolvedValue(
+        credential({ expiresAt: new Date(Date.now() - 60_000) } as never),
+      );
+
+      await expect(
+        service.requestCommand({
+          organizationId: ORG,
+          actorUserId: ACTOR,
+          chargingStationId: STATION_ID,
+          connectorId: CONNECTOR_ID,
+          authorizationCredentialId: CREDENTIAL_ID,
+          commandType: RemoteCommandType.REMOTE_START,
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('rejects a credential identifier that exceeds the OCPP 1.6J idTag length limit', async () => {
+      prisma.authorizationCredential.findFirst.mockResolvedValue(
+        credential({ externalIdentifier: 'X'.repeat(21) }),
+      );
+
+      await expect(
+        service.requestCommand({
+          organizationId: ORG,
+          actorUserId: ACTOR,
+          chargingStationId: STATION_ID,
+          connectorId: CONNECTOR_ID,
+          authorizationCredentialId: CREDENTIAL_ID,
+          commandType: RemoteCommandType.REMOTE_START,
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
   });
 
   describe('RemoteStop', () => {
@@ -450,6 +539,42 @@ describe('RemoteCommandService (WO-ARGOS-059)', () => {
       ];
       expect(frame.raw[2]).toBe('RemoteStopTransaction');
       expect(frame.raw[3]).toEqual({ transactionId: 55526 });
+    });
+
+    // WO-ARGOS-064 §11 — a RemoteStop must never be sent for a session
+    // that's already terminal (or not yet real).
+    it.each(['COMPLETED', 'FAILED', 'CANCELLED'])(
+      'rejects RemoteStop for a %s (already-terminal) session',
+      async (status) => {
+        prisma.chargingSession.findFirst.mockResolvedValue(session({ status }));
+
+        await expect(
+          service.requestCommand({
+            organizationId: ORG,
+            actorUserId: ACTOR,
+            chargingStationId: STATION_ID,
+            chargingSessionId: SESSION_ID,
+            commandType: RemoteCommandType.REMOTE_STOP,
+          }),
+        ).rejects.toThrow(BadRequestException);
+        expect(prisma.remoteCommand.create).not.toHaveBeenCalled();
+      },
+    );
+
+    it('accepts RemoteStop for an OFFLINE session (logically active, per WO-063)', async () => {
+      prisma.chargingSession.findFirst.mockResolvedValue(
+        session({ status: 'OFFLINE' }),
+      );
+      const promise = service.requestCommand({
+        organizationId: ORG,
+        actorUserId: ACTOR,
+        chargingStationId: STATION_ID,
+        chargingSessionId: SESSION_ID,
+        commandType: RemoteCommandType.REMOTE_STOP,
+      });
+      await respondWith({ status: 'Accepted' });
+      const result = await promise;
+      expect(result.state).toBe(RemoteCommandState.ACCEPTED);
     });
   });
 
@@ -489,6 +614,128 @@ describe('RemoteCommandService (WO-ARGOS-059)', () => {
         expect(input.actorUserId).toBe(ACTOR);
         expect(input.subjectType).toBe('RemoteCommand');
       }
+    });
+  });
+
+  describe('acceptedAt (WO-ARGOS-064 confirmation-window clock)', () => {
+    it('is set when the command reaches ACCEPTED', async () => {
+      const promise = service.requestCommand({
+        organizationId: ORG,
+        actorUserId: ACTOR,
+        chargingStationId: STATION_ID,
+        connectorId: CONNECTOR_ID,
+        authorizationCredentialId: CREDENTIAL_ID,
+        commandType: RemoteCommandType.REMOTE_START,
+      });
+      await respondWith({ status: 'Accepted' });
+      const result = await promise;
+
+      expect(prisma.remoteCommand.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ acceptedAt: expect.any(Date) }),
+        }),
+      );
+      expect(result.state).toBe(RemoteCommandState.ACCEPTED);
+    });
+  });
+
+  describe('connector-only / session-only targeting (WO-ARGOS-064 API surface)', () => {
+    it('requestRemoteStart resolves chargingStationId from the connector and delegates to requestCommand', async () => {
+      prisma.connector.findFirst.mockResolvedValue({
+        ...connector(),
+        evse: { chargingStationId: STATION_ID },
+      });
+
+      const promise = service.requestRemoteStart(
+        ORG,
+        ACTOR,
+        CONNECTOR_ID,
+        CREDENTIAL_ID,
+      );
+      await respondWith({ status: 'Accepted' });
+      const result = await promise;
+
+      expect(result.chargingStationId).toBe(STATION_ID);
+      expect(result.connectorId).toBe(CONNECTOR_ID);
+    });
+
+    it('requestRemoteStart throws NotFoundException for a connector outside the caller organization', async () => {
+      prisma.connector.findFirst.mockResolvedValue(null);
+      await expect(
+        service.requestRemoteStart(
+          OTHER_ORG,
+          ACTOR,
+          CONNECTOR_ID,
+          CREDENTIAL_ID,
+        ),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('requestRemoteStop resolves chargingStationId from the session and delegates to requestCommand', async () => {
+      const promise = service.requestRemoteStop(ORG, ACTOR, SESSION_ID);
+      await respondWith({ status: 'Accepted' });
+      const result = await promise;
+
+      expect(result.chargingStationId).toBe(STATION_ID);
+      // The RemoteCommand row's persisted chargingSessionId — asserted on
+      // the create() call's data, since this spec's update() mock (used by
+      // finalize() to reach ACCEPTED) only echoes back the fields that
+      // specific update touched, not the full row create() originally
+      // wrote — a test-double limitation, not production behavior.
+      expect(prisma.remoteCommand.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ chargingSessionId: SESSION_ID }),
+        }),
+      );
+    });
+
+    it('requestRemoteStop throws NotFoundException for a session outside the caller organization', async () => {
+      prisma.chargingSession.findFirst.mockResolvedValue(null);
+      await expect(
+        service.requestRemoteStop(OTHER_ORG, ACTOR, SESSION_ID),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('command history reads (WO-ARGOS-064 §15)', () => {
+    it('listCommandsForConnector verifies ownership before reading', async () => {
+      prisma.remoteCommand.findMany.mockResolvedValue([remoteCommandRow()]);
+
+      const result = await service.listCommandsForConnector(ORG, CONNECTOR_ID);
+      expect(result).toHaveLength(1);
+    });
+
+    it('listCommandsForConnector throws NotFoundException for a foreign connector, never reading RemoteCommand rows', async () => {
+      prisma.connector.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.listCommandsForConnector(OTHER_ORG, CONNECTOR_ID),
+      ).rejects.toThrow(NotFoundException);
+      expect(prisma.remoteCommand.findMany).not.toHaveBeenCalled();
+    });
+
+    it('listCommandsForSession verifies ownership before reading', async () => {
+      prisma.remoteCommand.findMany.mockResolvedValue([remoteCommandRow()]);
+
+      const result = await service.listCommandsForSession(ORG, SESSION_ID);
+      expect(result).toHaveLength(1);
+    });
+
+    it('getCommandById scopes by organizationId', async () => {
+      prisma.remoteCommand.findFirst.mockResolvedValue(
+        remoteCommandRow({ id: 'cmd-42' }),
+      );
+
+      const result = await service.getCommandById(ORG, 'cmd-42');
+      expect(result.id).toBe('cmd-42');
+    });
+
+    it('getCommandById throws NotFoundException for a foreign command id', async () => {
+      prisma.remoteCommand.findFirst.mockResolvedValue(null);
+
+      await expect(service.getCommandById(OTHER_ORG, 'cmd-42')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 

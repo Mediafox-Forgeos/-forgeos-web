@@ -11,19 +11,36 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ApiError } from '@/lib/api-client';
 import { listConnectorsByEvse } from '@/lib/charging-api';
 import { ConnectorFormModal } from './connector-form-modal';
+import { RemoteStartDialog } from './remote-start-dialog';
 
 type LoadState = 'loading' | 'ready' | 'notfound' | 'error';
 
 interface ConnectorListProps {
   evseId: string;
   canManage: boolean;
+  /** WO-ARGOS-064 — OWNER/ADMIN/OPERATOR, same role set as canManage today,
+   * kept as its own prop since it's a distinct concern (operate vs. CRUD)
+   * even though the two happen to coincide right now. */
+  canRemoteStart?: boolean;
+  siteName?: string;
+  stationName?: string;
+  evseName?: string;
 }
 
-export function ConnectorList({ evseId, canManage }: ConnectorListProps) {
+export function ConnectorList({
+  evseId,
+  canManage,
+  canRemoteStart = false,
+  siteName = '',
+  stationName = '',
+  evseName = '',
+}: ConnectorListProps) {
   const [connectors, setConnectors] = React.useState<ApiConnector[]>([]);
   const [state, setState] = React.useState<LoadState>('loading');
   const [modalOpen, setModalOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<ApiConnector | undefined>();
+  const [remoteStartConnector, setRemoteStartConnector] =
+    React.useState<ApiConnector | null>(null);
 
   const load = React.useCallback(async (): Promise<void> => {
     setState('loading');
@@ -148,6 +165,20 @@ export function ConnectorList({ evseId, canManage }: ConnectorListProps) {
                   <ApiConnectorStatusBadge status={connector.status} />
                 </div>
               </CardHeader>
+              {canRemoteStart && connector.status === 'AVAILABLE' && (
+                <CardContent className="pt-0">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setRemoteStartConnector(connector);
+                    }}
+                  >
+                    Iniciar carga remota
+                  </Button>
+                </CardContent>
+              )}
             </Card>
           ))}
         </div>
@@ -160,6 +191,22 @@ export function ConnectorList({ evseId, canManage }: ConnectorListProps) {
         evseId={evseId}
         onSaved={handleSaved}
       />
+
+      {remoteStartConnector && (
+        <RemoteStartDialog
+          open={remoteStartConnector !== null}
+          onClose={() => setRemoteStartConnector(null)}
+          connectorId={remoteStartConnector.id}
+          siteName={siteName}
+          stationName={stationName}
+          evseName={evseName}
+          connectorLabel={`${remoteStartConnector.type}${
+            remoteStartConnector.externalId
+              ? ` · ${remoteStartConnector.externalId}`
+              : ''
+          }`}
+        />
+      )}
     </div>
   );
 }
