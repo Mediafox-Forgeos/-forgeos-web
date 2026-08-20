@@ -4,6 +4,7 @@ import type { ChargingStation } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuthorizationAttemptsService } from '../../authorization/authorization-attempts.service';
 import { SessionLifecycleService } from '../../sessions/session-lifecycle.service';
+import { RemoteCommandConfirmationService } from '../remote-commands/remote-command-confirmation.service';
 import { idTagStatusFor } from '../normalization/id-tag-status-mapping';
 import type {
   DomainResult,
@@ -26,6 +27,7 @@ export class TransactionStartHandler {
     private readonly prisma: PrismaService,
     private readonly attempts: AuthorizationAttemptsService,
     private readonly sessionLifecycle: SessionLifecycleService,
+    private readonly remoteCommandConfirmation: RemoteCommandConfirmationService,
   ) {}
 
   async handle(
@@ -86,6 +88,22 @@ export class TransactionStartHandler {
       meterStart: event.meterStart,
       startedAt: new Date(event.timestamp),
     });
+
+    // WO-ARGOS-064 — the observed-outcome corroboration for RemoteStart.
+    // A cheap, connector-scoped lookup; a no-op for the overwhelming
+    // majority of StartTransactions (no ACCEPTED RemoteCommand exists for
+    // this connector at all) and never itself creates/mutates a
+    // ChargingSession — only ever confirms a RemoteCommand that already
+    // exists. Runs for every StartTransaction (idempotent-return CASE A/B
+    // included), not just genuinely new sessions — harmless either way,
+    // since the RemoteStart precondition check already guarantees no
+    // ACCEPTED command can exist while a non-terminal session already
+    // occupied this connector.
+    await this.remoteCommandConfirmation.onStartTransactionObserved(
+      station.id,
+      connector.id,
+      session,
+    );
 
     return {
       status: 'Accepted',

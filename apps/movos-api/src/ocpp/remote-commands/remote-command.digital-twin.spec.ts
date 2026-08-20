@@ -27,6 +27,7 @@ import {
 } from './remote-command.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../../audit/audit.service';
+import { SessionLifecycleService } from '../../sessions/session-lifecycle.service';
 // WO-ARGOS-059 — the real Digital Twin client, imported by this one
 // integration spec (mirrors OCPP_SIMULATOR_GUIDE.md's "programmatic usage"
 // pattern). apps/movos-api/tsconfig.build.json excludes simulator/ from the
@@ -47,7 +48,7 @@ const ACTOR = 'user-1';
 const TEST_RESPONSE_TIMEOUT_MS = 300;
 
 const station = { id: STATION_ID, ocppIdentity: OCPP_IDENTITY };
-const connector = { id: CONNECTOR_ID, externalId: '1' };
+const connector = { id: CONNECTOR_ID, externalId: '1', status: 'AVAILABLE' };
 const credential = {
   id: CREDENTIAL_ID,
   externalIdentifier: 'RFID-XYZ',
@@ -144,6 +145,14 @@ describe('RemoteCommand — Digital Twin foundation validation (WO-ARGOS-059)', 
         ConnectionRegistryService,
         PendingCallRegistryService,
         RemoteCommandService,
+        {
+          provide: SessionLifecycleService,
+          useValue: {
+            findNonTerminalSessionForConnector: jest
+              .fn()
+              .mockResolvedValue(null),
+          },
+        },
         Ocpp16Adapter,
         Ocpp201Adapter,
         {

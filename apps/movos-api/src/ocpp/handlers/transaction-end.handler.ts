@@ -3,6 +3,7 @@ import type { ChargingStation } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { SessionLifecycleService } from '../../sessions/session-lifecycle.service';
+import { RemoteCommandConfirmationService } from '../remote-commands/remote-command-confirmation.service';
 import { mapStopReasonToTerminationReason } from '../normalization/termination-reason-mapping';
 import type {
   DomainResult,
@@ -25,6 +26,7 @@ export class TransactionEndHandler {
   constructor(
     private readonly prisma: PrismaService,
     private readonly sessionLifecycle: SessionLifecycleService,
+    private readonly remoteCommandConfirmation: RemoteCommandConfirmationService,
   ) {}
 
   async handle(
@@ -60,6 +62,13 @@ export class TransactionEndHandler {
       reason: mapStopReasonToTerminationReason(event.reason),
       endedAt: new Date(event.timestamp),
     });
+
+    // WO-ARGOS-064 — observed-outcome corroboration for RemoteStop. A
+    // no-op for the overwhelming majority of StopTransactions (no ACCEPTED
+    // RemoteCommand exists for this exact session). Never mutates
+    // ChargingSession itself — stopSession above is the sole authority for
+    // that, already called and already returned.
+    await this.remoteCommandConfirmation.onStopTransactionObserved(session.id);
 
     return { status: 'Accepted' };
   }

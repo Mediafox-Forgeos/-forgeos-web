@@ -10,11 +10,20 @@ import { PageContainer } from '@/components/layout/page-container';
 import { PageHeader } from '@/components/layout/page-header';
 import { EmptyState } from '@/components/movos/empty-state';
 import { ApiChargingSessionStatusBadge } from '@/components/movos/api-charging-status-badges';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { apiClient, ApiError } from '@/lib/api-client';
 import { formatDateTime } from '@/lib/format';
+import { useAuth } from '@/context/auth-context';
+import { RemoteStopDialog } from '@/components/charging/remote-stop-dialog';
 
 type LoadState = 'loading' | 'ready' | 'notfound' | 'error';
+
+// WO-ARGOS-064 — the same "logically active/stoppable" set the backend's
+// own RemoteStop precondition enforces (session-lifecycle.service.ts's
+// STOPPABLE states, ACTIVE/OFFLINE/SUSPENDED -> STOPPING). Gates the button
+// only — the backend re-checks this itself regardless.
+const STOPPABLE_SESSION_STATUSES = new Set(['ACTIVE', 'OFFLINE', 'SUSPENDED']);
 
 /**
  * WO-ARGOS-023 (Operational Consistency Hardening). Replaces the previous
@@ -28,9 +37,15 @@ type LoadState = 'loading' | 'ready' | 'notfound' | 'error';
  */
 export default function SessionDetailPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
+  const { membership } = useAuth();
+  const canRemoteStop =
+    membership?.role === 'OWNER' ||
+    membership?.role === 'ADMIN' ||
+    membership?.role === 'OPERATOR';
   const [session, setSession] = React.useState<ApiChargingSession | null>(null);
   const [meterValues, setMeterValues] = React.useState<ApiMeterValue[]>([]);
   const [state, setState] = React.useState<LoadState>('loading');
+  const [remoteStopOpen, setRemoteStopOpen] = React.useState(false);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -130,7 +145,21 @@ export default function SessionDetailPage() {
         ]}
         title={`Sesión ${session.id}`}
         description={`${session.chargingStationName} · ${session.siteName}`}
-        actions={<ApiChargingSessionStatusBadge status={session.status} />}
+        actions={
+          <div className="flex items-center gap-2">
+            <ApiChargingSessionStatusBadge status={session.status} />
+            {canRemoteStop &&
+              STOPPABLE_SESSION_STATUSES.has(session.status) && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setRemoteStopOpen(true)}
+                >
+                  Detener carga
+                </Button>
+              )}
+          </div>
+        }
       />
 
       <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
@@ -191,6 +220,16 @@ export default function SessionDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      {canRemoteStop && (
+        <RemoteStopDialog
+          open={remoteStopOpen}
+          onClose={() => setRemoteStopOpen(false)}
+          sessionId={session.id}
+          siteName={session.siteName}
+          stationName={session.chargingStationName}
+        />
+      )}
     </PageContainer>
   );
 }

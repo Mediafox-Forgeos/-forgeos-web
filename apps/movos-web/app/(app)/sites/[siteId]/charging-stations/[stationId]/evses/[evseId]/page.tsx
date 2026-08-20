@@ -206,7 +206,14 @@ export default function EvseDetailPage() {
       )}
 
       <div className="mt-8">
-        <ConnectorList evseId={evse.id} canManage={canManage} />
+        <ConnectorList
+          evseId={evse.id}
+          canManage={canManage}
+          canRemoteStart={canManage}
+          siteName={site?.name ?? siteId}
+          stationName={station?.name ?? stationId}
+          evseName={evse.name ?? evse.externalId ?? evse.id}
+        />
       </div>
 
       <EvseFormModal

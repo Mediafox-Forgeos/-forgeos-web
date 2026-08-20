@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import { TransactionStartHandler } from './transaction-start.handler';
 import { AuthorizationAttemptsService } from '../../authorization/authorization-attempts.service';
 import { SessionLifecycleService } from '../../sessions/session-lifecycle.service';
+import { RemoteCommandConfirmationService } from '../remote-commands/remote-command-confirmation.service';
 import { PrismaService } from '../../prisma/prisma.service';
 
 const station = {
@@ -28,6 +29,7 @@ describe('TransactionStartHandler', () => {
   };
   let attempts: { recordAttempt: jest.Mock };
   let sessionLifecycle: { createSession: jest.Mock };
+  let remoteCommandConfirmation: { onStartTransactionObserved: jest.Mock };
 
   beforeEach(async () => {
     prisma = {
@@ -40,6 +42,9 @@ describe('TransactionStartHandler', () => {
     };
     attempts = { recordAttempt: jest.fn() };
     sessionLifecycle = { createSession: jest.fn() };
+    remoteCommandConfirmation = {
+      onStartTransactionObserved: jest.fn().mockResolvedValue(undefined),
+    };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -47,6 +52,10 @@ describe('TransactionStartHandler', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: AuthorizationAttemptsService, useValue: attempts },
         { provide: SessionLifecycleService, useValue: sessionLifecycle },
+        {
+          provide: RemoteCommandConfirmationService,
+          useValue: remoteCommandConfirmation,
+        },
       ],
     }).compile();
 
@@ -86,6 +95,15 @@ describe('TransactionStartHandler', () => {
         protocolTransactionId: '42',
         sessionId: 'session-1',
       },
+    });
+    // WO-ARGOS-064 — every real StartTransaction notifies the confirmation
+    // layer, connector-scoped; a no-op internally when no RemoteCommand is
+    // waiting, but the handler must always call it.
+    expect(
+      remoteCommandConfirmation.onStartTransactionObserved,
+    ).toHaveBeenCalledWith('cs1', 'connector-1', {
+      id: 'session-1',
+      protocolTransactionId: '42',
     });
   });
 

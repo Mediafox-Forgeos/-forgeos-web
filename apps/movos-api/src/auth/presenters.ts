@@ -9,6 +9,7 @@ import type {
   MeterValue,
   AuthorizationCredential,
   AuthorizationAttempt,
+  RemoteCommand,
 } from '@prisma/client';
 import type {
   ApiOrganization,
@@ -31,6 +32,7 @@ import type {
   ApiAssignableTechnician,
   ApiWorkOrderAttachment,
   ApiTechnicianWorkload,
+  ApiRemoteCommand,
 } from '@mediafox/shared-types';
 import type { ChargingSessionWithNames } from '../sessions/sessions.service';
 import type { ChargingStationWithSiteName } from '../charging-stations/charging-stations.service';
@@ -267,6 +269,24 @@ export function toApiAuthorizationCredential(
     revokedAt: credential.revokedAt?.toISOString() ?? null,
     createdAt: credential.createdAt.toISOString(),
     updatedAt: credential.updatedAt.toISOString(),
+  };
+}
+
+export function toApiRemoteCommand(command: RemoteCommand): ApiRemoteCommand {
+  return {
+    id: command.id,
+    organizationId: command.organizationId,
+    chargingStationId: command.chargingStationId,
+    connectorId: command.connectorId,
+    chargingSessionId: command.chargingSessionId,
+    commandType: command.commandType,
+    state: command.state,
+    requestedByUserId: command.requestedByUserId,
+    rejectionReason: command.rejectionReason,
+    requestedAt: command.requestedAt.toISOString(),
+    sentAt: command.sentAt?.toISOString() ?? null,
+    acceptedAt: command.acceptedAt?.toISOString() ?? null,
+    resolvedAt: command.resolvedAt?.toISOString() ?? null,
   };
 }
 
