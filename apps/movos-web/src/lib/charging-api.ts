@@ -151,3 +151,33 @@ export function updateConnector(
 ): Promise<ApiConnector> {
   return apiClient.patch<ApiConnector>(`/connectors/${id}`, payload);
 }
+
+/**
+ * No shared-types response shape exists yet for OCPP provisioning/rotation
+ * (the backend endpoints predate this DTO) — kept minimal and local here
+ * rather than added to @mediafox/shared-types for a two-field, frontend-only
+ * shape.
+ */
+export interface OcppProvisioningResult {
+  ocppIdentity: string;
+  /** Plaintext secret — present only in this one response. Never persist
+   * it (storage, logs, analytics, URLs) beyond the caller's own in-memory
+   * display state. */
+  plaintextSecret: string;
+}
+
+export function provisionOcppCredentials(
+  chargingStationId: string,
+): Promise<OcppProvisioningResult> {
+  return apiClient.post<OcppProvisioningResult>(
+    `/charging-stations/${chargingStationId}/ocpp-provisioning`,
+  );
+}
+
+export function rotateOcppCredentials(
+  chargingStationId: string,
+): Promise<OcppProvisioningResult> {
+  return apiClient.post<OcppProvisioningResult>(
+    `/charging-stations/${chargingStationId}/ocpp-provisioning/rotate`,
+  );
+}
