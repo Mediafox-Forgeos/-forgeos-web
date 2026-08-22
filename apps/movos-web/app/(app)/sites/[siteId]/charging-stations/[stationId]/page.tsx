@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import * as React from 'react';
-import { X } from 'lucide-react';
 import type {
   ApiChargingSession,
   ApiChargingStation,
@@ -24,10 +23,16 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { apiClient, ApiError } from '@/lib/api-client';
 import { formatDateTime, formatRelative } from '@/lib/format';
-import { getChargingStation } from '@/lib/charging-api';
+import {
+  getChargingStation,
+  provisionOcppCredentials,
+  type OcppProvisioningResult,
+} from '@/lib/charging-api';
 import { useAuth } from '@/context/auth-context';
 import { EvseList } from '@/components/charging/evse-list';
 import { ChargingStationFormModal } from '@/components/charging/charging-station-form-modal';
+import { OcppCredentialResultModal } from '@/components/charging/ocpp-credential-result-modal';
+import { OcppRotateConfirmModal } from '@/components/charging/ocpp-rotate-confirm-modal';
 
 type LoadState = 'loading' | 'ready' | 'notfound' | 'error';
 
@@ -39,6 +44,12 @@ export default function ChargingStationDetailPage() {
     membership?.role === 'OWNER' ||
     membership?.role === 'ADMIN' ||
     membership?.role === 'OPERATOR';
+  // OCPP credential administration (provision/rotate) is OWNER/ADMIN only on
+  // the backend (see OcppProvisioningController's @Roles) — narrower than
+  // canManage above, which also includes OPERATOR. Using canManage here
+  // would show an action that 403s for OPERATOR.
+  const canManageOcppCredentials =
+    membership?.role === 'OWNER' || membership?.role === 'ADMIN';
 
   const [station, setStation] = React.useState<ApiChargingStation | null>(null);
   const [site, setSite] = React.useState<ApiSite | null>(null);
@@ -47,11 +58,14 @@ export default function ChargingStationDetailPage() {
   const [state, setState] = React.useState<LoadState>('loading');
   const [editOpen, setEditOpen] = React.useState(false);
   const [isProvisioning, setIsProvisioning] = React.useState(false);
-  const [provisionResult, setProvisionResult] =
-    React.useState<ProvisionResult | null>(null);
   const [provisionError, setProvisionError] = React.useState<string | null>(
     null,
   );
+  const [rotateOpen, setRotateOpen] = React.useState(false);
+  const [credentialResult, setCredentialResult] = React.useState<{
+    title: string;
+    value: OcppProvisioningResult;
+  } | null>(null);
 
   const load = React.useCallback(async (): Promise<void> => {
     setState('loading');
@@ -101,10 +115,11 @@ export default function ChargingStationDetailPage() {
     setIsProvisioning(true);
     setProvisionError(null);
     try {
-      const result = await apiClient.post<ProvisionResult>(
-        `/charging-stations/${station.id}/ocpp-provisioning`,
-      );
-      setProvisionResult(result);
+      const result = await provisionOcppCredentials(station.id);
+      setCredentialResult({
+        title: 'Estación aprovisionada para OCPP',
+        value: result,
+      });
     } catch (err) {
       setProvisionError(
         err instanceof ApiError
@@ -168,7 +183,7 @@ export default function ChargingStationDetailPage() {
                 Editar
               </Button>
             )}
-            {canManage && (
+            {canManageOcppCredentials && (
               <Button
                 variant="outline"
                 size="sm"
@@ -176,6 +191,15 @@ export default function ChargingStationDetailPage() {
                 disabled={isProvisioning}
               >
                 {isProvisioning ? 'Aprovisionando…' : 'Aprovisionar OCPP'}
+              </Button>
+            )}
+            {canManageOcppCredentials && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setRotateOpen(true)}
+              >
+                Rotar credenciales OCPP
               </Button>
             )}
           </div>
@@ -286,10 +310,26 @@ export default function ChargingStationDetailPage() {
         onSaved={setStation}
       />
 
-      {provisionResult && (
-        <ProvisionResultModal
-          result={provisionResult}
-          onClose={() => setProvisionResult(null)}
+      <OcppRotateConfirmModal
+        open={rotateOpen}
+        chargingStationId={station.id}
+        stationName={station.name}
+        stationCode={station.code}
+        onClose={() => setRotateOpen(false)}
+        onRotated={(result) => {
+          setRotateOpen(false);
+          setCredentialResult({
+            title: 'Credenciales OCPP rotadas',
+            value: result,
+          });
+        }}
+      />
+
+      {credentialResult && (
+        <OcppCredentialResultModal
+          title={credentialResult.title}
+          result={credentialResult.value}
+          onClose={() => setCredentialResult(null)}
         />
       )}
     </PageContainer>
@@ -304,117 +344,5 @@ function DetailCard({ label, value }: { label: string; value: string }) {
         <p className="mt-2 text-lg font-semibold">{value}</p>
       </CardContent>
     </Card>
-  );
-}
-
-interface ProvisionResult {
-  ocppIdentity: string;
-  plaintextSecret: string;
-}
-
-/**
- * The secret is only ever held here, in this component's own local state —
- * never localStorage/sessionStorage/global state — matching the backend's
- * own guarantee that it's returned exactly once and never retrievable
- * again after this response.
- */
-function ProvisionResultModal({
-  result,
-  onClose,
-}: {
-  result: ProvisionResult;
-  onClose: () => void;
-}) {
-  const [copied, setCopied] = React.useState<'identity' | 'secret' | null>(
-    null,
-  );
-
-  async function copy(
-    value: string,
-    which: 'identity' | 'secret',
-  ): Promise<void> {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(which);
-      setTimeout(() => setCopied(null), 2000);
-    } catch {
-      // Clipboard access can be denied by the browser — the value is still
-      // shown on screen for manual copy, so this is not fatal.
-    }
-  }
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 px-4 py-8"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="provision-result-title"
-    >
-      <div className="border-border bg-background w-full max-w-lg rounded-xl border p-6 shadow-xl">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 id="provision-result-title" className="text-lg font-semibold">
-            Estación aprovisionada para OCPP
-          </h2>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onClose}
-            aria-label="Cerrar"
-          >
-            <X className="size-5" />
-          </Button>
-        </div>
-
-        <p
-          role="alert"
-          className="mb-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-500"
-        >
-          El secreto solo se muestra esta vez. Cópialo ahora — MOVOS no lo
-          volverá a mostrar.
-        </p>
-
-        <div className="space-y-4">
-          <div>
-            <p className="text-muted-foreground mb-1 text-xs">Identidad OCPP</p>
-            <div className="flex items-center gap-2">
-              <code className="bg-muted flex-1 break-all rounded-md px-3 py-2 text-sm">
-                {result.ocppIdentity}
-              </code>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => void copy(result.ocppIdentity, 'identity')}
-              >
-                {copied === 'identity' ? 'Copiado' : 'Copiar'}
-              </Button>
-            </div>
-          </div>
-
-          <div>
-            <p className="text-muted-foreground mb-1 text-xs">Secreto</p>
-            <div className="flex items-center gap-2">
-              <code className="bg-muted flex-1 break-all rounded-md px-3 py-2 text-sm">
-                {result.plaintextSecret}
-              </code>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => void copy(result.plaintextSecret, 'secret')}
-              >
-                {copied === 'secret' ? 'Copiado' : 'Copiar'}
-              </Button>
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-6 flex justify-end">
-          <Button type="button" onClick={onClose}>
-            Ya copié ambos valores
-          </Button>
-        </div>
-      </div>
-    </div>
   );
 }
