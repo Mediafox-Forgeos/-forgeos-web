@@ -2,6 +2,7 @@
 
 import {
   clearAuth,
+  clearSessionCookie,
   getAccessToken,
   getActiveOrganizationId,
   setAccessToken,
@@ -66,11 +67,7 @@ async function parseError(response: Response): Promise<string> {
   }
 }
 
-/**
- * Attempts to silently refresh the access token using the httpOnly cookie.
- * Returns the new token, or null if the session cannot be refreshed.
- */
-async function attemptRefresh(): Promise<string | null> {
+async function performRefresh(): Promise<string | null> {
   try {
     const response = await fetch(buildUrl('/auth/refresh'), {
       method: 'POST',
@@ -89,6 +86,29 @@ async function attemptRefresh(): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+/** Single in-flight refresh at a time, shared by every caller. The backend
+ * rotates the refresh token cookie on every /auth/refresh call — without
+ * this, N concurrent 401s (e.g. several polling widgets after an idle tab)
+ * would each present the same not-yet-rotated cookie, only the first would
+ * succeed, and every other one would fail even though the session itself
+ * was perfectly valid. Cleared in `finally` so a later, genuinely new
+ * refresh (e.g. the next natural token expiry) isn't stuck reusing a
+ * resolved promise. */
+let refreshPromise: Promise<string | null> | null = null;
+
+/**
+ * Attempts to silently refresh the access token using the httpOnly cookie.
+ * Returns the new token, or null if the session cannot be refreshed.
+ */
+function attemptRefresh(): Promise<string | null> {
+  if (!refreshPromise) {
+    refreshPromise = performRefresh().finally(() => {
+      refreshPromise = null;
+    });
+  }
+  return refreshPromise;
 }
 
 async function execute<T>(path: string, options: RequestOptions): Promise<T> {
@@ -142,10 +162,33 @@ async function parseJson<T>(response: Response): Promise<T | undefined> {
   return JSON.parse(text) as T;
 }
 
+/** Single-flight refresh means every request that was concurrently 401'd
+ * shares one failure outcome, but each still independently reaches this
+ * function — without this guard, N failed requests would call
+ * window.location.assign N times. Never reset: once a page instance has
+ * decided to navigate away, it never should again (a real navigation tears
+ * down this JS realm; the guard just makes that true under test/timing
+ * conditions too, not only by luck). */
+let redirectingToLogin = false;
+
+/** Reached only when refresh could not recover the session. Clears the
+ * client-visible `movos_session` marker (not just the in-memory token) so
+ * middleware.ts stops believing the session is still valid — otherwise it
+ * bounces /login back to /dashboard, which re-mounts every widget and
+ * re-triggers this exact failure, looping. Never touches the httpOnly
+ * `movos_refresh` cookie itself (not readable/writable from JS, and the API
+ * already manages its lifecycle). */
 function redirectToLogin(): void {
-  if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
-    window.location.assign('/login');
+  if (
+    redirectingToLogin ||
+    typeof window === 'undefined' ||
+    window.location.pathname === '/login'
+  ) {
+    return;
   }
+  redirectingToLogin = true;
+  clearSessionCookie();
+  window.location.assign('/login');
 }
 
 export const apiClient = {
