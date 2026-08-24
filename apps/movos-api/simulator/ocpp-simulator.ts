@@ -18,12 +18,16 @@
  * only ever produce SIMULATOR_VALIDATED evidence, never more.
  */
 import { randomUUID } from 'node:crypto';
+import * as readline from 'node:readline';
 
 import WebSocket from 'ws';
 
 import { formatCall } from '../src/ocpp/protocol/common/ocpp-frame';
 import type { OcppProtocolVersion } from '../src/ocpp/protocol/common/normalized-events';
-import type { SimulatorConnectionConfig } from '../src/ocpp/simulator-contracts/simulator-config';
+import type {
+  SimulatorCommandOutcome,
+  SimulatorConnectionConfig,
+} from '../src/ocpp/simulator-contracts/simulator-config';
 
 const SUBPROTOCOL_BY_VERSION: Record<OcppProtocolVersion, string> = {
   OCPP1_6J: 'ocpp1.6',
@@ -268,7 +272,13 @@ export class OcppSimulator {
     // test-author-controlled response this now sends instead.
     if (messageTypeId === 2) {
       const action = typeof third === 'string' ? third : undefined;
-      if (action) this.respondToIncomingCall(messageId, action);
+      const rawPayload = (parsed as unknown[])[3];
+      const incomingPayload =
+        rawPayload && typeof rawPayload === 'object'
+          ? (rawPayload as Record<string, unknown>)
+          : {};
+      if (action)
+        this.respondToIncomingCall(messageId, action, incomingPayload);
       return;
     }
 
@@ -301,10 +311,20 @@ export class OcppSimulator {
    * An action with no configured outcome defaults to a plain Accepted, so
    * a simple happy-path test needs no boilerplate.
    */
-  private respondToIncomingCall(messageId: string, action: string): void {
+  private respondToIncomingCall(
+    messageId: string,
+    action: string,
+    incomingPayload: Record<string, unknown>,
+  ): void {
     const outcome = this.config.commandResponses?.[action] ?? {
       kind: 'accept',
     };
+
+    // Observability only — see SimulatorConnectionConfig.onIncomingCall's
+    // doc comment. Fires before the kind-based branching below so it's
+    // called for every outcome, including 'silent'. Never influences what
+    // gets sent back.
+    this.config.onIncomingCall?.(action, outcome, incomingPayload);
 
     if (outcome.kind === 'silent') {
       return; // deliberately no response — exercises the server's own timeout path
@@ -330,9 +350,240 @@ export class OcppSimulator {
   }
 }
 
+/** Heartbeat cadence while --interactive keeps the connection open —
+ * comfortably under ConnectionRegistryService's 5-minute STALE_THRESHOLD_MS
+ * (connection-registry.service.ts), without sending excessive traffic. */
+export const HEARTBEAT_INTERVAL_MS = 60_000;
+
+export function describeOutcome(outcome: SimulatorCommandOutcome): string {
+  switch (outcome.kind) {
+    case 'accept':
+      return 'Accepted';
+    case 'reject':
+      return 'Rejected';
+    case 'error':
+      return `CALLERROR (${outcome.errorCode})`;
+    case 'silent':
+      return '(silent — no response sent)';
+  }
+}
+
+function requireNumber(token: string | undefined, name: string): number {
+  const value = Number(token);
+  if (token === undefined || !Number.isFinite(value)) {
+    throw new Error(`invalid or missing ${name}: ${token ?? '(none)'}`);
+  }
+  return value;
+}
+
+/** Reads the transactionId MOVOS actually assigned from a StartTransaction
+ * CALLRESULT — never invented client-side, same discipline as
+ * sendStartTransaction's own doc comment. Returns null for anything else
+ * (e.g. a CALLERROR), so callers can fall back to showing the raw
+ * response. */
+function extractTransactionId(response: CallResponse): number | null {
+  if (response.kind !== 'CALLRESULT') return null;
+  const payload = response.payload;
+  if (
+    payload &&
+    typeof payload === 'object' &&
+    typeof (payload as Record<string, unknown>).transactionId === 'number'
+  ) {
+    return (payload as { transactionId: number }).transactionId;
+  }
+  return null;
+}
+
+/**
+ * Drives the --interactive CLI session: dispatches operator commands to the
+ * existing OcppSimulator send* methods (never duplicates payload
+ * construction), keeps the connection alive with a periodic Heartbeat, and
+ * remembers the last real transactionId MOVOS returned so follow-up
+ * meter/stop commands can reuse it via the "last" keyword. Deliberately has
+ * no knowledge of readline/stdin/process signals (see runInteractiveMode's
+ * wiring below) so it can be driven directly and deterministically in
+ * tests, mirroring how remote-command.digital-twin.spec.ts drives
+ * OcppSimulator itself directly rather than through the CLI.
+ *
+ * Receiving a server-initiated CALL (RemoteStartTransaction, etc.) is
+ * handled entirely by OcppSimulator's own respondToIncomingCall — this
+ * class never reacts to one automatically. The physical-effect commands
+ * below (start/meter/stop) only ever run when a human types them.
+ */
+export class InteractiveSession {
+  private lastTransactionId: number | null = null;
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private shuttingDown = false;
+
+  constructor(
+    private readonly simulator: OcppSimulator,
+    private readonly log: (message: string) => void = console.log,
+  ) {}
+
+  startHeartbeat(intervalMs: number = HEARTBEAT_INTERVAL_MS): void {
+    this.heartbeatTimer = setInterval(() => {
+      void this.simulator
+        .sendHeartbeat()
+        .then(() => this.log('[heartbeat] ok'))
+        .catch((error: Error) =>
+          this.log(`[heartbeat] failed: ${error.message}`),
+        );
+    }, intervalMs);
+  }
+
+  /** Handles one line of operator input. Returns 'exit' for the
+   * "disconnect" command — the CLI wiring below is responsible for actually
+   * closing readline and letting the process end. */
+  async handleLine(rawLine: string): Promise<'continue' | 'exit'> {
+    const tokens = rawLine.trim().split(/\s+/).filter(Boolean);
+    if (tokens.length === 0) return 'continue';
+    const [command, ...args] = tokens;
+
+    try {
+      switch (command) {
+        case 'help':
+          this.printHelp();
+          break;
+        case 'status':
+          this.log(
+            `connected=${this.simulator.isConnected()} lastTransactionId=${this.lastTransactionId ?? '(none)'}`,
+          );
+          break;
+        case 'heartbeat':
+          this.log(JSON.stringify(await this.simulator.sendHeartbeat()));
+          break;
+        case 'available':
+          await this.runStatusNotification(args, 'Available');
+          break;
+        case 'charging':
+          await this.runStatusNotification(args, 'Charging');
+          break;
+        case 'start':
+          await this.runStart(args);
+          break;
+        case 'meter':
+          await this.runMeter(args);
+          break;
+        case 'stop':
+          await this.runStop(args);
+          break;
+        case 'disconnect':
+          return 'exit';
+        default:
+          this.log(`Unknown command: ${command}. Type "help" for the list.`);
+      }
+    } catch (error) {
+      this.log(`Command failed: ${(error as Error).message}`);
+    }
+    return 'continue';
+  }
+
+  /** Idempotent — safe to call from both the "disconnect" command and a
+   * signal handler without double-clearing/double-closing. */
+  shutdown(): void {
+    if (this.shuttingDown) return;
+    this.shuttingDown = true;
+    if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+    this.simulator.disconnect();
+  }
+
+  private printHelp(): void {
+    this.log(
+      [
+        'Commands:',
+        '  status',
+        '  heartbeat',
+        '  available <connectorId>',
+        '  charging <connectorId>',
+        '  start <connectorId> <idTag> [meterStart]',
+        '  meter <connectorId> <transactionId|last> <energyWh>',
+        '  stop <transactionId|last> <meterStop>',
+        '  disconnect',
+        '  help',
+      ].join('\n'),
+    );
+  }
+
+  private async runStatusNotification(
+    args: string[],
+    status: string,
+  ): Promise<void> {
+    const connectorId = requireNumber(args[0], 'connectorId');
+    this.log(
+      JSON.stringify(
+        await this.simulator.sendStatusNotification(connectorId, status),
+      ),
+    );
+  }
+
+  private async runStart(args: string[]): Promise<void> {
+    const connectorId = requireNumber(args[0], 'connectorId');
+    const idTag = args[1];
+    if (!idTag) {
+      throw new Error('usage: start <connectorId> <idTag> [meterStart]');
+    }
+    const meterStart =
+      args[2] !== undefined ? requireNumber(args[2], 'meterStart') : 0;
+
+    const response = await this.simulator.sendStartTransaction(
+      connectorId,
+      idTag,
+      meterStart,
+    );
+    const transactionId = extractTransactionId(response);
+    if (transactionId !== null) {
+      this.lastTransactionId = transactionId;
+      this.log(
+        `StartTransaction -> transactionId=${transactionId} (use "last" in meter/stop) ${JSON.stringify(response)}`,
+      );
+    } else {
+      this.log(
+        `StartTransaction response (no transactionId found): ${JSON.stringify(response)}`,
+      );
+    }
+  }
+
+  private async runMeter(args: string[]): Promise<void> {
+    const connectorId = requireNumber(args[0], 'connectorId');
+    const transactionId = this.resolveTransactionId(args[1]);
+    const energyWh = requireNumber(args[2], 'energyWh');
+    this.log(
+      JSON.stringify(
+        await this.simulator.sendMeterValues(
+          connectorId,
+          transactionId,
+          energyWh,
+        ),
+      ),
+    );
+  }
+
+  private async runStop(args: string[]): Promise<void> {
+    const transactionId = this.resolveTransactionId(args[0]);
+    const meterStop = requireNumber(args[1], 'meterStop');
+    this.log(
+      JSON.stringify(
+        await this.simulator.sendStopTransaction(transactionId, meterStop),
+      ),
+    );
+  }
+
+  private resolveTransactionId(token: string | undefined): number {
+    if (token === undefined || token === 'last') {
+      if (this.lastTransactionId === null) {
+        throw new Error(
+          'no transactionId known yet — run "start" first, or pass one explicitly',
+        );
+      }
+      return this.lastTransactionId;
+    }
+    return requireNumber(token, 'transactionId');
+  }
+}
+
 /** CLI entry point for manual/local usage — see
  * docs/engineering/OCPP_SIMULATOR_GUIDE.md. Not invoked by any automated
- * test, which import the OcppSimulator class directly instead. */
+ * test, which drive OcppSimulator/InteractiveSession directly instead. */
 async function runCli(): Promise<void> {
   const args = process.argv.slice(2);
   const flag = (name: string, fallback?: string): string | undefined =>
@@ -344,10 +595,14 @@ async function runCli(): Promise<void> {
   const secret = flag('secret');
   const protocolVersion =
     (flag('protocol', 'OCPP1_6J') as OcppProtocolVersion) ?? 'OCPP1_6J';
+  // Presence-only flag (no "=value"), consistent with how this parser
+  // already treats bare tokens — absent entirely, the CLI's behavior below
+  // is byte-for-byte what it was before this option existed.
+  const interactive = args.includes('--interactive');
 
   if (!ocppIdentity || !secret) {
     console.error(
-      'Usage: ts-node simulator/ocpp-simulator.ts --identity=<ocppIdentity> --secret=<plaintextSecret> [--host=localhost] [--port=4000] [--protocol=OCPP1_6J|OCPP2_0_1]',
+      'Usage: ts-node simulator/ocpp-simulator.ts --identity=<ocppIdentity> --secret=<plaintextSecret> [--host=localhost] [--port=4000] [--protocol=OCPP1_6J|OCPP2_0_1] [--interactive]',
     );
     process.exitCode = 1;
     return;
@@ -359,6 +614,17 @@ async function runCli(): Promise<void> {
     ocppIdentity,
     secret,
     protocolVersion,
+    // Only wired in --interactive: the short fire-and-forget flow below
+    // never expects an incoming CALL, so this stays inert (and silent)
+    // unless explicitly asked for.
+    ...(interactive
+      ? {
+          onIncomingCall: (action, outcome, payload) => {
+            console.log(`\n← Incoming ${action} ${JSON.stringify(payload)}`);
+            console.log(`→ Responding: ${describeOutcome(outcome)}`);
+          },
+        }
+      : {}),
   });
   console.log(
     `Connecting to ws://${host}:${port}/ocpp/${ocppIdentity} as ${protocolVersion}...`,
@@ -372,7 +638,60 @@ async function runCli(): Promise<void> {
   console.log(await simulator.sendHeartbeat());
   console.log('Sending StatusNotification (connector 1, Available)...');
   console.log(await simulator.sendStatusNotification(1, 'Available'));
-  simulator.disconnect();
+
+  if (!interactive) {
+    simulator.disconnect();
+    return;
+  }
+
+  await runInteractiveMode(simulator);
+}
+
+/** --interactive wiring: readline + heartbeat + SIGINT/SIGTERM, all driving
+ * the process/environment-agnostic InteractiveSession above. Never called
+ * by any automated test (readline/process signals aren't something a unit
+ * test should touch) — tests exercise InteractiveSession directly. */
+async function runInteractiveMode(simulator: OcppSimulator): Promise<void> {
+  const session = new InteractiveSession(simulator, console.log);
+  session.startHeartbeat();
+
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    prompt: '> ',
+  });
+
+  let shuttingDown = false;
+  const cleanShutdown = (): void => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    session.shutdown();
+    rl.close();
+  };
+
+  process.on('SIGINT', cleanShutdown);
+  process.on('SIGTERM', cleanShutdown);
+
+  console.log(
+    'Interactive mode — connection stays open. Type "help" for commands.',
+  );
+  rl.prompt();
+
+  await new Promise<void>((resolve) => {
+    rl.on('line', (line) => {
+      void session.handleLine(line).then((result) => {
+        if (result === 'exit') {
+          cleanShutdown();
+          return;
+        }
+        rl.prompt();
+      });
+    });
+    rl.on('close', () => {
+      cleanShutdown();
+      resolve();
+    });
+  });
 }
 
 if (require.main === module) {
