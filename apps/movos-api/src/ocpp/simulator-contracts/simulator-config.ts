@@ -33,4 +33,18 @@ export interface SimulatorConnectionConfig {
    * 'RemoteStartTransaction'). An action with no entry here defaults to a
    * plain Accepted. */
   commandResponses?: Partial<Record<string, SimulatorCommandOutcome>>;
+  /** Observability-only hook, fired whenever an incoming server-originated
+   * CALL is received, right after respondToIncomingCall decides (but
+   * regardless of) the outcome — never changes what gets sent back. Used by
+   * the interactive CLI (--interactive) to print "Incoming X -> Accepted"
+   * without touching the actual response logic above. `payload` is the
+   * incoming CALL's own params (e.g. idTag/connectorId/transactionId) —
+   * never the OCPP Basic Auth secret, which only ever appears in the
+   * WebSocket upgrade header at connect() time and is never part of any
+   * message payload. */
+  onIncomingCall?: (
+    action: string,
+    outcome: SimulatorCommandOutcome,
+    payload: Record<string, unknown>,
+  ) => void;
 }
