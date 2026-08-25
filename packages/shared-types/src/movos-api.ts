@@ -25,6 +25,24 @@ export interface ApiMembership {
   status: string;
 }
 
+/**
+ * WO-ARGOS-089 — a row in an organization's member list, as seen by an
+ * OWNER/ADMIN managing access. Distinct from ApiMembership (which
+ * represents "my own membership" in the /auth/me response) — this carries
+ * the target user's identity fields a member-management UI needs, and
+ * nothing more (no password hash, no refresh sessions, no other
+ * organizations that user belongs to).
+ */
+export interface ApiOrganizationMember {
+  id: string;
+  userId: string;
+  email: string;
+  displayName: string;
+  role: string;
+  status: string;
+  createdAt: string;
+}
+
 export type LocationSource =
   'GOOGLE_PLACES' | 'GOOGLE_GEOCODING' | 'MANUAL' | 'MANUAL_ADJUSTMENT';
 
