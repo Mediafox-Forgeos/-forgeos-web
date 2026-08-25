@@ -2,7 +2,10 @@
 
 import { Users } from 'lucide-react';
 import * as React from 'react';
-import type { ApiOrganizationMember } from '@mediafox/shared-types';
+import type {
+  ApiMembershipInvitation,
+  ApiOrganizationMember,
+} from '@mediafox/shared-types';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -16,7 +19,7 @@ import {
 } from '@/components/ui/table';
 import { EmptyState } from '@/components/movos/empty-state';
 import { useAuth } from '@/context/auth-context';
-import { listMembers } from '@/lib/memberships-api';
+import { listMembers, listPendingInvitations } from '@/lib/memberships-api';
 import { AddMemberModal } from './add-member-modal';
 import {
   ConfirmMemberChangeModal,
@@ -43,6 +46,9 @@ export function MembersSection() {
     membership?.role === 'OWNER' || membership?.role === 'ADMIN';
 
   const [members, setMembers] = React.useState<ApiOrganizationMember[]>([]);
+  const [invitations, setInvitations] = React.useState<
+    ApiMembershipInvitation[]
+  >([]);
   const [state, setState] = React.useState<LoadState>('loading');
   const [addOpen, setAddOpen] = React.useState(false);
   const [pendingChange, setPendingChange] =
@@ -51,8 +57,12 @@ export function MembersSection() {
   const load = React.useCallback(async (): Promise<void> => {
     setState('loading');
     try {
-      const data = await listMembers();
-      setMembers(data);
+      const [membersData, invitationsData] = await Promise.all([
+        listMembers(),
+        listPendingInvitations(),
+      ]);
+      setMembers(membersData);
+      setInvitations(invitationsData);
       setState('ready');
     } catch {
       setState('error');
@@ -223,11 +233,55 @@ export function MembersSection() {
         </Card>
       )}
 
+      {state === 'ready' && invitations.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-sm font-medium">Invitaciones pendientes</h3>
+          <Card>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Correo</TableHead>
+                    <TableHead>Rol</TableHead>
+                    <TableHead>Expira</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {invitations.map((invitation) => (
+                    <TableRow key={invitation.id}>
+                      <TableCell className="font-mono text-sm">
+                        {invitation.email}
+                      </TableCell>
+                      <TableCell>{roleLabel(invitation.role)}</TableCell>
+                      <TableCell>
+                        {new Date(invitation.expiresAt).toLocaleString('es-CO')}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       <AddMemberModal
         open={addOpen}
         actorRole={membership?.role ?? 'VIEWER'}
         onClose={() => setAddOpen(false)}
         onAdded={(created) => setMembers((prev) => [...prev, created])}
+        onInvited={(created) =>
+          setInvitations((prev) => [
+            {
+              id: created.id,
+              email: created.email,
+              role: created.role,
+              expiresAt: created.expiresAt,
+              createdAt: created.createdAt,
+            },
+            ...prev,
+          ])
+        }
       />
 
       <ConfirmMemberChangeModal

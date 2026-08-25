@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ApiOrganizationMember } from '@mediafox/shared-types';
 
 import { MembersSection } from './members-section';
@@ -34,6 +34,13 @@ function member(
     ...overrides,
   };
 }
+
+beforeEach(() => {
+  // load() fetches members and pending invitations together — default to
+  // no pending invitations so existing member-focused tests don't need to
+  // know about this. Tests about invitations override this explicitly.
+  vi.spyOn(membershipsApi, 'listPendingInvitations').mockResolvedValue([]);
+});
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -178,6 +185,107 @@ describe('MembersSection — add user flow', () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByLabelText('Correo electrónico')).toBeInTheDocument();
+  });
+
+  it('a 409 (already member) does NOT fall back to inviting — only a 404 does', async () => {
+    mockAuth('OWNER');
+    vi.spyOn(membershipsApi, 'listMembers').mockResolvedValue([]);
+    vi.spyOn(membershipsApi, 'addMember').mockRejectedValue(
+      new ApiError(409, 'Este usuario ya es miembro de esta organización.'),
+    );
+    const inviteSpy = vi.spyOn(membershipsApi, 'createInvitation');
+    const user = userEvent.setup();
+
+    render(<MembersSection />);
+    await screen.findByText('No hay usuarios registrados todavía.');
+    await user.click(screen.getByRole('button', { name: '+ Agregar usuario' }));
+    const dialog = screen.getByRole('dialog', { name: 'Agregar usuario' });
+    await user.type(
+      within(dialog).getByLabelText('Correo electrónico'),
+      'ya-existe@kylumenergy.com',
+    );
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Agregar usuario' }),
+    );
+
+    await screen.findByText('Este usuario ya es miembro de esta organización.');
+    expect(inviteSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('MembersSection — invitation fallback for a brand-new email', () => {
+  it('a 404 from addMember falls back to creating an invitation, shown with a copyable URL and no password', async () => {
+    mockAuth('OWNER');
+    vi.spyOn(membershipsApi, 'listMembers').mockResolvedValue([]);
+    vi.spyOn(membershipsApi, 'addMember').mockRejectedValue(
+      new ApiError(
+        404,
+        'No existe una cuenta MOVOS con este correo electrónico.',
+      ),
+    );
+    const inviteSpy = vi
+      .spyOn(membershipsApi, 'createInvitation')
+      .mockResolvedValue({
+        id: 'inv-1',
+        email: 'nueva@kylumenergy.com',
+        role: 'VIEWER',
+        expiresAt: '2026-08-27T00:00:00.000Z',
+        createdAt: '2026-08-25T00:00:00.000Z',
+        token: 'super-secret-one-time-token',
+      });
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: vi.fn().mockResolvedValue(undefined) },
+      configurable: true,
+    });
+    const user = userEvent.setup();
+
+    render(<MembersSection />);
+    await screen.findByText('No hay usuarios registrados todavía.');
+    await user.click(screen.getByRole('button', { name: '+ Agregar usuario' }));
+    const dialog = screen.getByRole('dialog', { name: 'Agregar usuario' });
+    await user.type(
+      within(dialog).getByLabelText('Correo electrónico'),
+      'nueva@kylumenergy.com',
+    );
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Agregar usuario' }),
+    );
+
+    await waitFor(() =>
+      expect(inviteSpy).toHaveBeenCalledWith('nueva@kylumenergy.com', 'OWNER'),
+    );
+
+    const resultDialog = await screen.findByRole('dialog', {
+      name: 'Invitación creada',
+    });
+    expect(
+      within(resultDialog).getByText(/super-secret-one-time-token/),
+    ).toBeInTheDocument();
+    // No temporary password ever shown.
+    expect(
+      within(resultDialog).queryByText(/contraseña/i),
+    ).not.toBeInTheDocument();
+
+    await user.click(
+      within(resultDialog).getByRole('button', {
+        name: 'Copiar enlace de invitación',
+      }),
+    );
+    // Observable proof the copy succeeded, rather than asserting on which
+    // mock object the browser's Clipboard API happened to route through.
+    expect(
+      await within(resultDialog).findByRole('button', { name: 'Copiado' }),
+    ).toBeInTheDocument();
+
+    // Two "Cerrar" controls exist in this dialog (the X icon and the
+    // explicit bottom button) — the bottom one is the real confirm action.
+    const closeButtons = within(resultDialog).getAllByRole('button', {
+      name: 'Cerrar',
+    });
+    await user.click(closeButtons[closeButtons.length - 1]);
+    expect(
+      await screen.findByText('nueva@kylumenergy.com'),
+    ).toBeInTheDocument(); // now listed under Invitaciones pendientes
   });
 });
 

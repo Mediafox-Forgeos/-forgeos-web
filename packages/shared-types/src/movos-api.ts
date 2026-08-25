@@ -43,6 +43,33 @@ export interface ApiOrganizationMember {
   createdAt: string;
 }
 
+/** WO-ARGOS-089 — a pending one-time invitation, as seen by the OWNER/ADMIN
+ * who manages org access. Never carries the token itself. */
+export interface ApiMembershipInvitation {
+  id: string;
+  email: string;
+  role: string;
+  expiresAt: string;
+  createdAt: string;
+}
+
+/** The one response that DOES carry the plaintext token — returned exactly
+ * once, at creation, embedded by the frontend into the /invite/<token> URL
+ * and never persisted beyond that. */
+export interface ApiMembershipInvitationCreated extends ApiMembershipInvitation {
+  token: string;
+}
+
+/** WO-ARGOS-089 — what the public, unauthenticated /invite/<token> page
+ * shows before asking for a password. Never the organizationId, role
+ * write-authority, or anything beyond what's safe to show someone who only
+ * has the link. */
+export interface ApiInvitationPreview {
+  organizationName: string;
+  email: string;
+  role: string;
+}
+
 export type LocationSource =
   'GOOGLE_PLACES' | 'GOOGLE_GEOCODING' | 'MANUAL' | 'MANUAL_ADJUSTMENT';
 

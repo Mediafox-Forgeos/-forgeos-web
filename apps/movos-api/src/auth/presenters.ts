@@ -15,6 +15,7 @@ import type {
   ApiOrganization,
   ApiMembership,
   ApiOrganizationMember,
+  ApiMembershipInvitation,
   ApiSite,
   ApiUser,
   ApiChargingStation,
@@ -100,6 +101,22 @@ export function toApiOrganizationMember(membership: {
     role: membership.role,
     status: membership.status,
     createdAt: membership.createdAt.toISOString(),
+  };
+}
+
+export function toApiMembershipInvitation(invitation: {
+  id: string;
+  email: string;
+  role: string;
+  expiresAt: Date;
+  createdAt: Date;
+}): ApiMembershipInvitation {
+  return {
+    id: invitation.id,
+    email: invitation.email,
+    role: invitation.role,
+    expiresAt: invitation.expiresAt.toISOString(),
+    createdAt: invitation.createdAt.toISOString(),
   };
 }
 

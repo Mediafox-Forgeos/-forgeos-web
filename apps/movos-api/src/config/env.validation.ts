@@ -14,6 +14,11 @@ export const envValidationSchema = Joi.object({
   JWT_REFRESH_SECRET: Joi.string().min(32).required(),
   JWT_ACCESS_TTL: Joi.number().default(900),
   JWT_REFRESH_TTL: Joi.number().default(604800),
+  // WO-ARGOS-089 — how long a one-time membership invitation link stays
+  // valid. 48h (within ARGOS's requested 24-72h range) balances giving an
+  // invited person a real chance to see an out-of-band-shared link against
+  // not leaving stale, guessable-window tokens valid indefinitely.
+  MEMBERSHIP_INVITATION_TTL_HOURS: Joi.number().default(48),
   CORS_ORIGINS: Joi.string().default('http://localhost:3002'),
   SEED_ADMIN_EMAIL: Joi.string().email().required(),
   SEED_ADMIN_PASSWORD: Joi.string().min(8).required(),
@@ -33,6 +38,7 @@ export interface AppConfig {
   jwtRefreshSecret: string;
   jwtAccessTtl: number;
   jwtRefreshTtl: number;
+  membershipInvitationTtlHours: number;
   corsOrigins: string[];
   seedAdminEmail: string;
   seedAdminPassword: string;

@@ -17,7 +17,7 @@ import type { UpdateMembershipDto } from './dto/update-membership.dto';
  * privilege-escalation path this WO closes conservatively (WO-ARGOS-089 §4:
  * "choose conservative behavior where existing policy does not decide").
  * Only OWNER may create or modify an OWNER/ADMIN membership. */
-const ADMIN_MANAGEABLE_ROLES: readonly MemberRole[] = [
+export const ADMIN_MANAGEABLE_ROLES: readonly MemberRole[] = [
   MemberRole.OPERATOR,
   MemberRole.SUPPORT,
   MemberRole.ANALYST,
