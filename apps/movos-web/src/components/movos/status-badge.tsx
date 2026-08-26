@@ -7,7 +7,6 @@ import type {
   SessionStatus,
   SiteStatus,
   StationStatus,
-  UserStatus,
 } from '@/types';
 
 type Descriptor = { label: string; tone: BadgeTone };
@@ -57,12 +56,6 @@ const stationMap: Record<StationStatus, Descriptor> = {
   PARTIAL: { label: 'Parcial', tone: 'warning' },
   MAINTENANCE: { label: 'Mantenimiento', tone: 'neutral' },
   OFFLINE: { label: 'Fuera de línea', tone: 'danger' },
-};
-
-const userMap: Record<UserStatus, Descriptor> = {
-  ACTIVE: { label: 'Activo', tone: 'success' },
-  INVITED: { label: 'Invitado', tone: 'info' },
-  SUSPENDED: { label: 'Suspendido', tone: 'danger' },
 };
 
 function Descriptored({ label, tone }: Descriptor, className?: string) {
@@ -141,14 +134,4 @@ export function StationStatusBadge({
   className?: string;
 }) {
   return Descriptored(stationMap[status], className);
-}
-
-export function UserStatusBadge({
-  status,
-  className,
-}: {
-  status: UserStatus;
-  className?: string;
-}) {
-  return Descriptored(userMap[status], className);
 }

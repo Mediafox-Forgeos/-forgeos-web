@@ -293,9 +293,16 @@ export default function ChargingStationDetailPage() {
               <Link
                 key={wo.id}
                 href={`/work-orders/${wo.id}`}
-                className="border-border hover:bg-accent/40 flex items-center justify-between rounded-lg border px-3 py-2 text-sm transition-colors"
+                className="border-border hover:bg-accent/40 flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm transition-colors"
               >
-                <p className="truncate font-medium">{wo.title}</p>
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{wo.title}</p>
+                  <p className="text-muted-foreground truncate text-xs">
+                    {wo.resolvedAt
+                      ? `Resuelta ${formatRelative(wo.resolvedAt)}`
+                      : `Creada ${formatRelative(wo.createdAt)}`}
+                  </p>
+                </div>
                 <WorkOrderStatusBadge status={wo.status} />
               </Link>
             ))}

@@ -719,4 +719,115 @@ describe('WorkOrderService', () => {
       );
     });
   });
+
+  describe('resolveRecoveredConnectivityWorkOrders', () => {
+    function candidate(overrides: Record<string, unknown> = {}) {
+      return workOrderRow({
+        id: 'wo-conn-1',
+        status: 'OPEN',
+        source: 'CONNECTIVITY_LOSS',
+        createdAt: new Date('2026-08-01T00:00:00.000Z'),
+        station: {
+          ...workOrderRow().station,
+          connectivityStatus: 'OFFLINE',
+          lastConnectedAt: null,
+        },
+        ...overrides,
+      });
+    }
+
+    it('resolves an OPEN CONNECTIVITY_LOSS work order once the station has reconnected after it was created', async () => {
+      prisma.workOrder.findMany.mockResolvedValue([
+        candidate({
+          station: {
+            ...workOrderRow().station,
+            connectivityStatus: 'ONLINE',
+            lastConnectedAt: new Date('2026-08-01T00:30:00.000Z'),
+          },
+        }),
+      ]);
+      prisma.workOrder.update.mockResolvedValue(
+        workOrderRow({ status: 'RESOLVED' }),
+      );
+
+      const result = await service.resolveRecoveredConnectivityWorkOrders();
+
+      expect(result).toHaveLength(1);
+      expect(prisma.workOrder.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'wo-conn-1' },
+          data: expect.objectContaining({ status: 'RESOLVED' }),
+        }),
+      );
+      expect(prisma.workOrderEvent.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            workOrderId: 'wo-conn-1',
+            type: 'RESOLVED',
+            actorId: null,
+            payload: expect.objectContaining({
+              auto: true,
+              reason: 'CONNECTIVITY_RECOVERED',
+            }),
+          }),
+        }),
+      );
+    });
+
+    it('only queries non-terminal CONNECTIVITY_LOSS work orders', async () => {
+      prisma.workOrder.findMany.mockResolvedValue([]);
+
+      await service.resolveRecoveredConnectivityWorkOrders();
+
+      expect(prisma.workOrder.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            source: 'CONNECTIVITY_LOSS',
+            status: { in: ['OPEN', 'ASSIGNED', 'IN_PROGRESS'] },
+          },
+        }),
+      );
+    });
+
+    it('does not resolve a work order whose station is still OFFLINE', async () => {
+      prisma.workOrder.findMany.mockResolvedValue([candidate()]);
+
+      const result = await service.resolveRecoveredConnectivityWorkOrders();
+
+      expect(result).toHaveLength(0);
+      expect(prisma.workOrder.update).not.toHaveBeenCalled();
+    });
+
+    it('does not resolve a work order whose station reconnected BEFORE this episode started (stale evidence)', async () => {
+      prisma.workOrder.findMany.mockResolvedValue([
+        candidate({
+          station: {
+            ...workOrderRow().station,
+            connectivityStatus: 'ONLINE',
+            // Reconnected before this WorkOrder's own createdAt — this is
+            // the *previous* connection, not evidence this episode ended.
+            lastConnectedAt: new Date('2026-07-31T23:00:00.000Z'),
+          },
+        }),
+      ]);
+
+      const result = await service.resolveRecoveredConnectivityWorkOrders();
+
+      expect(result).toHaveLength(0);
+      expect(prisma.workOrder.update).not.toHaveBeenCalled();
+    });
+
+    it('is idempotent: nothing to do on the next sweep once already resolved (mock never returns terminal rows)', async () => {
+      // The query itself filters status to non-terminal — a RESOLVED
+      // work order simply never appears in `candidates` on a later sweep,
+      // simulated here by an empty result.
+      prisma.workOrder.findMany.mockResolvedValue([]);
+
+      const result = await service.resolveRecoveredConnectivityWorkOrders();
+
+      expect(result).toHaveLength(0);
+      expect(prisma.workOrder.update).not.toHaveBeenCalled();
+      expect(prisma.workOrderEvent.create).not.toHaveBeenCalled();
+    });
+  });
 });

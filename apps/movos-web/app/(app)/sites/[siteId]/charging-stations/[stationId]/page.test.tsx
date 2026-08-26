@@ -415,3 +415,76 @@ describe('ChargingStationDetailPage — existing OCPP provisioning flow stays gr
     ).toBeInTheDocument();
   });
 });
+
+// WO-ARGOS-090 §12, §14.22/§14.23 — station detail must let an operator
+// distinguish a resolved historical incident from an active one, with real
+// timestamps, not just a same-looking list of titles.
+describe('ChargingStationDetailPage — WorkOrder history', () => {
+  it('distinguishes an active connectivity incident from an already-resolved one, with timestamps', async () => {
+    mockAuth('OWNER');
+    vi.spyOn(chargingApi, 'getChargingStation').mockResolvedValue(station());
+    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+      if (url === '/work-orders') {
+        return [
+          {
+            id: 'wo-open',
+            title: 'Estación sin conexión: Calima – Digital Twin 01',
+            status: 'OPEN',
+            priority: 'HIGH',
+            source: 'CONNECTIVITY_LOSS',
+            stationId: 'cs-1',
+            stationName: 'Calima – Digital Twin 01',
+            assignedMemberId: null,
+            assignedMemberName: null,
+            assignedAt: null,
+            startedAt: null,
+            scheduledAt: null,
+            resolvedAt: null,
+            notes: null,
+            createdAt: '2026-08-26T04:00:00.000Z',
+            updatedAt: '2026-08-26T04:00:00.000Z',
+            visitLocation: null,
+          },
+          {
+            id: 'wo-resolved',
+            title: 'Estación sin conexión: Calima – Digital Twin 01',
+            status: 'RESOLVED',
+            priority: 'HIGH',
+            source: 'CONNECTIVITY_LOSS',
+            stationId: 'cs-1',
+            stationName: 'Calima – Digital Twin 01',
+            assignedMemberId: null,
+            assignedMemberName: null,
+            assignedAt: null,
+            startedAt: null,
+            scheduledAt: null,
+            resolvedAt: '2026-08-25T10:00:00.000Z',
+            notes: 'Conectividad restablecida automáticamente.',
+            createdAt: '2026-08-25T09:00:00.000Z',
+            updatedAt: '2026-08-25T10:00:00.000Z',
+            visitLocation: null,
+          },
+        ] as unknown as Awaited<ReturnType<typeof apiClient.get>>;
+      }
+      throw new ApiError(404, 'n/a');
+    });
+
+    render(<ChargingStationDetailPage />);
+
+    const openRow = (
+      await screen.findAllByText(
+        'Estación sin conexión: Calima – Digital Twin 01',
+      )
+    )[0].closest('a')!;
+    expect(within(openRow).getByText('Abierta')).toBeInTheDocument();
+
+    const rows = screen.getAllByText(
+      'Estación sin conexión: Calima – Digital Twin 01',
+    );
+    const resolvedRow = rows[1].closest('a')!;
+    expect(within(resolvedRow).getByText('Resuelta')).toBeInTheDocument();
+    // Distinct, real timestamps — not the same static label on every row.
+    expect(within(openRow).getByText(/^Creada /)).toBeInTheDocument();
+    expect(within(resolvedRow).getByText(/^Resuelta /)).toBeInTheDocument();
+  });
+});

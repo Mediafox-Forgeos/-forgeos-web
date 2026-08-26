@@ -29,11 +29,17 @@ function staleStation(overrides: Record<string, unknown> = {}) {
 describe('WorkOrderAutomationService', () => {
   let service: WorkOrderAutomationService;
   let prisma: PrismaMock;
-  let workOrders: { create: jest.Mock };
+  let workOrders: {
+    create: jest.Mock;
+    resolveRecoveredConnectivityWorkOrders: jest.Mock;
+  };
 
   beforeEach(async () => {
     prisma = createPrismaMock();
-    workOrders = { create: jest.fn().mockResolvedValue({ id: 'wo-new' }) };
+    workOrders = {
+      create: jest.fn().mockResolvedValue({ id: 'wo-new' }),
+      resolveRecoveredConnectivityWorkOrders: jest.fn().mockResolvedValue([]),
+    };
     const moduleRef = await Test.createTestingModule({
       providers: [
         WorkOrderAutomationService,
@@ -168,5 +174,27 @@ describe('WorkOrderAutomationService', () => {
 
     await expect(service.sweepOfflineStations()).resolves.not.toThrow();
     expect(workOrders.create).toHaveBeenCalledTimes(2);
+  });
+
+  describe('sweepRecoveredConnectivity', () => {
+    it('delegates eligibility/resolution entirely to WorkOrderService', async () => {
+      workOrders.resolveRecoveredConnectivityWorkOrders.mockResolvedValue([
+        { id: 'wo-1' },
+      ]);
+
+      await service.sweepRecoveredConnectivity();
+
+      expect(
+        workOrders.resolveRecoveredConnectivityWorkOrders,
+      ).toHaveBeenCalledTimes(1);
+    });
+
+    it('a failure sweeping recovered connectivity never throws out of the sweep', async () => {
+      workOrders.resolveRecoveredConnectivityWorkOrders.mockRejectedValue(
+        new Error('boom'),
+      );
+
+      await expect(service.sweepRecoveredConnectivity()).resolves.not.toThrow();
+    });
   });
 });
