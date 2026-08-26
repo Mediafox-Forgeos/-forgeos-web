@@ -95,6 +95,18 @@ export interface TechnicianWorkload {
 }
 
 const TERMINAL_STATUSES: WorkOrderStatus[] = ['RESOLVED', 'CANCELLED'];
+const NON_TERMINAL_STATUSES: WorkOrderStatus[] = [
+  'OPEN',
+  'ASSIGNED',
+  'IN_PROGRESS',
+];
+
+// WO-ARGOS-090 — the fixed system message for an automatic
+// CONNECTIVITY_LOSS resolution. Distinct from RESOLUTION_SUMMARY_MIN_LENGTH
+// below on purpose: that constant governs the *human* resolve transition's
+// free-text summary, which this path never uses.
+const CONNECTIVITY_RECOVERED_COMMENT =
+  'Conectividad restablecida automáticamente.';
 
 // WO-ARGOS-051 — Requires Attention rule D's threshold (ARGOS's approved
 // spec: "status = IN_PROGRESS AND startedAt < now - 4 hours"). Named here,
@@ -514,6 +526,91 @@ export class WorkOrderService {
       },
     });
     return updated;
+  }
+
+  /**
+   * WO-ARGOS-090 — the reconnect-side counterpart to
+   * WorkOrderAutomationService's offline sweep (Rule 1): an operator should
+   * not have to manually close an outage WorkOrder MOVOS already knows
+   * ended. Deliberately bypasses VALID_TRANSITIONS/assertValidTransition —
+   * this is a system-only write path, never reachable from the
+   * authenticated transition() controller endpoint, so the human transition
+   * graph (and every existing test/guarantee about it) is completely
+   * unchanged. The same precedent already exists for creation: create()
+   * writes a CREATED WorkOrderEvent with actorId: null for automation,
+   * bypassing the normal human-initiated flow entirely; this does the same
+   * for RESOLVED. Reuses the existing RESOLVED WorkOrderEventType (no new
+   * enum value) and the frontend's pre-existing "actorName ? ... :
+   * automático" rendering (WorkOrderEventTimeline) — no frontend change
+   * needed for this to display correctly.
+   *
+   * Scoped to CONNECTIVITY_LOSS only and gated on the station's own
+   * lastConnectedAt being after this WorkOrder's own createdAt — the same
+   * per-episode timestamp discipline WorkOrderAutomationService.
+   * createIfNotDuplicate already uses on the creation side, so this can
+   * never resolve a WorkOrder for an episode the station hasn't actually
+   * recovered from yet. Naturally idempotent: a WorkOrder already RESOLVED
+   * no longer matches the status filter, so an overlapping or duplicate
+   * reconnect signal is a safe no-op, not a re-resolution or an error.
+   * Never touches MANUAL/RECOMMENDATION-sourced WorkOrders, whatever their
+   * status.
+   */
+  async resolveRecoveredConnectivityWorkOrders(): Promise<
+    WorkOrderWithNames[]
+  > {
+    const candidates = await this.prisma.workOrder.findMany({
+      where: {
+        source: 'CONNECTIVITY_LOSS',
+        status: { in: NON_TERMINAL_STATUSES },
+      },
+      include: {
+        ...WORK_ORDER_WITH_NAMES_INCLUDE,
+        station: {
+          select: {
+            ...WORK_ORDER_WITH_NAMES_INCLUDE.station.select,
+            connectivityStatus: true,
+            lastConnectedAt: true,
+          },
+        },
+      },
+    });
+
+    const resolved: WorkOrderWithNames[] = [];
+    for (const workOrder of candidates) {
+      const { connectivityStatus, lastConnectedAt } = workOrder.station;
+      if (
+        connectivityStatus !== 'ONLINE' ||
+        !lastConnectedAt ||
+        lastConnectedAt <= workOrder.createdAt
+      ) {
+        continue;
+      }
+
+      const now = new Date();
+      const updated = await this.prisma.workOrder.update({
+        where: { id: workOrder.id },
+        data: {
+          status: 'RESOLVED',
+          resolvedAt: now,
+          notes: CONNECTIVITY_RECOVERED_COMMENT,
+        },
+        include: WORK_ORDER_WITH_NAMES_INCLUDE,
+      });
+      await this.prisma.workOrderEvent.create({
+        data: {
+          workOrderId: workOrder.id,
+          type: 'RESOLVED',
+          actorId: null,
+          payload: {
+            auto: true,
+            reason: 'CONNECTIVITY_RECOVERED',
+            comment: CONNECTIVITY_RECOVERED_COMMENT,
+          },
+        },
+      });
+      resolved.push(updated);
+    }
+    return resolved;
   }
 
   private assertValidTransition(

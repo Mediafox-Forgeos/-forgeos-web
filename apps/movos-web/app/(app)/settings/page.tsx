@@ -46,7 +46,29 @@ function SettingsSection({
   );
 }
 
-export default function SettingsPage() {
+const VALID_TABS = new Set([
+  'org',
+  'brand',
+  'currency',
+  'locale',
+  'operators',
+  'integrations',
+  'ocpp',
+  'credentials',
+  'notifications',
+]);
+
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
+  const { tab } = await searchParams;
+  // WO-ARGOS-090 — lets /users honestly redirect to /settings?tab=operators
+  // and land directly on the real membership tab, instead of a second hop
+  // the user has to click through manually.
+  const defaultTab = tab && VALID_TABS.has(tab) ? tab : undefined;
+
   return (
     <PageContainer>
       <PageHeader
@@ -57,6 +79,7 @@ export default function SettingsPage() {
 
       <div className="mt-8">
         <Tabs
+          defaultTab={defaultTab}
           items={[
             {
               id: 'org',

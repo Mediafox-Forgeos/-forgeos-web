@@ -29,15 +29,39 @@ export class WorkOrderAutomationService implements OnModuleDestroy {
     private readonly prisma: PrismaService,
     private readonly workOrders: WorkOrderService,
   ) {
-    this.sweepTimer = setInterval(
-      () => void this.sweepOfflineStations(),
-      SWEEP_INTERVAL_MS,
-    );
+    this.sweepTimer = setInterval(() => {
+      void this.sweepOfflineStations();
+      void this.sweepRecoveredConnectivity();
+    }, SWEEP_INTERVAL_MS);
     this.sweepTimer.unref?.();
   }
 
   onModuleDestroy(): void {
     clearInterval(this.sweepTimer);
+  }
+
+  /**
+   * Work Order V1, Rule 1's reconnect-side counterpart (WO-ARGOS-090) — see
+   * WorkOrderService.resolveRecoveredConnectivityWorkOrders for the actual
+   * eligibility/write logic. Same 60s cadence and same per-sweep isolation
+   * discipline as sweepOfflineStations: a failure here must never prevent
+   * the offline-detection sweep (or the next reconnect sweep) from running.
+   */
+  async sweepRecoveredConnectivity(): Promise<void> {
+    try {
+      const resolved =
+        await this.workOrders.resolveRecoveredConnectivityWorkOrders();
+      if (resolved.length > 0) {
+        this.logger.log(
+          `Auto-resolved ${resolved.length} connectivity-loss work order(s) after station recovery`,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        'Failed to sweep recovered-connectivity work orders',
+        error instanceof Error ? error.stack : undefined,
+      );
+    }
   }
 
   async sweepOfflineStations(): Promise<void> {
