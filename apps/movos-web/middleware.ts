@@ -8,7 +8,12 @@ import type { NextRequest } from 'next/server';
  * validation to the API.
  */
 const SESSION_COOKIE = 'movos_session';
-const PUBLIC_PATHS = ['/login'];
+// WO-ARGOS-089 — /invite/<token> is a public, unauthenticated invitation
+// acceptance page: authorization comes from possessing the valid one-time
+// token in the URL, not from a session. Without this, an invited person
+// with no MOVOS session yet would be bounced straight to /login before
+// ever seeing it.
+const PUBLIC_PATHS = ['/login', '/invite'];
 
 export function middleware(request: NextRequest): NextResponse {
   const { pathname } = request.nextUrl;

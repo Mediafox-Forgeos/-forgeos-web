@@ -14,6 +14,8 @@ import type {
 import type {
   ApiOrganization,
   ApiMembership,
+  ApiOrganizationMember,
+  ApiMembershipInvitation,
   ApiSite,
   ApiUser,
   ApiChargingStation,
@@ -77,6 +79,44 @@ export function toApiMembership(membership: Membership): ApiMembership {
     organizationId: membership.organizationId,
     role: membership.role,
     status: membership.status,
+  };
+}
+
+/** WO-ARGOS-089 — a member-list row. Deliberately never given the raw
+ * Membership+User Prisma objects wholesale (that would risk passwordHash
+ * leaking through if the select clause upstream ever changes) — always
+ * built from the exact named fields below. */
+export function toApiOrganizationMember(membership: {
+  id: string;
+  role: string;
+  status: string;
+  createdAt: Date;
+  user: { id: string; email: string; displayName: string };
+}): ApiOrganizationMember {
+  return {
+    id: membership.id,
+    userId: membership.user.id,
+    email: membership.user.email,
+    displayName: membership.user.displayName,
+    role: membership.role,
+    status: membership.status,
+    createdAt: membership.createdAt.toISOString(),
+  };
+}
+
+export function toApiMembershipInvitation(invitation: {
+  id: string;
+  email: string;
+  role: string;
+  expiresAt: Date;
+  createdAt: Date;
+}): ApiMembershipInvitation {
+  return {
+    id: invitation.id,
+    email: invitation.email,
+    role: invitation.role,
+    expiresAt: invitation.expiresAt.toISOString(),
+    createdAt: invitation.createdAt.toISOString(),
   };
 }
 

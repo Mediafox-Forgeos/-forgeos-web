@@ -194,6 +194,11 @@ model User {
 
   // WO-ARGOS-059 — Remote Operations / Control Plane Foundation.
   requestedRemoteCommands RemoteCommand[]
+
+  // WO-ARGOS-089 — invitations this user issued as OWNER/ADMIN. Not the
+  // invited person themselves (that's tracked by email only, since no User
+  // row exists for them until acceptance).
+  createdMembershipInvitations MembershipInvitation[]
 }
 
 model Organization {
@@ -229,6 +234,9 @@ model Organization {
 
   // WO-ARGOS-035 — Work Order V1.
   workOrders WorkOrder[]
+
+  // WO-ARGOS-089 — pending/accepted one-time membership invitations.
+  membershipInvitations MembershipInvitation[]
 }
 
 model Membership {
@@ -244,6 +252,38 @@ model Membership {
   organization Organization @relation(fields: [organizationId], references: [id])
 
   @@unique([userId, organizationId])
+}
+
+/**
+ * WO-ARGOS-089 — a one-time invitation link for a person who does not yet
+ * have a MOVOS account. Deliberately a standalone entity rather than a
+ * dormant User + INVITED Membership: User.email is @unique and
+ * User.passwordHash is required, so a "dormant" User created at invite time
+ * would need a permanently-unusable placeholder password hash and would
+ * permanently claim that email even if the invitation is never accepted —
+ * re-inviting the same address later would collide with it. Keeping the
+ * pending state here means User and Membership are only ever created
+ * together, atomically, at the moment of real acceptance (see
+ * MembershipInvitationsService.accept) — no half-formed rows of either kind
+ * ever exist. No email-delivery infrastructure sends this link; the
+ * inviting OWNER/ADMIN copies and shares it out-of-band.
+ */
+model MembershipInvitation {
+  id              String     @id @default(cuid())
+  organizationId  String
+  email           String
+  role            MemberRole
+  // SHA-256 of the random token embedded in the invitation URL — same
+  // pattern as RefreshSession.tokenHash (see AuthService.hashRefreshToken):
+  // O(1) lookup by hash, while a database leak alone can't be replayed.
+  tokenHash       String     @unique
+  expiresAt       DateTime
+  acceptedAt      DateTime?
+  createdByUserId String
+  createdAt       DateTime   @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  createdBy    User         @relation(fields: [createdByUserId], references: [id])
 }
 
 model Site {

@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { tenant } from '@/config/tenant';
 import { CredentialsSection } from '@/components/settings/credentials-section';
+import { MembersSection } from '@/components/settings/members-section';
 
 type Field = { label: string; value: string; hint?: string };
 
@@ -115,15 +116,7 @@ export default function SettingsPage() {
             {
               id: 'operators',
               label: 'Operadores',
-              content: (
-                <SettingsSection
-                  description="Gestión de operadores. La administración de accesos estará disponible con autenticación."
-                  fields={[
-                    { label: 'Operadores activos', value: '3' },
-                    { label: 'Invitaciones pendientes', value: '1' },
-                  ]}
-                />
-              ),
+              content: <MembersSection />,
             },
             {
               id: 'integrations',
