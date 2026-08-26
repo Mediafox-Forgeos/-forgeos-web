@@ -30,6 +30,7 @@ import {
 } from '@/lib/charging-api';
 import { useAuth } from '@/context/auth-context';
 import { EvseList } from '@/components/charging/evse-list';
+import { OcppActivitySection } from '@/components/charging/ocpp-activity-section';
 import { ChargingStationFormModal } from '@/components/charging/charging-station-form-modal';
 import { OcppCredentialResultModal } from '@/components/charging/ocpp-credential-result-modal';
 import { OcppRotateConfirmModal } from '@/components/charging/ocpp-rotate-confirm-modal';
@@ -308,6 +309,10 @@ export default function ChargingStationDetailPage() {
             ))}
           </CardContent>
         </Card>
+      </div>
+
+      <div className="mt-6">
+        <OcppActivitySection stationId={station.id} />
       </div>
 
       <ChargingStationFormModal
