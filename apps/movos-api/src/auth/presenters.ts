@@ -10,6 +10,7 @@ import type {
   AuthorizationCredential,
   AuthorizationAttempt,
   RemoteCommand,
+  OcppProtocolEvent,
 } from '@prisma/client';
 import type {
   ApiOrganization,
@@ -35,6 +36,7 @@ import type {
   ApiWorkOrderAttachment,
   ApiTechnicianWorkload,
   ApiRemoteCommand,
+  ApiOcppProtocolEvent,
 } from '@mediafox/shared-types';
 import type { ChargingSessionWithNames } from '../sessions/sessions.service';
 import type { ChargingStationWithSiteName } from '../charging-stations/charging-stations.service';
@@ -49,6 +51,7 @@ import type {
   TechnicianWorkload,
 } from '../work-orders/work-order.service';
 import type { WorkOrderAttachmentWithUploader } from '../work-orders/work-order-attachment.service';
+import { boundPayload } from '../ocpp/persistence/ocpp-protocol-event.service';
 
 /**
  * Explicit projections from Prisma models to public API contracts. These are
@@ -461,5 +464,28 @@ export function toApiTechnicianWorkload(
     unresolvedCount: workload.unresolvedCount,
     inProgressCount: workload.inProgressCount,
     scheduledTodayCount: workload.scheduledTodayCount,
+  };
+}
+
+// WO-ARGOS-091 — the support/operator OCPP read model. `payload` is
+// re-scrubbed and size-bounded here (boundPayload), not just at write
+// time — defense in depth against any row written before that safety net
+// existed, or a future write-path regression, at the one point this data
+// actually crosses the API boundary.
+export function toApiOcppProtocolEvent(
+  event: OcppProtocolEvent,
+): ApiOcppProtocolEvent {
+  return {
+    id: event.id,
+    chargingStationId: event.chargingStationId,
+    protocolVersion: event.protocolVersion,
+    direction: event.direction,
+    messageType: event.messageType,
+    action: event.action,
+    protocolMessageId: event.protocolMessageId,
+    payload: boundPayload(event.payload),
+    processingStatus: event.processingStatus,
+    processingError: event.processingError,
+    receivedAt: event.receivedAt.toISOString(),
   };
 }

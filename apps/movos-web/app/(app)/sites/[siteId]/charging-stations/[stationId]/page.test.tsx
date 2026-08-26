@@ -488,3 +488,44 @@ describe('ChargingStationDetailPage — WorkOrder history', () => {
     expect(within(resolvedRow).getByText(/^Resuelta /)).toBeInTheDocument();
   });
 });
+
+// WO-ARGOS-091 §13.24 — the backend has no @Roles() restriction on
+// GET /charging-stations/:id/ocpp-events (matches the existing precedent
+// of GET /charging-stations/:id itself and GET /authorization-attempts);
+// the frontend must not invent a stricter client-side gate that doesn't
+// reflect the real backend policy. Confirmed across a real, non-privileged
+// role — not just OWNER, which every other RBAC test here already covers.
+describe('ChargingStationDetailPage — OCPP Activity RBAC visibility', () => {
+  it('a VIEWER (the least-privileged real role with station access) still sees Actividad OCPP', async () => {
+    mockAuth('VIEWER');
+    vi.spyOn(chargingApi, 'getChargingStation').mockResolvedValue(station());
+    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+      if (url.includes('/ocpp-events')) {
+        return {
+          events: [
+            {
+              id: 'evt-1',
+              chargingStationId: 'cs-1',
+              protocolVersion: 'OCPP1_6J',
+              direction: 'INBOUND',
+              messageType: 'CALL',
+              action: 'Heartbeat',
+              protocolMessageId: 'msg-1',
+              payload: {},
+              processingStatus: 'PROCESSED',
+              processingError: null,
+              receivedAt: '2026-08-26T17:00:00.000Z',
+            },
+          ],
+          hasMore: false,
+        };
+      }
+      throw new ApiError(404, 'n/a');
+    });
+
+    render(<ChargingStationDetailPage />);
+
+    expect(await screen.findByText('Actividad OCPP')).toBeInTheDocument();
+    expect(await screen.findByText('Heartbeat')).toBeInTheDocument();
+  });
+});

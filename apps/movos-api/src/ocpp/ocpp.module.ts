@@ -21,6 +21,7 @@ import { RemoteCommandsController } from './remote-commands/remote-commands.cont
 import { Ocpp16Adapter } from './protocol/ocpp16/ocpp16-adapter';
 import { Ocpp201Adapter } from './protocol/ocpp201/ocpp201-adapter';
 import { OcppProtocolEventService } from './persistence/ocpp-protocol-event.service';
+import { OcppProtocolEventsController } from './persistence/ocpp-protocol-events.controller';
 import { BootNotificationHandler } from './handlers/boot-notification.handler';
 import { HeartbeatHandler } from './handlers/heartbeat.handler';
 import { StatusNotificationHandler } from './handlers/status-notification.handler';
@@ -40,7 +41,11 @@ import { OcppWebSocketServer } from './transport/ocpp-websocket.server';
  */
 @Module({
   imports: [SessionsModule, AuthorizationModule],
-  controllers: [OcppProvisioningController, RemoteCommandsController],
+  controllers: [
+    OcppProvisioningController,
+    RemoteCommandsController,
+    OcppProtocolEventsController,
+  ],
   providers: [
     OrgContextGuard,
     RolesGuard,

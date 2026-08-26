@@ -45,6 +45,20 @@ export function formatWorkOrderDateTime(
   }).format(new Date(iso));
 }
 
+// WO-ARGOS-091 — OCPP Activity: a chronological list of events on the same
+// station over a short window benefits from a compact time-only stamp
+// (matches the WO's own mockup, "12:40:15"), not a repeated date. Same
+// fixed-timezone convention as formatWorkOrderDateTime.
+export function formatTime(
+  iso: string,
+  locale: string = tenant.locale,
+): string {
+  return new Intl.DateTimeFormat(locale, {
+    timeStyle: 'medium',
+    timeZone: 'America/Bogota',
+  }).format(new Date(iso));
+}
+
 export function formatDuration(startIso: string, endIso: string): string {
   const minutes = Math.max(
     0,

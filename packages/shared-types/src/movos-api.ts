@@ -786,3 +786,34 @@ export interface ApiRemoteCommand {
 export interface RequestRemoteStartRequest {
   authorizationCredentialId: string;
 }
+
+// WO-ARGOS-091 — OCPP support read model. `direction`/`messageType`/
+// `protocolVersion` are plain strings (not imported Prisma enum types),
+// matching this file's existing convention for OCPP-native fields (see
+// ApiChargingStation.protocol/lastProtocolVersion) — the frontend renders
+// whatever the backend sends, it never re-derives OCPP semantics itself.
+// `action` is null for CALLRESULT/CALLERROR rows (they carry no action of
+// their own, only their `protocolMessageId` ties them back to the CALL
+// they answer) — this is a real, honest null, not a missing-data bug.
+// `payload` is deliberately `unknown`, not `Record<string, unknown>`: the
+// stored value is the *entire* raw OCPP frame (e.g.
+// `[2, "<messageId>", "BootNotification", {...}]`), already redacted and
+// size-bounded server-side (see boundPayload in ocpp-protocol-event.service.ts).
+export interface ApiOcppProtocolEvent {
+  id: string;
+  chargingStationId: string | null;
+  protocolVersion: string;
+  direction: string;
+  messageType: string;
+  action: string | null;
+  protocolMessageId: string | null;
+  payload: unknown;
+  processingStatus: string;
+  processingError: string | null;
+  receivedAt: string;
+}
+
+export interface ApiOcppProtocolEventsResponse {
+  events: ApiOcppProtocolEvent[];
+  hasMore: boolean;
+}
