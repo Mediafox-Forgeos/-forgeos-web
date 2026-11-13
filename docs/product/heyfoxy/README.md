@@ -2,12 +2,12 @@
 
 Plataforma SaaS multiempresa de escucha social con IA, monitoreo reputacional, alertas por WhatsApp y gestión de incidentes. Producto independiente de MediaFOX Forge, integrable con MediaFOX OS por API.
 
-| Propiedad  | Valor                                                                                                                               |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| Work order | WO-MFOX-HEYFOXY-001 (P1) — Architecture & MVP Foundation                                                                            |
-| Estado     | **Gate 1 — PROPUESTA, pendiente de aprobación.** Sin infraestructura, sin migraciones, sin cuentas conectadas, sin código funcional |
-| Fecha      | 2026-11-12                                                                                                                          |
-| Autor      | VULCAN                                                                                                                              |
+| Propiedad  | Valor                                                                                                                           |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Work order | WO-MFOX-HEYFOXY-001 (P1) — Architecture & MVP Foundation                                                                        |
+| Estado     | **Gate 2 en curso** (Gate 1 aprobado con condiciones). Código en `apps/heyfoxy-web`; sin cuentas reales, sin Production pública |
+| Fecha      | 2026-11-12                                                                                                                      |
+| Autor      | VULCAN                                                                                                                          |
 
 ## Documentos
 
@@ -20,6 +20,9 @@ Plataforma SaaS multiempresa de escucha social con IA, monitoreo reputacional, a
 | 05  | [Command Center](./05_COMMAND_CENTER.md)                                                    | AC06                                  |
 | 06  | [Piloto, modelo SaaS y costos](./06_PILOT_COMMERCIAL_COSTS.md)                              | AC07                                  |
 | 07  | [Plan MVP de 14 días, backlog, riesgos, QA y rollback](./07_MVP_PLAN_RISKS_QA.md)           | AC08, AC09, AC12                      |
+| 08  | [Metricool: capacidades verificadas y conexión segura](./08_METRICOOL_CONNECTION.md)        | Gate 2                                |
+| 09  | [Gate 2: estado, infraestructura y plan](./09_GATE2_STATUS.md)                              | Gate 2                                |
+| —   | [WORKLOG](./WORKLOG.md) · [TECH_BACKLOG](./TECH_BACKLOG.md)                                 | Seguimiento                           |
 
 ## Decisiones abiertas para Gate 1
 
