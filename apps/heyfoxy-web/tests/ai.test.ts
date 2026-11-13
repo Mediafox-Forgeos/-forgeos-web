@@ -221,7 +221,9 @@ describe('router IA: caché, presupuesto, respaldo', () => {
   });
   it('sin API key el proveedor por defecto es heurístico', () => {
     expect(
-      providerFromEnv({ HF_AI_PROVIDER: 'openai' } as NodeJS.ProcessEnv).id,
+      providerFromEnv({
+        HF_AI_PROVIDER: 'openai',
+      } as unknown as NodeJS.ProcessEnv).id,
     ).toBe('heuristic');
   });
 });
