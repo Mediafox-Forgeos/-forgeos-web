@@ -1,8 +1,11 @@
+import path from 'node:path';
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  outputFileTracingRoot: process.cwd(),
+  // Raíz del monorepo: con pnpm, `next` y sus dependencias viven en ../../node_modules.
+  // Con process.cwd() el trazado excluía el runtime de Next y la función fallaba en Vercel.
+  outputFileTracingRoot: path.join(__dirname, '../..'),
   poweredByHeader: false,
   async headers() {
     return [

@@ -93,3 +93,22 @@ Ejecutado, sin contratar, migrar ni desplegar:
 - **Migraciones:** 111/111 también sobre PostgreSQL 17.11.
 - **`scripts/smoke-http.sh`:** 32/32. Se corrigió una prueba de roles que no discriminaba, porque el owner también ve los números enmascarados.
 - **MOVOS y MediaFOX OS:** sin cambios.
+
+## 2026-11-13 16:11 UTC — Preview n.º 1 (GO de Álvaro para `bb8b422`)
+
+- `HF_PREVIEW_GO=bb8b422 scripts/deploy-preview.sh deploy`: preflight completo.
+  - Resultado: **`dpl_9vfWbpvhMz5xu8j3Zh4AX1UD2wJZ`**, `https://heyfoxy-o4qbmlrol-mediafox.vercel.app`.
+- Verificación del script:
+  - target `preview` y SHA `bb8b422`;
+  - sin alias de Production, y Production sigue en `dpl_CBLq2U37…`;
+  - acceso anónimo → 302 a SSO en `/`, `/api/health` y `/login`.
+- **Hallazgo funcional en la prueba autenticada** (Chrome con la sesión de Vercel del usuario; sin crear enlaces compartidos ni secretos de bypass):
+  - **Síntoma:** todas las rutas devuelven 500. Log de runtime: `Cannot find module 'next/dist/compiled/source-map'`.
+  - **Causa:** `outputFileTracingRoot: process.cwd()` (copiado de forgeos-web) limitaba el trazado a `apps/heyfoxy-web`. Con pnpm, Next vive en el `node_modules` raíz, así que solo se trazaron 25 archivos en lugar de unos 650.
+  - **El despliegue congelado de Production (`fd896ad`) tiene la misma configuración.** Probablemente también responde 500, protegido; no se tocó.
+  - **Corrección:**
+    - `outputFileTracingRoot` pasa a la raíz del monorepo;
+    - nueva guarda `scripts/check-trace.mjs` en `build`, que hace fallar la compilación si el trazado está incompleto (probada en negativo con la configuración anterior: exit 1);
+    - re-ejecutados typecheck, lint, 54/54 unitarias y smoke 32/32.
+- **Riesgo fuera de alcance (solo reportado):** `apps/forgeos-web/next.config.ts` usa el mismo `outputFileTracingRoot: process.cwd()`.
+- El Preview `dpl_9vfWbpvh…` se conserva, protegido. El siguiente Preview requiere un GO nuevo ligado al SHA de la corrección.
