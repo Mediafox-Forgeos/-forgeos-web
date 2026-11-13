@@ -64,3 +64,32 @@ Conclusión: no hubo exposición pública ni cambio en otros proyectos. La anoma
 3. **Metricool:** conector implementado pero deshabilitado. No solicitar ni almacenar credenciales hasta la autorización de la integración real. Prohibidos los endpoints de escritura, eliminación, campañas y administración de cuentas.
 4. **QA:** conservar las pruebas. Re-ejecutadas hoy: 54/54 unitarias y 111/111 de aislamiento SQL.
 5. Documentación actualizada: este WORKLOG, [TECH_BACKLOG.md](./TECH_BACKLOG.md) y [09_GATE2_STATUS.md](./09_GATE2_STATUS.md).
+
+## 2026-11-13 — Gate 2: preparación técnica tras la opción A
+
+Decisiones de Álvaro:
+
+- Supabase opción A (organización Pro independiente, solo QA), con presupuesto objetivo de USD 25 al mes y confirmación del importe antes de contratar.
+- Vercel congelado; CLI y script de Preview preparados.
+- Metricool sigue sin credenciales.
+- QA solo con datos sintéticos.
+- Secretos separados de MediaFOX OS.
+
+Ejecutado, sin contratar, migrar ni desplegar:
+
+- **Vercel CLI:** 56.2.0 → **65.15.0** (instalación global local; no es un cambio en Vercel).
+- **`apps/heyfoxy-web/scripts/deploy-preview.sh`:**
+  - Proyecto fijado por ID; ignora el enlace de la raíz que apunta a MOVOS.
+  - Verifica directorio, paquete, CLI ≥ 65, rama distinta de `main`, árbol limpio y HEAD publicado.
+  - Verifica Root Directory, protección `all`, ausencia de Git y Production congelado en `dpl_CBLq2U37…`.
+  - Variables: ninguna de Production y ninguna que apunte a los Supabase de MediaFOX OS. Nunca imprime valores.
+  - `deploy` exige `HF_PREVIEW_GO` igual al SHA de HEAD y fija `--environment preview`.
+  - `verify` comprueba target, SHA, alias, que Production no cambió y que el acceso anónimo devuelve 302 a SSO.
+  - No usa `--verify` de la CLI, porque crearía un secreto de bypass de la protección.
+- **Pruebas negativas del script:** 4/4 bloqueos, incluido que `verify` detecta el target `production` del despliegue congelado.
+- **Procedimiento Supabase QA, presupuesto y plan de migraciones:** [10_SUPABASE_QA_PROCEDURE.md](./10_SUPABASE_QA_PROCEDURE.md). Precio verificado en supabase.com/pricing.
+- **Batería remota sin residuos:** `scripts/build-remote-test-sql.py`. Simulada en PG17 con 111/111 superadas y cero residuos.
+- **Seed sintético de QA:** `supabase/seed/qa_seed.sql`. Idempotente y validado con RLS en PG17.
+- **Migraciones:** 111/111 también sobre PostgreSQL 17.11.
+- **`scripts/smoke-http.sh`:** 32/32. Se corrigió una prueba de roles que no discriminaba, porque el owner también ve los números enmascarados.
+- **MOVOS y MediaFOX OS:** sin cambios.
