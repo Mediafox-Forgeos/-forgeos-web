@@ -134,7 +134,7 @@ El flujo PKCE está implementado y probado en local hasta donde es posible sin c
 2. En `/login`, introducir el correo QA y pegar la contraseña copiada del llavero (§3.2).
 3. Cerrar sesión desde «Salir» (barra lateral) y repetir con otro perfil. Para comparar perfiles en paralelo, usar una ventana privada.
 
-> El Preview n.º 3 (`dpl_FYjif3NN…`, `6009c9c`) **no** incluye todavía las vistas Publicaciones y Reportes ni el callback exacto. Requieren el Preview n.º 4, con su propio GO.
+> El alias apunta al **Preview n.º 4** (`dpl_2dKCgyHn…`, `1b74b7c`, 2026-11-14), que incluye Publicaciones, Reportes y el callback exacto.
 
 ## 7. Guion de QA funcional (Gate D, navegador asistido)
 

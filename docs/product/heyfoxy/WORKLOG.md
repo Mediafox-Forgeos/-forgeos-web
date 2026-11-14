@@ -297,3 +297,24 @@ Ejecutado, sin contratar, migrar ni desplegar:
   - Alternativa sin contraseñas: con la identidad de cada usuario QA en el MCP (transacción revertida), las vistas nuevas ven solo su organización (0 filas ajenas).
   - El QA por interfaz queda para el navegador asistido (12 §7).
 - **Sin cambios** en Supabase Auth (lo configura Álvaro), Production, Metricool, WhatsApp, MediaFOX OS ni MOVOS.
+
+## 2026-11-14 07:37–07:45 UTC — Gate C: Preview n.º 4 (GO de Álvaro para `1b74b7c`)
+
+- **Pre-flight:**
+  - `1b74b7c` con el árbol limpio y publicado;
+  - **0 bypass**, protección `all`, Production en `dpl_CBLq2U37…`;
+  - `NEXT_PUBLIC_SUPABASE_URL` → `admbpgqtgmaaofcgajzh` (`plain`); la clave publicable es `encrypted`; ambas solo con target `preview`.
+- **Despliegue** con `deploy-preview.sh deploy`:
+  - **`dpl_2dKCgyHnBb7PEGkg5PwFp7Y23AP5`**, `https://heyfoxy-1lu4rh148-mediafox.vercel.app`, SHA `1b74b7c`;
+  - verificado: `target=preview`, sin alias de Production, Production sin cambios, acceso anónimo → SSO.
+- **Alias:** `heyfoxy-qa-mediafox.vercel.app` reasignado **solo** al Preview n.º 4 y verificado. Después: 0 bypass, protección `all`, 302 → SSO en `/`, `/publicaciones`, `/reportes`, `/auth/callback` y `/api/health`.
+- **Build del despliegue:** compiló `/publicaciones`, `/publicaciones/[id]` y `/reportes`; `check-trace` en verde.
+- **Validación de solo lectura** en Chrome con la sesión de Vercel de Álvaro, sin bypass y sin iniciar sesión como usuario QA:
+  - `/api/health` → SHA `1b74b7c`, `dataMode: supabase`, `whatsappMode: simulate`, conectores en `false`;
+  - `/publicaciones` y `/reportes` sin sesión de la app → `/login`, que muestra el formulario de contraseña;
+  - `/login/recuperar` operativo;
+  - `/auth/callback` con código falso y `next` externo → `/login?error=enlace-invalido`;
+  - `/login/nueva-clave` sin sesión rechaza la solicitud;
+  - sin errores de consola y sin 500 en las rutas visitadas.
+  - La API de logs de runtime devolvió 0 registros, también a nivel de proyecto, así que no sirve como evidencia en esta ventana.
+- **Pendiente:** Álvaro configura Site URL y Redirect URL (10 §6) y valida manualmente (12 §7). Gate 2 sigue abierto.
