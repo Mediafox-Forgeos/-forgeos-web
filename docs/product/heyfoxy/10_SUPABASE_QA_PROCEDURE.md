@@ -1,10 +1,10 @@
 # 10 — Supabase QA de Hey Foxy: procedimiento, presupuesto, migraciones y pruebas
 
-| Propiedad | Valor                                                                                                     |
-| --------- | --------------------------------------------------------------------------------------------------------- |
-| Decisión  | Opción A (Álvaro, 2026-11-13): organización independiente «Hey Foxy» en plan Pro, con un solo proyecto QA |
-| Estado    | **Preparado. Sin contratar, sin crear y sin migrar.** Requiere confirmación explícita del importe         |
-| Alcance   | Solo QA. Production de Hey Foxy se decide en Gate 3                                                       |
+| Propiedad | Valor                                                                                                                                                                                              |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Decisión  | Opción A (Álvaro, 2026-11-13): organización independiente «Hey Foxy» en plan Pro, con un solo proyecto QA                                                                                          |
+| Estado    | **Organización «Hey Foxy» (Pro) y proyecto `heyfoxy-qa` (`admbpgqtgmaaofcgajzh`) creados.** Destino verificado el 2026-11-14 por MCP propio (solo lectura). **Sin migrar**: pendiente del GO de §3 |
+| Alcance   | Solo QA. Production de Hey Foxy se decide en Gate 3                                                                                                                                                |
 
 ## 1. Presupuesto final
 
@@ -38,28 +38,62 @@ Fuente: supabase.com/pricing, consultado el 2026-11-13.
 
 ## 3. Plan de migraciones
 
-**Orden:** se aplican en `heyfoxy-qa` y en ningún otro proyecto, con MCP `apply_migration`, que deja historial en `supabase_migrations`.
+**Destino único:** `heyfoxy-qa`, ref `admbpgqtgmaaofcgajzh`.
 
-| Orden | Archivo                                        | Contenido                                                                                                                                                    |
-| ----- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1     | `20261113000100_hf_core_tenancy.sql`           | Organizations, brands, memberships, platform_staff y audit_logs (append-only); helpers RLS `SECURITY DEFINER` con `search_path=''`                           |
-| 2     | `20261113000200_hf_sources_content.sql`        | Fuentes, cobertura, credenciales (inaccesibles para usuarios), contenido con dedupe, guardas de datos sintéticos y de cruce entre empresas, `ingestion_jobs` |
-| 3     | `20261113000300_hf_intelligence_incidents.sql` | Análisis, alertas, incidentes (FSM en la base), eventos append-only, WhatsApp, reportes, presupuestos y uso de IA; grants por columna                        |
+- Las migraciones se aplican solo con el MCP `supabase-heyfoxy-qa`, cuya URL fija `project_ref=admbpgqtgmaaofcgajzh` y no expone herramientas de cuenta.
+- Se usa `apply_migration`, que deja historial en `supabase_migrations`.
+- **Prohibido** usar el conector claude.ai Supabase para esta tarea.
 
-**Validación previa, ya ejecutada en local:**
+Inventario completo y por qué existe 0004: [11_SCHEMA_INVENTORY.md](./11_SCHEMA_INVENTORY.md).
 
-- Las 3 migraciones aplican limpias sobre PostgreSQL **17.11** (Supabase QA usa 17.6) y sobre 16.
-- El stub reproduce los privilegios por defecto de Supabase: `anon` y `authenticated` reciben ALL en las tablas nuevas, y cada migración los revoca de forma explícita.
+| Orden | Archivo                                        | Contenido                                                                                                                                                                           |
+| ----- | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | `20261113000100_hf_core_tenancy.sql`           | 5 tablas: organizations, brands, memberships, platform_staff y audit_logs (append-only). Helpers RLS `SECURITY DEFINER` con `search_path=''`. 10 políticas                          |
+| 2     | `20261113000200_hf_sources_content.sql`        | 9 tablas: fuentes, cobertura, credenciales (inaccesibles para usuarios), contenido con dedupe, guardas de datos sintéticos y de cruce entre empresas, `ingestion_jobs`. 9 políticas |
+| 3     | `20261113000300_hf_intelligence_incidents.sql` | 12 tablas: análisis, alertas, incidentes (FSM en la base), eventos append-only, WhatsApp, reportes, presupuestos y uso de IA. 18 políticas                                          |
+| 4     | `20261113000400_hf_explicit_grants.sql`        | Sin objetos nuevos. Modelo de privilegios explícito: revoca todo y concede solo lo que exige cada política (grant ⇔ política). Determinista frente a los privilegios por defecto    |
 
-**Después de migrar:**
+**Por qué hay una cuarta migración.** En `heyfoxy-qa`, una tabla creada por `postgres` solo concede TRUNCATE, REFERENCES, TRIGGER y MAINTAIN a `anon`, `authenticated` y `service_role`. Con solo 0001–0003, la app y el servidor se quedarían sin acceso, y `authenticated` conservaría TRUNCATE en 20 tablas. Detalle en 11 §8.
 
-1. `list_migrations` debe mostrar las 3.
-2. `list_tables` debe mostrar 28 tablas con RLS activa.
-3. `get_advisors` (security y performance): ningún hallazgo de severidad ERROR. Los WARN se documentan.
-4. Batería de aislamiento remota (§4.1).
-5. Crear los usuarios QA y cargar el seed (§4.2).
+**Validación previa, ejecutada en local el 2026-11-14:**
 
-**Reversión (solo QA):** se descarta el proyecto `heyfoxy-qa`, o se ejecuta `drop schema public cascade` y se recrea. No existe ningún dato real que proteger. Nada de esto afecta a MediaFOX OS.
+- `scripts/test-db.sh` aplica las 4 migraciones y pasa en las cuatro combinaciones:
+
+  | PostgreSQL | Privilegios por defecto           | Contrato | Aislamiento |
+  | ---------- | --------------------------------- | -------- | ----------- |
+  | 17 y 16    | Reales de QA (stub actual)        | 31/31    | 111/111     |
+  | 17 y 16    | Antiguos (`HF_STUB_LEGACY_ACL=1`) | 31/31    | 111/111     |
+
+- Con los privilegios reales y **sin** 0004, la batería falla en la prueba 26 (`permission denied for table brands`). Esta prueba negativa demuestra que el stub anterior ocultaba el problema.
+- El event trigger `ensure_rls` del proyecto se simuló con su definición literal. Es compatible.
+- La batería remota generada termina en `HF_TESTS_PASSED 111` y no deja residuos (0 filas, 0 funciones `t_*`).
+
+**Controles previos, en solo lectura, antes de cada migración:**
+
+1. `get_project_url` devuelve `https://admbpgqtgmaaofcgajzh.supabase.co`, y el ref no es `srsllmqeljhodttqefih` ni `wzamylhiqvosbrlhzssp`.
+2. `list_migrations` devuelve exactamente las anteriores: 0, 1, 2 y 3 antes de la 1.ª, 2.ª, 3.ª y 4.ª.
+3. El contenido se envía literal desde el commit autorizado, sin editarlo.
+4. Si algo falla, se detiene la secuencia. No se corrige sobre la marcha.
+
+**Criterios de aceptación** (todos obligatorios; valores en 11 §2):
+
+1. `list_migrations` muestra las 4 en orden.
+2. `list_tables` muestra **26** tablas en `public`, todas con RLS.
+3. Contrato de esquema: `execute_sql` con `apps/heyfoxy-web/tests/sql/20_schema_contract.check.sql` devuelve las **31 filas con `ok = true`**. El contrato cubre:
+   - 26 tablas, 37 políticas, 10 enums, 9 funciones `hf_*` (6 DEFINER, todas con `search_path=''`), 18 triggers y 60 índices;
+   - `anon` sin grants sobre tablas ni EXECUTE sobre `hf_*`;
+   - `authenticated` sin TRUNCATE, REFERENCES, TRIGGER ni MAINTAIN, y sin nada sobre `platform_staff` ni `integration_credentials`;
+   - los grants por columna;
+   - `service_role` con CRUD, sin TRUNCATE y sin mutar las tablas append-only.
+4. `get_advisors` de seguridad sin ningún ERROR. WARN e INFO esperados, que se documentan:
+   - `authenticated` puede ejecutar `hf_is_member` y `hf_has_role` como SECURITY DEFINER. Es intencionado: son los helpers de RLS y solo devuelven un booleano sobre el propio `auth.uid()`;
+   - `rls_auto_enable` (previo, de Supabase; event trigger que no se puede invocar por RPC);
+   - RLS sin políticas en `platform_staff` e `integration_credentials`. Es intencionado: denegación total.
+5. `get_advisors` de rendimiento sin ningún ERROR. Esperados: FK sin índice (INFO, HF-PERF-01) y políticas permisivas múltiples en `brands` y `alert_rules` (WARN).
+6. Batería de aislamiento remota: `HF_TESTS_PASSED 111` y cero residuos (§4.1).
+7. Usuarios QA y seed (§4.2) **solo con un GO aparte**.
+
+**Reversión (solo QA):** se descarta el proyecto `heyfoxy-qa`, o se ejecuta `drop schema public cascade` y se recrea; las dos opciones requieren autorización expresa. No existe ningún dato real que proteger. Nada de esto afecta a MediaFOX OS ni a MOVOS.
 
 ## 4. Pruebas en QA
 

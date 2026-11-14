@@ -11,7 +11,7 @@ Registro cronológico de ejecución, decisiones y anomalías. Sin secretos ni cr
 
 - Rama `feat/heyfoxy-gate2-foundation` en ForgeOS. Commits `a0c2e56` (fundación) y `fd896ad` (ajuste de tipos en una prueba). Sin PR ni fusión a `main`.
 - `apps/heyfoxy-web` (Next 15, independiente de MediaFOX OS):
-  - 3 migraciones de esquema dev/QA con RLS multiempresa en las 28 tablas;
+  - 3 migraciones de esquema dev/QA con RLS multiempresa en las 26 tablas _(corregido el 2026-11-14: decía 28 por un error de recuento; ver [11](./11_SCHEMA_INVENTORY.md) §1)_;
   - contratos de conectores;
   - Model Router de IA;
   - incidentes con máquina de estados;
@@ -138,3 +138,26 @@ Ejecutado, sin contratar, migrar ni desplegar:
   - último despliegue de `movos-web`: `dpl_FFbCoBAK…` (agosto);
   - último de `mediafox-os`: `dpl_4jZVMJj5…` (653a405), ambos anteriores a esta sesión.
 - **Supabase:** solo existe la organización `alipise`. La organización «Hey Foxy» y `heyfoxy-qa` siguen pendientes de Álvaro.
+
+## 2026-11-14 — Gate 2: validación final previa a migraciones (sin migrar)
+
+- **Destino verificado** con el MCP `supabase-heyfoxy-qa`, en solo lectura:
+  - `get_project_url` → `https://admbpgqtgmaaofcgajzh.supabase.co`;
+  - la URL del MCP fija `project_ref` y no expone herramientas de cuenta;
+  - 0 migraciones, 0 tablas en `public`, 0 usuarios de Auth;
+  - PostgreSQL 17.11;
+  - organización «Hey Foxy» (Pro) confirmada por Álvaro en el dashboard.
+  - No se usó el conector claude.ai Supabase.
+- **28 frente a 26:** el esquema tiene 26 tablas. El 28 era un error de recuento del WORKLOG y del procedimiento 10. Ver [11](./11_SCHEMA_INVENTORY.md) §1.
+- **Hallazgo crítico:** `pg_default_acl` de `heyfoxy-qa` no coincide con lo que asumía el stub local.
+  - Una tabla creada por `postgres` solo concede TRUNCATE, REFERENCES, TRIGGER y MAINTAIN a `anon`, `authenticated` y `service_role`. Las funciones no conceden EXECUTE a nadie.
+  - Reproducido en local: 0001–0003 aplican sin error, pero la batería falla en la prueba 26 de 111 (`permission denied for table brands`). La app y el servidor se habrían quedado sin acceso en QA.
+- **Corrección propuesta (sin aplicar):**
+  - Nueva migración `20261113000400_hf_explicit_grants.sql`, con un modelo de privilegios explícito: revoca todo y concede solo donde hay política. 0001–0003 quedan intactas.
+  - El stub `00_supabase_stub.sql` ahora reproduce los privilegios reales de QA.
+  - Nuevo contrato de esquema `tests/sql/20_schema_contract.check.sql`, de solo lectura, con 31 controles. `test-db.sh` lo exige.
+- **Validación local:** `test-db.sh` pasa con el contrato 31/31 y 111/111 en PG17 y PG16, con los privilegios reales y con los antiguos (`HF_STUB_LEGACY_ACL=1`). La batería remota generada termina en `HF_TESTS_PASSED 111` y cero residuos.
+- **Procedimiento 10 §3 actualizado:** 4 migraciones, controles previos por migración, criterios de aceptación con valores exactos y advisors esperados.
+- **Inventario definitivo:** [11_SCHEMA_INVENTORY.md](./11_SCHEMA_INVENTORY.md).
+- **Hallazgos menores** al backlog: HF-SEC-03, HF-SEC-04 y HF-PERF-01.
+- Ninguna escritura en `heyfoxy-qa`. MediaFOX OS y MOVOS sin cambios.

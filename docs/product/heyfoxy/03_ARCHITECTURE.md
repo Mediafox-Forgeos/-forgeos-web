@@ -88,6 +88,8 @@ Convenciones: `id uuid`, `organization_id uuid not null` en toda tabla de negoci
 | `ai_usage` _(nueva)_              | Medición de tokens y costo por organización                          | Base de presupuestos y facturación                                                                                                                                                                               |
 | `audit_logs`                      | Quién hizo qué (configuración, accesos, exportaciones, credenciales) | Append-only                                                                                                                                                                                                      |
 
+> **Esquema implementado (2026-11-14):** el modelo anterior es la propuesta de Gate 1. Las migraciones crean **26 tablas** en `public`: estas sin `users` (el perfil vive en `auth.users`), más `source_coverage` y `usage_budgets`. Algunas columnas y claves difieren de la propuesta. El inventario autoritativo es [11_SCHEMA_INVENTORY.md](./11_SCHEMA_INVENTORY.md).
+
 ## 5. Roles y permisos
 
 | Capacidad                                         | owner | admin | analyst | responder | viewer |
