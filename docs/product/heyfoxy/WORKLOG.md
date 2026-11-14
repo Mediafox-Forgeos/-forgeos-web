@@ -161,3 +161,30 @@ Ejecutado, sin contratar, migrar ni desplegar:
 - **Inventario definitivo:** [11_SCHEMA_INVENTORY.md](./11_SCHEMA_INVENTORY.md).
 - **Hallazgos menores** al backlog: HF-SEC-03, HF-SEC-04 y HF-PERF-01.
 - Ninguna escritura en `heyfoxy-qa`. MediaFOX OS y MOVOS sin cambios.
+
+## 2026-11-14 06:00–06:10 UTC — Migraciones 0001–0004 aplicadas en `heyfoxy-qa` (GO de Álvaro)
+
+- **Commit autorizado:** `020e3a7` en `feat/heyfoxy-gate2-foundation`, publicado en remoto. Árbol limpio y `test-db.sh` 4/4 sobre ese mismo árbol.
+- **Pre-flight:** ref `admbpgqtgmaaofcgajzh`; 0 migraciones, 0 tablas, 0 usuarios y 0 objetos de storage. Preview n.º 2 re-verificado con `deploy-preview.sh verify`; el proyecto Vercel no tiene variables de entorno.
+- **Aplicación** con MCP `supabase-heyfoxy-qa` y `apply_migration`, una por una. Antes de cada una se comprobaron el ref y el historial. El contenido guardado en `supabase_migrations` es **byte a byte** idéntico a cada archivo (md5 de los `statements`):
+
+  | Archivo                          | Versión remota   | md5         |
+  | -------------------------------- | ---------------- | ----------- |
+  | `0001_hf_core_tenancy`           | `20261114060028` | `50e14acc…` |
+  | `0002_hf_sources_content`        | `20261114060119` | `aba08c21…` |
+  | `0003_hf_intelligence_incidents` | `20261114060215` | `94adf51d…` |
+  | `0004_hf_explicit_grants`        | `20261114060647` | `54f2b937…` |
+
+- **Incidente durante 0004:** el MCP perdió la autenticación (`Failed to check user auth status`) y todas las llamadas siguientes fallaron.
+  - Se detuvo la secuencia sin reintentar.
+  - Álvaro re-autenticó con `/mcp` y autorizó el protocolo de recuperación.
+  - El historial mostraba solo 0001–0003.
+  - **Huella de privilegios** (765 elementos: grants de tabla y columna, EXECUTE, RLS y políticas): idéntica a la reproducción local tras 0003 (`cd6f7513…`). Esto descartó una ejecución parcial de 0004.
+  - Se aplicó 0004 una sola vez. La huella posterior es idéntica a la local tras 0004 (1395 elementos, `28d1c0af…`).
+- **QA de seguridad en `heyfoxy-qa`:**
+  - Contrato `20_schema_contract.check.sql`: **31/31**. Son 26 tablas con RLS, 37 políticas, 10 enums, 9 funciones `hf_*` (6 DEFINER con `search_path=''`), 18 triggers y 60 índices.
+  - Batería remota (transacción abortada a propósito): **`HF_TESTS_PASSED 111`**.
+  - Residuos posteriores: 0 usuarios, 0 identidades, 0 filas de negocio y 0 objetos `t_*`.
+  - Advisors de seguridad: 0 ERROR. Los 3 hallazgos son los esperados en 10 §3: `hf_is_member`/`hf_has_role` ejecutables por `authenticated` (intencionado), `rls_auto_enable` (previo, de Supabase) e INFO por RLS sin políticas en `platform_staff` e `integration_credentials` (denegación total).
+  - Advisors de rendimiento: 0 ERROR. INFO por 27 FK sin índice, 16 índices sin uso (base vacía) y conexiones de Auth; WARN por políticas permisivas múltiples en `brands` y `alert_rules` (HF-PERF-01).
+- **Sin cambios** en MediaFOX OS, MOVOS, Production, Metricool ni WhatsApp. No se crearon usuarios ni se cargaron datos.
