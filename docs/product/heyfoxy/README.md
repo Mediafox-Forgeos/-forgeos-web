@@ -23,7 +23,8 @@ Plataforma SaaS multiempresa de escucha social con IA, monitoreo reputacional, a
 | 08  | [Metricool: capacidades verificadas y conexión segura](./08_METRICOOL_CONNECTION.md)            | Gate 2                                |
 | 09  | [Gate 2: estado, infraestructura y plan](./09_GATE2_STATUS.md)                                  | Gate 2                                |
 | 10  | [Supabase QA: procedimiento, presupuesto, migraciones y pruebas](./10_SUPABASE_QA_PROCEDURE.md) | Gate 2                                |
-| 11  | [Inventario definitivo del esquema (migraciones 0001–0004)](./11_SCHEMA_INVENTORY.md)           | Gate 2                                |
+| 11  | [Inventario definitivo del esquema (migraciones 0001–0005)](./11_SCHEMA_INVENTORY.md)           | Gate 2                                |
+| 12  | [Usuarios QA, credenciales privadas y acceso al Preview](./12_QA_USERS_AND_ACCESS.md)           | Gate 2                                |
 | —   | [WORKLOG](./WORKLOG.md) · [TECH_BACKLOG](./TECH_BACKLOG.md)                                     | Seguimiento                           |
 
 ## Decisiones abiertas para Gate 1

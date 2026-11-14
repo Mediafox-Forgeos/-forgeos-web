@@ -143,10 +143,22 @@ Las migraciones 0001–0003 se escribieron para el modelo antiguo («ALL por def
 
 El resultado no depende del rol creador ni de los privilegios por defecto: el contrato de 31 controles y la batería de 111 pruebas dan el mismo resultado con el modelo real y con el antiguo, en PG17 y en PG16.
 
-## 9. Hallazgos menores (no bloquean; en TECH_BACKLOG)
+## 9. Migración 0005 (preparada; se aplica con el GO de Gate B)
 
-- **HF-SEC-03.** `incidents_insert` no valida que `alert_id` pertenezca a la misma organización. Tampoco se valida en el INSERT que `owner_user_id` sea miembro; en el UPDATE sí se valida.
-  - Impacto: un responder podría enlazar el UUID de una alerta ajena sin poder leerla. La FK solo revela si ese UUID existe.
-  - Afecta igual, con FK hacia entidades del mismo tenant, a `alerts.alert_rule_id/analysis_id/cluster_id`, `notification_deliveries.*` y `post_metric_snapshots.post_id`. Ahí solo escribe `service_role`.
-- **HF-SEC-04.** `organizations_update` permite a owner/admin cambiar `plan`, `is_demo`, `slug` y `retention_days`. La app no actualiza organizaciones. Conviene limitarlo por columnas antes del piloto.
-- **HF-PERF-01.** 27 FK sin índice; las políticas permisivas duplicadas (`brands`, `alert_rules`: `_select` + `_write`) el linter las marcará como WARN de rendimiento.
+`20261114000500_hf_sec_fixes_member_names.sql` es aditiva. Tras aplicarla, el contrato pasa a 36 controles y la batería a 122 pruebas.
+
+| Cambio               | Detalle                                                                                                                                                                                                                                                                                                                   | Totales tras 0005                            |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| **HF-SEC-03**        | Función `hf_guard_incident_refs()` (SECURITY DEFINER, `search_path=''`, sin EXECUTE para usuarios) y trigger `incidents_refs_guard` (BEFORE INSERT OR UPDATE OF `alert_id`). `alert_id` debe ser de la misma organización, también para el servidor. En el alta, `owner_user_id` debe ser un miembro con rol de respuesta | 10 funciones `hf_*` (7 DEFINER), 19 triggers |
+| **HF-SEC-04**        | `authenticated` pasa de UPDATE sobre toda la tabla `organizations` a UPDATE solo en (`name`, `timezone`). `plan`, `is_demo`, `slug` y `retention_days` quedan reservados a la plataforma                                                                                                                                  | —                                            |
+| **Nombres visibles** | `memberships.display_name` (texto opcional, 1–120). Lo gestionan owner/admin con las políticas existentes; la UI lo usa para asignar incidentes                                                                                                                                                                           | —                                            |
+
+- Sin cambios en tablas (26), políticas (37), enums (10) ni índices (60).
+- Nuevo control permanente del contrato: las guardas append-only deben estar habilitadas (`tgenabled = O`).
+- **Pruebas negativas:** sin 0005, la batería falla en `HF-SEC-04: owner no puede cambiar plan`.
+- **Rollback probado:** vuelve exactamente al estado de 0004.
+
+## 10. Hallazgos pendientes (en TECH_BACKLOG)
+
+- **HF-SEC-06.** Las FK hacia entidades del mismo tenant en `alerts.alert_rule_id/analysis_id/cluster_id`, `notification_deliveries.*` y `post_metric_snapshots.post_id` no tienen guarda de misma organización. Solo las escribe `service_role`, así que el riesgo es bajo.
+- **HF-PERF-01.** 27 FK sin índice y políticas permisivas duplicadas (`brands`, `alert_rules`), que el linter marca como WARN de rendimiento.

@@ -11,7 +11,7 @@ Transformaciones sobre tests/sql/10_isolation.test.sql:
     aborta la transacción, así que la base vuelve a su estado anterior aunque el cliente
     use autocommit. Una aserción fallida aborta igual con 'ASSERT FAILED: ...'.
 
-Resultado esperado en QA: error con el texto 'HF_TESTS_PASSED 111' y cero filas nuevas.
+Resultado esperado en QA: error con el texto 'HF_TESTS_PASSED 122' y cero filas nuevas.
 """
 import pathlib
 import re
@@ -19,7 +19,7 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SRC = ROOT / "tests" / "sql" / "10_isolation.test.sql"
-EXPECTED = 111
+EXPECTED = 122
 
 sql = SRC.read_text(encoding="utf-8")
 sql = "\n".join(line for line in sql.splitlines() if not line.lstrip().startswith("\\"))

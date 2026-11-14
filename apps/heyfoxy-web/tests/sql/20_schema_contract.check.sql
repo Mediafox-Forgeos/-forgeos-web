@@ -1,4 +1,4 @@
--- Hey Foxy — contrato de esquema tras 0001–0004. SOLO LECTURA (un único SELECT).
+-- Hey Foxy — contrato de esquema tras 0001–0005. SOLO LECTURA (un único SELECT).
 -- Uso local: lo ejecuta el arnés tras migrar. Uso remoto: execute_sql en heyfoxy-qa.
 -- Aceptación: todas las filas con ok = true. Fuente de los valores: docs/product/heyfoxy/11_SCHEMA_INVENTORY.md
 with
@@ -25,7 +25,7 @@ col_upd as (
   select table_name, string_agg(column_name, ',' order by column_name) as cols
   from information_schema.column_privileges
   where table_schema = 'public' and grantee = 'authenticated' and privilege_type = 'UPDATE'
-    and table_name in ('data_sources', 'sentiment_analyses', 'alerts', 'incidents')
+    and table_name in ('data_sources', 'sentiment_analyses', 'alerts', 'incidents', 'organizations')
   group by table_name
 ),
 checks(check_name, expected, actual) as (
@@ -38,12 +38,12 @@ checks(check_name, expected, actual) as (
       where not exists (select 1 from pg_policy p where p.polrelid = t.oid))),
   ('enums_public',                 '10', (select count(*)::text from pg_type t join pg_namespace n on n.oid = t.typnamespace
                                           where n.nspname = 'public' and t.typtype = 'e')),
-  ('hf_functions',                 '9',  (select count(*)::text from hf_funcs)),
-  ('hf_security_definer',          'hf_guard_incident_event_org,hf_guard_same_org_source,hf_guard_synthetic,hf_has_role,hf_incident_guard,hf_is_member',
+  ('hf_functions',                 '10',  (select count(*)::text from hf_funcs)),
+  ('hf_security_definer',          'hf_guard_incident_event_org,hf_guard_incident_refs,hf_guard_same_org_source,hf_guard_synthetic,hf_has_role,hf_incident_guard,hf_is_member',
      (select string_agg(proname, ',' order by proname) from hf_funcs where prosecdef)),
   ('hf_functions_without_empty_search_path', '0',
      (select count(*)::text from hf_funcs where proconfig is null or not ('search_path=""' = any (proconfig)))),
-  ('triggers_public',              '18', (select count(*)::text from pg_trigger tg join hf_tables t on t.oid = tg.tgrelid where not tg.tgisinternal)),
+  ('triggers_public',              '19', (select count(*)::text from pg_trigger tg join hf_tables t on t.oid = tg.tgrelid where not tg.tgisinternal)),
   ('indexes_public_total',         '60', (select count(*)::text from pg_indexes where schemaname = 'public')),
   ('indexes_non_unique',           '18', (select count(*)::text from pg_index i join hf_tables t on t.oid = i.indrelid where not i.indisunique)),
   ('anon_table_grants',            '0',  (select count(*)::text from tgrants where grantee in ('anon', 'PUBLIC'))),
@@ -56,6 +56,15 @@ checks(check_name, expected, actual) as (
   ('authenticated_on_incident_events', 'INSERT,SELECT', (select privs from auth_grants where table_name = 'incident_events')),
   ('authenticated_on_incidents',   'INSERT,SELECT', (select privs from auth_grants where table_name = 'incidents')),
   ('authenticated_on_alerts',      'SELECT', (select privs from auth_grants where table_name = 'alerts')),
+  ('authenticated_on_organizations', 'SELECT', (select privs from auth_grants where table_name = 'organizations')),
+  ('authenticated_col_update_organizations', 'name,timezone', (select cols from col_upd where table_name = 'organizations')),
+  ('incident_refs_trigger', 'incidents_refs_guard',
+     (select string_agg(tgname, ',') from pg_trigger where tgrelid = 'public.incidents'::regclass and tgname = 'incidents_refs_guard')),
+  ('append_only_triggers_enabled', 'audit_logs_append_only:O,incident_events_append_only:O',
+     (select string_agg(tgname || ':' || tgenabled::text, ',' order by tgname) from pg_trigger
+      where tgname in ('audit_logs_append_only', 'incident_events_append_only'))),
+  ('memberships_display_name',     'text',
+     (select data_type from information_schema.columns where table_schema = 'public' and table_name = 'memberships' and column_name = 'display_name')),
   ('authenticated_on_social_comments', 'SELECT', (select privs from auth_grants where table_name = 'social_comments')),
   ('authenticated_on_whatsapp_recipients', 'DELETE,INSERT,SELECT,UPDATE', (select privs from auth_grants where table_name = 'whatsapp_recipients')),
   ('authenticated_col_update_data_sources', 'display_name,ingestion_paused,max_items_per_day,poll_interval_minutes',

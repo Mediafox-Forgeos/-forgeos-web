@@ -28,9 +28,13 @@ export async function currentViewer(): Promise<Viewer | null> {
   const db = await supabaseServer();
   const { data } = await db.auth.getUser();
   if (!data.user) return null;
+  const fullName = data.user.user_metadata?.full_name;
   return {
     userId: data.user.id,
-    name: data.user.email ?? 'Usuario',
+    name:
+      typeof fullName === 'string' && fullName.trim()
+        ? fullName.trim()
+        : (data.user.email ?? 'Usuario'),
     email: data.user.email ?? '',
     mode: 'supabase',
   };

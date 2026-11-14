@@ -188,3 +188,37 @@ Ejecutado, sin contratar, migrar ni desplegar:
   - Advisors de seguridad: 0 ERROR. Los 3 hallazgos son los esperados en 10 §3: `hf_is_member`/`hf_has_role` ejecutables por `authenticated` (intencionado), `rls_auto_enable` (previo, de Supabase) e INFO por RLS sin políticas en `platform_staff` e `integration_credentials` (denegación total).
   - Advisors de rendimiento: 0 ERROR. INFO por 27 FK sin índice, 16 índices sin uso (base vacía) y conexiones de Auth; WARN por políticas permisivas múltiples en `brands` y `alert_rules` (HF-PERF-01).
 - **Sin cambios** en MediaFOX OS, MOVOS, Production, Metricool ni WhatsApp. No se crearon usuarios ni se cargaron datos.
+
+## 2026-11-14 — Gate 2, etapa 2: Gate A (diagnóstico y correcciones locales; sin cambios remotos)
+
+- **Contexto verificado:**
+  - `heyfoxy-qa` con 4 migraciones; 26/37/10/9/18/60; 0 usuarios y 0 filas.
+  - Preview n.º 2 protegido y en modo demo.
+  - Metricool deshabilitado: el proyecto Vercel no tiene variables de entorno.
+- **Ya existía en el código:** login con contraseña, logout, refresco de sesión en el middleware, rutas protegidas, cambio de organización validado contra las membresías reales y repositorio Supabase para las 10 vistas.
+- **Inconsistencias encontradas:**
+  - El documento 05 lista «Publicaciones» y «Reportes» como MVP, pero no hay vistas (HF-UX-01).
+  - Los miembros se mostraban como UUID: `auth.users` no es legible.
+  - No había recuperación de contraseña.
+- **Hallazgo de seguridad (solo lectura):** el registro público está **activado** en `heyfoxy-qa` (HF-SEC-05). Debe desactivarse antes de Gate B (12 §4).
+- **Migración 0005** (aditiva, sin aplicar): corrige HF-SEC-03 (trigger `incidents_refs_guard`) y HF-SEC-04 (UPDATE de `organizations` solo en `name`/`timezone`), y añade `memberships.display_name`.
+  - Pruebas: 122/122 y contrato 36/36 en PG17/PG16, con los privilegios reales y con los antiguos.
+  - Prueba negativa sin 0005: falla en HF-SEC-04.
+  - Rollback probado: huella `28d1c0af…` y 0004 con 31/31 y 111/111.
+- **App:**
+  - Nombres visibles de miembros y nombre del usuario desde `user_metadata.full_name`.
+  - Recuperación de contraseña con PKCE: `/login/recuperar`, `/auth/callback` con lista blanca de destinos y `/login/nueva-clave` con mínimo de 12.
+  - Pruebas: typecheck, lint y 54/54 unitarias.
+  - Build en modo demo y en modo Supabase.
+  - Smoke sin sesión contra QA: rutas privadas → `/login`, callback inválido rechazado, sin redirección abierta y 0 errores.
+  - Regresión demo: 32/32.
+- **Seed sintético** reescrito (Clínica Aurora / Banco Horizonte) y nuevo `qa_cleanup.sql`.
+  - Idempotente, con 0 filas no sintéticas.
+  - Historial de incidentes atribuido por los triggers.
+  - RLS por usuario verificada; la limpieza deja 0 filas.
+- **Credenciales:** `scripts/qa_users.py`.
+  - Las contraseñas van solo al llavero de macOS, a través de stdin. El SQL lleva solo hashes y no se puede escribir dentro del repo.
+  - `verify` imprime solo OK/FALLO.
+  - Probado con un llavero temporal, que después se eliminó.
+- **Documentación:** nuevo [12_QA_USERS_AND_ACCESS.md](./12_QA_USERS_AND_ACCESS.md); procedimiento 10 §3/§4.2 e inventario 11 §9 actualizados.
+- **Sin cambios** en `heyfoxy-qa`, Vercel, MediaFOX OS ni MOVOS.

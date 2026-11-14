@@ -24,6 +24,14 @@ export default async function LoginPage({
         <p className="text-muted-foreground mt-1 text-sm">
           Inteligencia social y reputacional.
         </p>
+        {error === 'enlace-invalido' && (
+          <p
+            role="alert"
+            className="mt-4 rounded-md border border-red-500/30 bg-red-500/10 p-2 text-sm"
+          >
+            El enlace no es válido o expiró. Solicita uno nuevo.
+          </p>
+        )}
         {error === 'sin-organizacion' && (
           <p
             role="alert"

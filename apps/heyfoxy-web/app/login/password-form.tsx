@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useActionState } from 'react';
 import { loginPassword } from '@/app/actions';
 import { buttonCls } from '@/components/ui';
@@ -44,7 +45,10 @@ export function PasswordForm() {
         {pending ? 'Ingresando…' : 'Ingresar'}
       </button>
       <p className="text-muted-foreground text-xs">
-        El acceso es por invitación. No existe registro público.
+        El acceso es por invitación. No existe registro público.{' '}
+        <Link href="/login/recuperar" className="text-brand hover:underline">
+          ¿Olvidaste tu contraseña?
+        </Link>
       </p>
     </form>
   );

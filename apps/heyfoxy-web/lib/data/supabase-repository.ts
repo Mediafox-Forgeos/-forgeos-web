@@ -351,12 +351,14 @@ export class SupabaseRepository implements Repository {
     const db = await supabaseServer();
     const { data, error } = await db
       .from('memberships')
-      .select('user_id, role')
-      .eq('organization_id', orgId);
+      .select('user_id, role, display_name')
+      .eq('organization_id', orgId)
+      .order('display_name');
     fail(error);
     return ((data ?? []) as Row[]).map((m) => ({
       userId: m.user_id,
-      name: m.user_id.slice(0, 8),
+      // auth.users no es legible desde la sesión: el nombre vive en memberships (0005).
+      name: m.display_name ?? `Miembro ${String(m.user_id).slice(0, 8)}`,
       email: '',
       role: m.role,
     }));

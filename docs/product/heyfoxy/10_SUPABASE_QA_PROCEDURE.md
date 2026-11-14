@@ -46,12 +46,13 @@ Fuente: supabase.com/pricing, consultado el 2026-11-13.
 
 Inventario completo y por qué existe 0004: [11_SCHEMA_INVENTORY.md](./11_SCHEMA_INVENTORY.md).
 
-| Orden | Archivo                                        | Contenido                                                                                                                                                                           |
-| ----- | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1     | `20261113000100_hf_core_tenancy.sql`           | 5 tablas: organizations, brands, memberships, platform_staff y audit_logs (append-only). Helpers RLS `SECURITY DEFINER` con `search_path=''`. 10 políticas                          |
-| 2     | `20261113000200_hf_sources_content.sql`        | 9 tablas: fuentes, cobertura, credenciales (inaccesibles para usuarios), contenido con dedupe, guardas de datos sintéticos y de cruce entre empresas, `ingestion_jobs`. 9 políticas |
-| 3     | `20261113000300_hf_intelligence_incidents.sql` | 12 tablas: análisis, alertas, incidentes (FSM en la base), eventos append-only, WhatsApp, reportes, presupuestos y uso de IA. 18 políticas                                          |
-| 4     | `20261113000400_hf_explicit_grants.sql`        | Sin objetos nuevos. Modelo de privilegios explícito: revoca todo y concede solo lo que exige cada política (grant ⇔ política). Determinista frente a los privilegios por defecto    |
+| Orden | Archivo                                        | Contenido                                                                                                                                                                                                  |
+| ----- | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | `20261113000100_hf_core_tenancy.sql`           | 5 tablas: organizations, brands, memberships, platform_staff y audit_logs (append-only). Helpers RLS `SECURITY DEFINER` con `search_path=''`. 10 políticas                                                 |
+| 2     | `20261113000200_hf_sources_content.sql`        | 9 tablas: fuentes, cobertura, credenciales (inaccesibles para usuarios), contenido con dedupe, guardas de datos sintéticos y de cruce entre empresas, `ingestion_jobs`. 9 políticas                        |
+| 3     | `20261113000300_hf_intelligence_incidents.sql` | 12 tablas: análisis, alertas, incidentes (FSM en la base), eventos append-only, WhatsApp, reportes, presupuestos y uso de IA. 18 políticas                                                                 |
+| 4     | `20261113000400_hf_explicit_grants.sql`        | Sin objetos nuevos. Modelo de privilegios explícito: revoca todo y concede solo lo que exige cada política (grant ⇔ política). Determinista frente a los privilegios por defecto                           |
+| 5     | `20261114000500_hf_sec_fixes_member_names.sql` | **Preparada, sin aplicar (Gate B).** Aditiva: HF-SEC-03 (trigger `incidents_refs_guard`), HF-SEC-04 (UPDATE de `organizations` solo en `name` y `timezone`) y `memberships.display_name`. Rollback probado |
 
 **Por qué hay una cuarta migración.** En `heyfoxy-qa`, una tabla creada por `postgres` solo concede TRUNCATE, REFERENCES, TRIGGER y MAINTAIN a `anon`, `authenticated` y `service_role`. Con solo 0001–0003, la app y el servidor se quedarían sin acceso, y `authenticated` conservaría TRUNCATE en 20 tablas. Detalle en 11 §8.
 
@@ -100,18 +101,42 @@ Inventario completo y por qué existe 0004: [11_SCHEMA_INVENTORY.md](./11_SCHEMA
 ### 4.1 Batería de aislamiento sin residuos
 
 - `python3 -I apps/heyfoxy-web/scripts/build-remote-test-sql.py > <tmp>/remote_isolation.sql`, y luego ejecutar el archivo en `heyfoxy-qa` con `execute_sql`.
-- **Resultado esperado:** error con el texto `HF_TESTS_PASSED 111`. La excepción final aborta la transacción a propósito, así que no queda ningún dato de prueba aunque el cliente use autocommit. Un fallo aparece como `ASSERT FAILED: …` o `HF_TESTS_INCOMPLETE n de 111`.
+- **Resultado esperado:** error con el texto `HF_TESTS_PASSED 122` (111 antes de 0005). La excepción final aborta la transacción a propósito, así que no queda ningún dato de prueba aunque el cliente use autocommit. Un fallo aparece como `ASSERT FAILED: …` o `HF_TESTS_INCOMPLETE n de 122`.
 - **Comprobación posterior:** 0 filas en las tablas de negocio y 0 funciones `t_*`.
 - **Validado en local (PG17):** 111/111 y cero residuos. Las secuencias de identidad sí pueden avanzar, lo cual no tiene efecto funcional.
 
-### 4.2 Usuarios y seed sintético
+### 4.2 Usuarios y seed sintético (Gate B, preparado el 2026-11-14)
 
-1. Álvaro crea en Auth 6 usuarios sin datos reales: `qa-owner`, `qa-admin`, `qa-analyst`, `qa-responder`, `qa-viewer` y `qa-owner-b`, todos `@heyfoxy.test`.
-   - Las contraseñas de prueba se guardan en su gestor; ni en el repositorio ni en el chat.
-2. Aplicar `apps/heyfoxy-web/supabase/seed/qa_seed.sql`. Es idempotente y falla si falta algún usuario.
-   - Crea 2 empresas sintéticas con `is_demo=true`, comentarios marcados `[SINTÉTICO]` y una fuente Metricool registrada como **no conectada y pausada**.
-   - Incluye una alerta crítica pendiente de revisión y un destinatario WhatsApp con un número ficticio.
-3. **Validado en local:** carga dos veces sin duplicar. El viewer de la clínica solo ve su empresa (2 alertas, 0 destinatarios WhatsApp) y el owner del banco solo la suya (1 alerta).
+Detalle completo, matriz de usuarios y entrega de credenciales: [12_QA_USERS_AND_ACCESS.md](./12_QA_USERS_AND_ACCESS.md).
+
+**Requisitos previos:**
+
+- Registro público **desactivado** en Auth (hoy está activado; HF-SEC-05). Se verifica con `/auth/v1/settings`.
+- Migración 0005 aplicada.
+
+**Pasos, cada uno con el GO de Gate B:**
+
+1. Aplicar `20261114000500_hf_sec_fixes_member_names.sql` siguiendo el protocolo de §3: ref, historial y verificación de que el contenido almacenado es byte a byte idéntico.
+   - Contrato **36/36**.
+   - Batería remota **`HF_TESTS_PASSED 122`**.
+2. `qa_users.py create-sql` en el Mac de Álvaro: contraseñas solo en el llavero, SQL solo con hashes. Después VULCAN aplica ese SQL.
+3. `qa_users.py verify`: 6 × `OK`.
+4. Aplicar `apps/heyfoxy-web/supabase/seed/qa_seed.sql`. Es idempotente y falla si falta algún usuario.
+
+**Validado en local:**
+
+- Alta de usuarios sobre una réplica de `auth`.
+- Seed ejecutado dos veces sin duplicados y sin filas no sintéticas.
+- Visibilidad por usuario:
+
+  | Usuario              | Comentarios | Alertas | Incidentes | Teléfonos de WhatsApp |
+  | -------------------- | ----------- | ------- | ---------- | --------------------- |
+  | Viewer de la clínica | 14          | 5       | 2          | 0                     |
+  | Owner del banco      | 6           | 2       | 1          | Solo los del banco    |
+
+- La limpieza deja 0 filas y vuelve a activar las guardas append-only (contrato 36/36).
+
+**Rollback de 0005:** `apps/heyfoxy-web/supabase/rollback/20261114000500_hf_sec_fixes_member_names.down.sql`, con GO. Probado en local: la huella de privilegios vuelve a ser idéntica a la de 0004 (`28d1c0af…`) y pasan el contrato 31/31 y la batería 111/111 de 0004.
 
 ### 4.3 Matriz funcional en Preview, tras el primer Preview autorizado
 

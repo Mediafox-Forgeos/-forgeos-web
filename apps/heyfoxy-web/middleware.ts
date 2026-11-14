@@ -6,6 +6,7 @@ export async function middleware(req: NextRequest) {
   const res = NextResponse.next({ request: req });
   const isPublic =
     req.nextUrl.pathname.startsWith('/login') ||
+    req.nextUrl.pathname.startsWith('/auth/') ||
     req.nextUrl.pathname.startsWith('/api/health');
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;

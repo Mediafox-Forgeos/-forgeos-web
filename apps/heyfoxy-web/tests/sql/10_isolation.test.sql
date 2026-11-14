@@ -139,6 +139,17 @@ select public.t_expect_error($q$insert into public.memberships (organization_id,
                               values ('bbbbbbbb-0000-0000-0000-000000000000','a0000000-0000-0000-0000-000000000001','owner')$q$,
                              'owner A no puede auto-agregarse a la organización B');
 select public.t_expect_error($q$update public.audit_logs set action = 'x'$q$, 'audit_logs es append-only');
+-- HF-SEC-04: owner edita presentación, no campos administrativos.
+select public.t_assert(public.t_affected($q$update public.organizations set name = 'Demo Org A' where id = 'aaaaaaaa-0000-0000-0000-000000000000'$q$) = 1,
+                       'HF-SEC-04: owner A puede renombrar su organización');
+select public.t_expect_error($q$update public.organizations set plan = 'enterprise' where id = 'aaaaaaaa-0000-0000-0000-000000000000'$q$,
+                             'HF-SEC-04: owner no puede cambiar plan');
+select public.t_expect_error($q$update public.organizations set is_demo = false where id = 'aaaaaaaa-0000-0000-0000-000000000000'$q$,
+                             'HF-SEC-04: owner no puede cambiar is_demo');
+select public.t_expect_error($q$update public.organizations set slug = 'otro-slug' where id = 'aaaaaaaa-0000-0000-0000-000000000000'$q$,
+                             'HF-SEC-04: owner no puede cambiar slug');
+select public.t_expect_error($q$update public.organizations set retention_days = 1095 where id = 'aaaaaaaa-0000-0000-0000-000000000000'$q$,
+                             'HF-SEC-04: owner no puede cambiar retention_days');
 reset role;
 
 -- --------------------------------------------------------------------------
@@ -187,6 +198,8 @@ select set_config('request.jwt.claim.sub', 'a0000000-0000-0000-0000-000000000004
 set role authenticated;
 select public.t_expect_error($q$update public.memberships set role = 'owner' where user_id = 'a0000000-0000-0000-0000-000000000004'$q$,
                              'admin no puede auto-promoverse a owner');
+select public.t_expect_error($q$update public.organizations set plan = 'enterprise' where id = 'aaaaaaaa-0000-0000-0000-000000000000'$q$,
+                             'HF-SEC-04: admin no puede cambiar plan');
 reset role;
 
 -- analyst: revisión humana de alerta crítica
@@ -206,6 +219,19 @@ set role authenticated;
 select public.t_expect_error($q$insert into public.incidents (organization_id, title, severity, opened_by)
                               values ('bbbbbbbb-0000-0000-0000-000000000000','x','high','a0000000-0000-0000-0000-000000000003')$q$,
                              'responder A no puede abrir incidentes en B');
+-- HF-SEC-03: referencias del incidente dentro de la misma organización.
+select public.t_expect_error($q$insert into public.incidents (organization_id, alert_id, title, severity, opened_by)
+                              values ('aaaaaaaa-0000-0000-0000-000000000000','bbbbbbbb-0000-0000-0000-0000000000a1','x','high','a0000000-0000-0000-0000-000000000003')$q$,
+                             'HF-SEC-03: incidente de A no puede enlazar una alerta de B');
+select public.t_expect_error($q$insert into public.incidents (organization_id, title, severity, opened_by, owner_user_id)
+                              values ('aaaaaaaa-0000-0000-0000-000000000000','x','high','a0000000-0000-0000-0000-000000000003','b0000000-0000-0000-0000-000000000001')$q$,
+                             'HF-SEC-03: responsable en el alta no puede ser de otra organización');
+select public.t_expect_error($q$insert into public.incidents (organization_id, title, severity, opened_by, owner_user_id)
+                              values ('aaaaaaaa-0000-0000-0000-000000000000','x','high','a0000000-0000-0000-0000-000000000003','a0000000-0000-0000-0000-000000000002')$q$,
+                             'HF-SEC-03: responsable en el alta no puede ser un viewer');
+select public.t_assert(public.t_affected($q$insert into public.incidents (organization_id, alert_id, title, severity, opened_by, owner_user_id)
+                              values ('aaaaaaaa-0000-0000-0000-000000000000','aaaaaaaa-0000-0000-0000-0000000000a1','Incidente desde alerta A','high','a0000000-0000-0000-0000-000000000003','a0000000-0000-0000-0000-000000000003')$q$) = 1,
+                       'HF-SEC-03: incidente de A enlazado a su propia alerta y con responsable válido');
 select public.t_expect_error($q$update public.incidents set status = 'resolved' where id = 'aaaaaaaa-0000-0000-0000-0000000000e1'$q$,
                              'FSM: open -> resolved no permitido');
 select public.t_assert(public.t_affected($q$update public.incidents set status = 'acknowledged', owner_user_id = 'a0000000-0000-0000-0000-000000000003' where id = 'aaaaaaaa-0000-0000-0000-0000000000e1'$q$) = 1,
@@ -238,6 +264,8 @@ reset role;
 select public.t_expect_error($q$insert into public.social_comments (organization_id, data_source_id, platform, external_id, body, published_at, content_hash, is_synthetic)
                               values ('aaaaaaaa-0000-0000-0000-000000000000','bbbbbbbb-0000-0000-0000-0000000000d1','instagram','x','x',now(),'x',true)$q$,
                              'servidor: referencia cruzada org A + fuente B rechazada');
+select public.t_expect_error($q$update public.incidents set alert_id = 'bbbbbbbb-0000-0000-0000-0000000000a1' where id = 'aaaaaaaa-0000-0000-0000-0000000000e1'$q$,
+                             'HF-SEC-03: ni el servidor puede re-enlazar un incidente a una alerta de otra organización');
 select public.t_expect_error($q$insert into public.social_comments (organization_id, data_source_id, platform, external_id, body, published_at, content_hash, is_synthetic)
                               values ('aaaaaaaa-0000-0000-0000-000000000000','aaaaaaaa-0000-0000-0000-0000000000d1','instagram','x2','x',now(),'x',false)$q$,
                              'proveedor demo no puede escribir datos marcados como reales');
