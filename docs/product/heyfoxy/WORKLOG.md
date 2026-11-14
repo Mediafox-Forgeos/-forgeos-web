@@ -112,3 +112,29 @@ Ejecutado, sin contratar, migrar ni desplegar:
     - re-ejecutados typecheck, lint, 54/54 unitarias y smoke 32/32.
 - **Riesgo fuera de alcance (solo reportado):** `apps/forgeos-web/next.config.ts` usa el mismo `outputFileTracingRoot: process.cwd()`.
 - El Preview `dpl_9vfWbpvh…` se conserva, protegido. El siguiente Preview requiere un GO nuevo ligado al SHA de la corrección.
+
+## 2026-11-14 04:38 UTC — Preview n.º 2 (GO de Álvaro para `f1e5205`)
+
+- **Antes de desplegar:** `deploy-preview.sh check`, invocado como `scripts/…` desde la app, mostró `FAIL no se encontró apps/heyfoxy-web` y aun así terminó en «CHECK OK».
+  - **Causa:** el script resolvía su ruta de forma relativa y el fallo ocurría dentro de un subshell (HF-OPS-07).
+  - No se llegó a Vercel. Invocado con ruta absoluta, el preflight y el dry-run quedaron limpios.
+  - Se desplegó el commit autorizado sin modificarlo. El script se corrigió después, en un commit separado.
+- `HF_PREVIEW_GO=f1e5205 deploy-preview.sh deploy` → **`dpl_BZLKHiH23JYLDTVnJ5rwYeuFDgAU`**, `https://heyfoxy-ckhth0z0b-mediafox.vercel.app`.
+  - Target `preview` y SHA `f1e5205`.
+  - Sin alias de Production; Production sigue en `dpl_CBLq2U37…`.
+  - Acceso anónimo → 302 a SSO.
+- **Prueba autenticada en Chrome** (sesión de Vercel del usuario, solo lectura, sin bypass ni enlaces compartidos):
+  - `/api/health` → 200 con `sha f1e5205`, `dataMode demo`, `whatsappMode simulate` y conectores en `false`. Cabeceras XFO DENY y noindex, sin X-Powered-By.
+  - `/login` → 200, con el selector de personas DEMO y el banner de datos ficticios.
+  - Sin sesión, las rutas protegidas redirigen.
+  - **Error 500 resuelto.**
+- **Smoke en el Preview:** 20/20.
+  - Las 10 vistas del owner responden 200, con banner DEMO y aviso de cobertura.
+  - Aislamiento: el banco con la cookie de la clínica forjada solo ve Banco Horizonte.
+  - Roles: viewer y analyst sin destinatarios WhatsApp; el owner los ve enmascarados.
+  - Un usuario forjado redirige.
+- **Logs:** sin errores de runtime en los últimos 30 min.
+- **MOVOS y MediaFOX OS sin cambios:**
+  - último despliegue de `movos-web`: `dpl_FFbCoBAK…` (agosto);
+  - último de `mediafox-os`: `dpl_4jZVMJj5…` (653a405), ambos anteriores a esta sesión.
+- **Supabase:** solo existe la organización `alipise`. La organización «Hey Foxy» y `heyfoxy-qa` siguen pendientes de Álvaro.

@@ -27,6 +27,10 @@ readonly PRODUCTION_ALIASES="heyfoxy-web.vercel.app heyfoxy-web-mediafox.vercel.
 # Proyectos Supabase de MediaFOX OS: Hey Foxy nunca puede apuntar a ellos.
 readonly FORBIDDEN_SUPABASE_REFS="srsllmqeljhodttqefih wzamylhiqvosbrlhzssp"
 
+# Ruta absoluta del script, resuelta UNA vez antes de cualquier `cd` (HF-OPS-07).
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIR
+
 export VERCEL_ORG_ID="$TEAM_ID"
 export VERCEL_PROJECT_ID="$PROJECT_ID"
 export VERCEL_TELEMETRY_DISABLED=1
@@ -45,7 +49,7 @@ jget() { python3 -I -c "import json,sys; d=json.load(sys.stdin); print($1)"; }
 
 repo_root() {
   local here
-  here="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+  here="$(cd "$SCRIPT_DIR/../../.." && pwd)"
   [[ -f "$here/$ROOT_DIRECTORY/package.json" ]] || fail "no se encontró $ROOT_DIRECTORY desde el script"
   echo "$here"
 }
@@ -166,7 +170,8 @@ case "$cmd" in
     [[ $# -eq 1 ]] || fail "check no acepta argumentos"
     preflight >/dev/null
     echo "Dry run (sin subir archivos):"
-    (cd "$(repo_root)" && vercel deploy --dry --environment preview --project "$PROJECT_ID" --scope "$TEAM_SLUG" --yes >/dev/null 2>&1) \
+    root="$(repo_root)" || exit 1
+    (cd "$root" && vercel deploy --dry --environment preview --project "$PROJECT_ID" --scope "$TEAM_SLUG" --yes >/dev/null 2>&1) \
       || fail "vercel deploy --dry falló"
     ok "vercel deploy --dry --environment preview"
     echo "CHECK OK — listo para solicitar autorización (HF_PREVIEW_GO=<sha>)."
@@ -181,7 +186,8 @@ case "$cmd" in
     [[ -n "${HF_PREVIEW_GO:-}" && "$sha" == "${HF_PREVIEW_GO}"* && ${#HF_PREVIEW_GO} -ge 7 ]] \
       || fail "falta autorización: HF_PREVIEW_GO debe ser el SHA (≥7) de HEAD ${sha:0:7}"
     ok "autorización ligada a ${sha:0:7}"
-    out="$(cd "$(repo_root)" && vercel deploy --environment preview --project "$PROJECT_ID" --scope "$TEAM_SLUG" \
+    root="$(repo_root)" || exit 1
+    out="$(cd "$root" && vercel deploy --environment preview --project "$PROJECT_ID" --scope "$TEAM_SLUG" \
       --yes --json --build-env "HF_BUILD_SHA=$sha" --env "HF_BUILD_SHA=$sha" 2>/dev/null)" || fail "vercel deploy falló"
     dep_url="$(python3 -I -c "import json,sys; d=json.load(sys.stdin); d=d.get('deployment',d); print(d.get('url'))" <<<"$out")"
     [[ -n "$dep_url" && "$dep_url" != "None" ]] || fail "no se obtuvo la URL del despliegue"
