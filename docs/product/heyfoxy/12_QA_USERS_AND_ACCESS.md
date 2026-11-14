@@ -1,11 +1,11 @@
 # 12 — Usuarios QA, credenciales privadas y acceso al Preview
 
-| Propiedad   | Valor                                                                                                           |
-| ----------- | --------------------------------------------------------------------------------------------------------------- |
-| Fecha       | 2026-11-14                                                                                                      |
-| Entorno     | Solo `heyfoxy-qa` (`admbpgqtgmaaofcgajzh`) y Preview protegido de `heyfoxy-web`                                 |
-| Estado      | **Preparado y probado en local. Sin usuarios en QA.** La creación requiere el GO de Gate B                      |
-| Contraseñas | **Nunca** en este documento, Git, logs, capturas ni chat. Viven solo en el llavero (Keychain) del Mac de Álvaro |
+| Propiedad   | Valor                                                                                                                                                       |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Fecha       | 2026-11-14                                                                                                                                                  |
+| Entorno     | Solo `heyfoxy-qa` (`admbpgqtgmaaofcgajzh`) y Preview protegido de `heyfoxy-web`                                                                             |
+| Estado      | **Usuarios creados en QA el 2026-11-14 (Gate B).** Las contraseñas están solo en el llavero de Álvaro. Login verificado contra la API de Auth: 6/6 HTTP 200 |
+| Contraseñas | **Nunca** en este documento, Git, logs, capturas ni chat. Viven solo en el llavero (Keychain) del Mac de Álvaro                                             |
 
 ## 1. Matriz de usuarios (sin contraseñas)
 
@@ -20,7 +20,7 @@ Todos son ficticios. Los correos usan `.test`, un dominio reservado (RFC 2606) q
 | 5   | `qa-viewer@heyfoxy.test`    | Mateo Silva (QA viewer)     | Clínica Aurora                 | viewer    | Solo lectura: sin acciones, sin teléfonos de WhatsApp, sin uso ni auditoría                                                        |
 | 6   | `qa-owner-b@heyfoxy.test`   | Sofía Lara (QA owner banco) | Banco Horizonte (QA sintético) | owner     | **Aislamiento:** no debe ver nada de Clínica Aurora, ni por la UI, ni por URL directa, ni manipulando la cookie `hf_org`           |
 
-**Estado de autenticación:** pendiente. Tras el GO de Gate B, el comando `verify` (§3.4) comprobará el inicio de sesión real de los 6. La fase se cierra solo cuando Álvaro entra personalmente (Gate D).
+**Estado de autenticación:** **6/6 OK** con `qa_users.py verify` contra la API de Auth de `heyfoxy-qa` (2026-11-14). La fase se cierra solo cuando Álvaro entra personalmente por la UI del Preview (Gates C y D).
 
 ### Permisos efectivos (base de datos y UI)
 

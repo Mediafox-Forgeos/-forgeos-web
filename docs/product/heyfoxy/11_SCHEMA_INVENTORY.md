@@ -1,11 +1,11 @@
 # 11 — Inventario definitivo del esquema de Hey Foxy (migraciones 0001–0004)
 
-| Propiedad    | Valor                                                                                                                                                       |
-| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Fecha        | 2026-11-14                                                                                                                                                  |
-| Fuente       | `apps/heyfoxy-web/supabase/migrations/*.sql`, aplicadas en PostgreSQL 17.11 y 16 locales y extraídas del catálogo (`pg_catalog`)                            |
-| Contrato     | `apps/heyfoxy-web/tests/sql/20_schema_contract.check.sql` (31 controles; solo lectura). Lo ejecuta `scripts/test-db.sh`                                     |
-| Estado en QA | **Aplicado el 2026-11-14** (commit `020e3a7`). Contrato 31/31, huella de privilegios idéntica a la local (`28d1c0af…`), batería remota 111/111 sin residuos |
+| Propiedad    | Valor                                                                                                                                         |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Fecha        | 2026-11-14                                                                                                                                    |
+| Fuente       | `apps/heyfoxy-web/supabase/migrations/*.sql`, aplicadas en PostgreSQL 17.11 y 16 locales y extraídas del catálogo (`pg_catalog`)              |
+| Contrato     | `apps/heyfoxy-web/tests/sql/20_schema_contract.check.sql` (31 controles; solo lectura). Lo ejecuta `scripts/test-db.sh`                       |
+| Estado en QA | **0001–0005 aplicadas** (0005 el 2026-11-14, versión `20261114064831`, md5 `7e2684d6…`). Contrato 36/36 y batería remota 122/122 sin residuos |
 
 ## 1. Resolución de la discrepancia «28 tablas»
 

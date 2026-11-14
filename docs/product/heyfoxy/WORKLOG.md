@@ -222,3 +222,46 @@ Ejecutado, sin contratar, migrar ni desplegar:
   - Probado con un llavero temporal, que después se eliminó.
 - **Documentación:** nuevo [12_QA_USERS_AND_ACCESS.md](./12_QA_USERS_AND_ACCESS.md); procedimiento 10 §3/§4.2 e inventario 11 §9 actualizados.
 - **Sin cambios** en `heyfoxy-qa`, Vercel, MediaFOX OS ni MOVOS.
+
+## 2026-11-14 06:48–07:05 UTC — Gate B ejecutado en `heyfoxy-qa` (GO de Álvaro)
+
+- **Verificación previa (solo lectura):**
+  - ref `admbpgqtgmaaofcgajzh`;
+  - `/auth/v1/settings` devuelve `disable_signup: true` y `mailer_autoconfirm: false`;
+  - el advisor ya no reporta contraseñas filtradas (protección activa);
+  - 4 migraciones, 0 usuarios y 0 datos.
+  - Longitud mínima, requisitos de caracteres, cambio seguro y contraseña actual: no son legibles por la API pública ni por el MCP; se toma como evidencia la confirmación de Álvaro.
+- **0005** (`20261114000500_hf_sec_fixes_member_names`, versión `20261114064831`): byte a byte idéntica a `867a3aa` (md5 `7e2684d6…`). Contrato **36/36** y batería remota **`HF_TESTS_PASSED 122`**, con 0 residuos.
+- **Usuarios:**
+  - `qa_users.py create-sql` guardó 6 contraseñas aleatorias de 24 caracteres **solo** en el llavero de inicio de sesión de Álvaro (servicio `Hey Foxy QA (admbpgqtgmaaofcgajzh)`).
+  - El SQL de alta solo llevaba hashes bcrypt; se aplicó y se borró del scratchpad.
+  - `verify` contra la API de Auth: **6/6 OK (HTTP 200)**.
+  - Ninguna contraseña apareció en el chat, Git ni logs.
+- **Seed:** dos ejecuciones con conteos idénticos:
+
+  | Elemento                         | Cantidad |
+  | -------------------------------- | -------- |
+  | Organizaciones                   | 2        |
+  | Miembros                         | 6        |
+  | Comentarios y análisis           | 20 + 20  |
+  | Menciones                        | 5        |
+  | Publicaciones                    | 5        |
+  | Alertas                          | 7        |
+  | Incidentes / eventos             | 3 / 15   |
+  | Reportes diarios                 | 5        |
+  | Destinatarios WhatsApp ficticios | 3        |
+
+  Verificado: 0 filas no sintéticas, 0 textos sin `[SINTÉTICO]`, 0 usuarios fuera de `@heyfoxy.test`, 0 teléfonos fuera del rango ficticio, Metricool no conectado y 0 envíos no simulados.
+
+- **Permisos efectivos por usuario real** (RLS con la identidad de cada uno, en una transacción revertida):
+
+  | Usuario                    | Organización visible | Comentarios | Alertas | Incidentes | WhatsApp | Auditoría | Uso |
+  | -------------------------- | -------------------- | ----------- | ------- | ---------- | -------- | --------- | --- |
+  | owner, admin               | Clínica Aurora       | 14          | 5       | 2          | 2        | ✓         | ✓   |
+  | analyst, responder, viewer | Clínica Aurora       | 14          | 5       | 2          | —        | —         | —   |
+  | owner-b                    | Solo Banco Horizonte | 6           | 2       | 1          | 1        | ✓         | ✓   |
+
+  Las credenciales de integraciones quedan denegadas para los 6.
+
+- **Advisors:** 0 ERROR; solo los WARN e INFO ya documentados.
+- **Sin cambios** en Site URL ni Redirect URLs (Gate C), Vercel, Production, Metricool, WhatsApp, MediaFOX OS ni MOVOS.

@@ -1,10 +1,10 @@
 # 10 — Supabase QA de Hey Foxy: procedimiento, presupuesto, migraciones y pruebas
 
-| Propiedad | Valor                                                                                                                                                                                       |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Decisión  | Opción A (Álvaro, 2026-11-13): organización independiente «Hey Foxy» en plan Pro, con un solo proyecto QA                                                                                   |
-| Estado    | **Migrado el 2026-11-14** (0001–0004, commit `020e3a7`) en `heyfoxy-qa` (`admbpgqtgmaaofcgajzh`, org «Hey Foxy» Pro). Criterios 1–6 de §3 cumplidos; §4.2 (usuarios y seed) pendiente de GO |
-| Alcance   | Solo QA. Production de Hey Foxy se decide en Gate 3                                                                                                                                         |
+| Propiedad | Valor                                                                                                                                                                                                   |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Decisión  | Opción A (Álvaro, 2026-11-13): organización independiente «Hey Foxy» en plan Pro, con un solo proyecto QA                                                                                               |
+| Estado    | **Gate B completado el 2026-11-14:** 0001–0005 aplicadas (0005 desde `867a3aa`), 6 usuarios QA verificados contra la API de Auth, seed sintético cargado. Site URL y Redirect URLs pendientes de Gate C |
+| Alcance   | Solo QA. Production de Hey Foxy se decide en Gate 3                                                                                                                                                     |
 
 ## 1. Presupuesto final
 
