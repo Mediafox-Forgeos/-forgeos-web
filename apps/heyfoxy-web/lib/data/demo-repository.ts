@@ -17,14 +17,19 @@ import type {
   Analysis,
   ConversationItem,
   CoverageRow,
+  DailyReport,
   DataSource,
   Incident,
   IncidentStatus,
   Platform,
+  Post,
 } from '@/lib/types';
+import { PLATFORM_LABEL } from '@/lib/format';
+import { sentimentBreakdown, topTopics } from '@/lib/insights';
 import type {
   ItemFilters,
   Membership,
+  PostFilters,
   Repository,
   UsageSummary,
   Viewer,
@@ -42,6 +47,8 @@ interface OrgStore {
   coverage: CoverageRow[];
   recipients: WaRecipient[];
   dispatches: WaDispatch[];
+  posts: Post[];
+  reports: DailyReport[];
   cacheHits: number;
   aiItems: number;
 }
@@ -63,6 +70,8 @@ async function buildStore(): Promise<Map<string, OrgStore>> {
       coverage: [],
       recipients: [],
       dispatches: [],
+      posts: [],
+      reports: [],
       cacheHits: 0,
       aiItems: 0,
     };
@@ -107,6 +116,63 @@ async function buildStore(): Promise<Map<string, OrgStore>> {
         permalink: null,
         isSynthetic: true,
         analysis,
+      });
+    }
+
+    // Publicaciones ficticias: una por red, con los comentarios de esa red.
+    for (const platform of [...new Set(st.items.map((i) => i.platform))]) {
+      const own = st.items.filter((i) => i.platform === platform);
+      const id = `${org.slug}-post-${platform}`;
+      for (const i of own) i.postId = id;
+      const n = own.length;
+      st.posts.push({
+        id,
+        organizationId: org.id,
+        platform,
+        accountHandle: `@${org.slug}`,
+        body: `Publicación de demostración de ${org.brand} en ${PLATFORM_LABEL[platform]}`,
+        permalink: null,
+        publishedAt: new Date(now - 4 * 86400_000).toISOString(),
+        isSynthetic: true,
+        metrics: [
+          {
+            capturedAt: new Date(now - 3600_000).toISOString(),
+            likes: 60 * n,
+            comments: 14 * n,
+            shares: 3 * n,
+            views: 900 * n,
+            reach: 700 * n,
+          },
+          {
+            capturedAt: new Date(now - 26 * 3600_000).toISOString(),
+            likes: 25 * n,
+            comments: 5 * n,
+            shares: n,
+            views: 400 * n,
+            reach: 300 * n,
+          },
+        ],
+      });
+    }
+    // Resúmenes diarios ficticios calculados con las mismas funciones de lib/insights.
+    for (const daysAgo of [0, 1, 2]) {
+      const date = new Date(now - daysAgo * 86400_000)
+        .toISOString()
+        .slice(0, 10);
+      const day = st.items.filter((i) => i.publishedAt.slice(0, 10) === date);
+      const b = sentimentBreakdown(day);
+      const topic = topTopics(day, 1)[0]?.[0];
+      st.reports.push({
+        id: `${org.slug}-report-${date}`,
+        organizationId: org.id,
+        reportDate: date,
+        summary: b.total
+          ? `${b.total} conversaciones analizadas, ${b.negativePct} % negativas.${topic ? ` Tema principal: ${topic}.` : ''}`
+          : 'Sin conversaciones en el periodo.',
+        coverageNote:
+          'Cobertura parcial: solo datos ficticios de demostración.',
+        metrics: { items: b.total, negative_pct: b.negativePct },
+        isSynthetic: true,
       });
     }
 
@@ -438,6 +504,7 @@ export class DemoRepository implements Repository {
       .filter((i) => !f.severity || i.analysis?.severity === f.severity)
       .filter((i) => !f.layer || i.analysis?.layer === f.layer)
       .filter((i) => !f.reviewPending || i.analysis?.reviewStatus === 'pending')
+      .filter((i) => !f.postId || i.postId === f.postId)
       .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))
       .slice(0, f.limit ?? 200);
   }
@@ -612,6 +679,19 @@ export class DemoRepository implements Repository {
   }
   async waDispatches(orgId: string) {
     return (await store(orgId)).dispatches;
+  }
+  async posts(orgId: string, f: PostFilters = {}) {
+    const q = f.q?.toLowerCase().trim();
+    return (await store(orgId)).posts
+      .filter((p) => !f.platform || p.platform === f.platform)
+      .filter((p) => !q || (p.body ?? '').toLowerCase().includes(q))
+      .slice(0, f.limit ?? 100);
+  }
+  async post(orgId: string, id: string) {
+    return (await store(orgId)).posts.find((p) => p.id === id) ?? null;
+  }
+  async reports(orgId: string) {
+    return (await store(orgId)).reports;
   }
 }
 

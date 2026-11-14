@@ -152,11 +152,20 @@ Detalle completo, matriz de usuarios y entrega de credenciales: [12_QA_USERS_AND
 
 ## 5. Variables por entorno (Vercel `heyfoxy-web`)
 
-| Variable                                              | Preview                                                                                      | Production               |
-| ----------------------------------------------------- | -------------------------------------------------------------------------------------------- | ------------------------ |
-| `NEXT_PUBLIC_SUPABASE_URL`                            | URL de `heyfoxy-qa` (tipo `plain`, para que el script verifique que no apunta a MediaFOX OS) | **Ninguna** hasta Gate 3 |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`                | Clave publicable de `heyfoxy-qa` (pública por diseño; RLS protege los datos)                 | Ninguna                  |
-| `HF_WHATSAPP_MODE`                                    | `simulate` (también es el valor por defecto)                                                 | Ninguna                  |
-| Service role, `HF_CREDENTIALS_KEK`, Metricool, OpenAI | **No se cargan en Gate 2**                                                                   | Ninguna                  |
+| Variable                                              | Preview                                                                                                  | Production               |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------ |
+| `NEXT_PUBLIC_SUPABASE_URL`                            | **Configurada el 2026-11-14 (Gate C):** URL de `heyfoxy-qa`, tipo `plain`, target solo `preview`         | **Ninguna** hasta Gate 3 |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`                | **Configurada el 2026-11-14:** clave publicable de `heyfoxy-qa`, tipo `encrypted`, target solo `preview` | Ninguna                  |
+| `HF_WHATSAPP_MODE`                                    | `simulate` (también es el valor por defecto)                                                             | Ninguna                  |
+| Service role, `HF_CREDENTIALS_KEK`, Metricool, OpenAI | **No se cargan en Gate 2**                                                                               | Ninguna                  |
 
 Los secretos de Hey Foxy y de MediaFOX OS nunca se comparten: son proyectos de Supabase y de Vercel distintos y no se reutiliza ninguna clave.
+
+## 6. URLs de Auth en Supabase (aprobadas por Álvaro, Gate C)
+
+```
+Site URL:      https://heyfoxy-qa-mediafox.vercel.app
+Redirect URL:  https://heyfoxy-qa-mediafox.vercel.app/auth/callback
+```
+
+La URL exacta, sin comodín, es suficiente. Desde el código pendiente de desplegar, la app pide la recuperación con `redirectTo = <origen>/auth/callback`, **sin query**, y el callback lleva por defecto a `/login/nueva-clave`. El alias apunta solo al Preview de QA (`target=preview`) y está protegido.

@@ -73,7 +73,8 @@ export async function requestPasswordReset(
   if (!origin) return { error: 'No fue posible procesar la solicitud' };
   const db = await supabaseServer();
   await db.auth.resetPasswordForEmail(email.data, {
-    redirectTo: `${origin}/auth/callback?next=/login/nueva-clave`,
+    // URL exacta, sin query: coincide literalmente con la Redirect URL permitida en Supabase.
+    redirectTo: `${origin}/auth/callback`,
   });
   return { done: true };
 }

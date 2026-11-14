@@ -128,8 +128,33 @@ El flujo PKCE está implementado y probado en local hasta donde es posible sin c
 
 **Para Gate 2** el restablecimiento se hace con `qa_users.py rotate` (§3.3). La prueba de correo de punta a punta requiere un SMTP propio y queda registrada como HF-AUTH-01.
 
-## 6. Cómo ingresar (tras Gates B y C)
+## 6. Cómo ingresar
 
-1. Abrir la URL del Preview. Vercel pide iniciar sesión con la cuenta de Vercel de Álvaro, porque el Preview está protegido.
-2. En `/login`, introducir el correo QA y pegar la contraseña copiada del llavero.
+1. Abrir **https://heyfoxy-qa-mediafox.vercel.app** (alias estable del Preview de QA). Vercel pide iniciar sesión con la cuenta de Vercel de Álvaro, porque el Preview está protegido y no hay bypass.
+2. En `/login`, introducir el correo QA y pegar la contraseña copiada del llavero (§3.2).
 3. Cerrar sesión desde «Salir» (barra lateral) y repetir con otro perfil. Para comparar perfiles en paralelo, usar una ventana privada.
+
+> El Preview n.º 3 (`dpl_FYjif3NN…`, `6009c9c`) **no** incluye todavía las vistas Publicaciones y Reportes ni el callback exacto. Requieren el Preview n.º 4, con su propio GO.
+
+## 7. Guion de QA funcional (Gate D, navegador asistido)
+
+Álvaro inicia sesión. VULCAN recorre las vistas en Chrome con la sesión de Vercel de Álvaro: **no** lee contraseñas, **no** usa `vercel curl` ni bypass.
+
+| #   | Perfil    | Pasos                                                                                                                                           | Resultado esperado                                                                                                  |
+| --- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| 1   | Todos     | Login, navegar, «Salir» y volver a `/`                                                                                                          | Entra a su organización; tras salir, `/` redirige a `/login`                                                        |
+| 2   | Todos     | Las 12 vistas: Resumen, Alertas, Revisión, Incidentes, Temas, Publicaciones, Reportes, Conversaciones, Cobertura, WhatsApp, Uso y Configuración | 200 sin errores; banda de datos sintéticos; aviso de cobertura parcial                                              |
+| 3   | Todos     | Publicaciones: filtrar por red y por «Más interacciones», abrir el detalle                                                                      | Métricas, historial y comentarios asociados; «Actividad inusual» en la publicación de la app                        |
+| 4   | Todos     | Reportes                                                                                                                                        | Indicadores con comparación semanal, tendencia de 14 días, temas, cobertura y 3 resúmenes diarios (2 para el banco) |
+| 5   | analyst   | Revisar la alerta crítica «Posible noticia sobre infección»                                                                                     | Confirmada con usuario y fecha                                                                                      |
+| 6   | responder | Abrir un incidente desde la alerta confirmada, asignarse, `acknowledged → investigating`, añadir una nota                                       | Historial con actor y eventos                                                                                       |
+| 7   | responder | Intentar cerrar sin resumen; después cerrar con resumen                                                                                         | El primer intento se rechaza; el segundo cierra con `closed_at`                                                     |
+| 8   | viewer    | Intentar revisar una alerta o abrir un incidente                                                                                                | Sin botones de acción; WhatsApp sin teléfonos                                                                       |
+| 9   | admin     | Configuración                                                                                                                                   | No puede crear owners                                                                                               |
+| 10  | owner-b   | URL directa a un incidente o una publicación de la clínica; cookie `hf_org` forjada                                                             | 404 y solo Banco Horizonte                                                                                          |
+| 11  | Todos     | Consola del navegador y logs de runtime del Preview                                                                                             | Sin errores                                                                                                         |
+
+Verificado ya **sin** navegador:
+
+- Los datos que consumen las vistas nuevas, con la identidad de cada usuario QA (RLS, transacción revertida): la clínica ve 3 publicaciones, 4 mediciones, 14 comentarios enlazados y 3 reportes; el banco, 2, 2, 6 y 2; **0 filas** de la otra organización.
+- En modo demo, el smoke HTTP pasa 40/40, incluido el aislamiento por URL directa.

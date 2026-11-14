@@ -7,7 +7,9 @@ import {
   Activity,
   BellRing,
   ClipboardCheck,
+  FileBarChart,
   Gauge,
+  Megaphone,
   MessageSquareText,
   MessagesSquare,
   Radar,
@@ -25,6 +27,8 @@ const GROUPS = [
       { href: '/revision', label: 'Revisión humana', icon: ClipboardCheck },
       { href: '/incidentes', label: 'Incidentes', icon: ShieldAlert },
       { href: '/temas', label: 'Temas', icon: Tags },
+      { href: '/publicaciones', label: 'Publicaciones', icon: Megaphone },
+      { href: '/reportes', label: 'Reportes', icon: FileBarChart },
     ],
   },
   {

@@ -42,7 +42,7 @@ check "usuario inexistente → 307" '[[ "$(get / "hf_demo_user=demo-user-forged"
 
 # Command Center: todas las vistas responden para el owner
 OWNER="hf_demo_user=demo-user-owner; hf_org=$ORG_A"
-for p in / /conversaciones /alertas /revision /incidentes /temas /cobertura /whatsapp /uso /configuracion; do
+for p in / /conversaciones /alertas /revision /incidentes /temas /publicaciones /reportes /cobertura /whatsapp /uso /configuracion; do
   check "owner $p → 200" '[[ "$(get "$p" "$OWNER")" == "200" ]]'
 done
 check "banner DEMO visible" '[[ "$(body / "$OWNER")" == *"DEMO"* ]]'
@@ -55,6 +55,14 @@ check "banco con cookie forjada ve Banco Horizonte" '[[ "$BB" == *"Banco Horizon
 check "banco con cookie forjada NO ve Clínica Aurora" '[[ "$BB" != *"Clínica Aurora"* ]]'
 BA="$(body /alertas "$BANK")"
 check "alertas del banco sin datos de la clínica" '[[ "$BA" != *"Clínica Aurora"* ]]'
+BP="$(body /publicaciones "$BANK")"
+check "publicaciones del banco sin datos de la clínica" '[[ "$BP" != *"Clínica Aurora"* && "$BP" == *"Banco Horizonte"* ]]'
+BR="$(body /reportes "$BANK")"
+check "reportes del banco sin datos de la clínica" '[[ "$BR" != *"Clínica Aurora"* ]]'
+check "owner ve el detalle de una publicación de la clínica" '[[ "$(get /publicaciones/demo-clinica-aurora-post-instagram "$OWNER")" == "200" ]]'
+check "banco NO abre la publicación de la clínica por URL directa" '[[ "$(get /publicaciones/demo-clinica-aurora-post-instagram "$BANK")" == "404" ]]'
+check "detalle muestra comentarios asociados" '[[ "$(body /publicaciones/demo-clinica-aurora-post-instagram "$OWNER")" == *"Comentarios asociados"* ]]'
+check "reportes muestran resúmenes ejecutivos" '[[ "$(body /reportes "$OWNER")" == *"Resúmenes ejecutivos"* ]]'
 
 # Roles
 VIEWER="hf_demo_user=demo-user-viewer; hf_org=$ORG_A"

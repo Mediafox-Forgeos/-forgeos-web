@@ -117,6 +117,40 @@ export interface ConversationItem {
   permalink: string | null;
   isSynthetic: boolean;
   analysis: Analysis | null;
+  /** Publicación a la que pertenece el comentario (null en menciones o si no se conoce). */
+  postId?: string | null;
+}
+
+export interface PostMetrics {
+  capturedAt: string;
+  likes: number | null;
+  comments: number | null;
+  shares: number | null;
+  views: number | null;
+  reach: number | null;
+}
+
+export interface Post {
+  id: string;
+  organizationId: string;
+  platform: Platform;
+  accountHandle: string | null;
+  body: string | null;
+  permalink: string | null;
+  publishedAt: string | null;
+  isSynthetic: boolean;
+  /** Serie de métricas, de la más reciente a la más antigua. */
+  metrics: PostMetrics[];
+}
+
+export interface DailyReport {
+  id: string;
+  organizationId: string;
+  reportDate: string;
+  summary: string;
+  coverageNote: string;
+  metrics: Record<string, number>;
+  isSynthetic: boolean;
 }
 
 export interface Alert {

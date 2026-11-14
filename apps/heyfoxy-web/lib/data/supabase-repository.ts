@@ -5,15 +5,18 @@ import type {
   Analysis,
   ConversationItem,
   CoverageRow,
+  DailyReport,
   DataSource,
   Incident,
   IncidentStatus,
   Member,
+  Post,
 } from '@/lib/types';
 import type { WaDispatch, WaRecipient } from '@/lib/whatsapp/notifier';
 import type {
   ItemFilters,
   Membership,
+  PostFilters,
   Repository,
   UsageSummary,
   Viewer,
@@ -24,6 +27,32 @@ type Row = Record<string, any>;
 
 function fail(error: { message: string } | null) {
   if (error) throw new Error(error.message);
+}
+
+const POST_COLUMNS =
+  'id, organization_id, platform, body, permalink, published_at, is_synthetic, social_accounts(handle), post_metric_snapshots(captured_at, likes, comments, shares, views, reach)';
+
+function toPost(r: Row): Post {
+  return {
+    id: r.id,
+    organizationId: r.organization_id,
+    platform: r.platform,
+    accountHandle: r.social_accounts?.handle ?? null,
+    body: r.body,
+    permalink: r.permalink,
+    publishedAt: r.published_at,
+    isSynthetic: r.is_synthetic,
+    metrics: ((r.post_metric_snapshots ?? []) as Row[])
+      .map((m) => ({
+        capturedAt: m.captured_at,
+        likes: m.likes,
+        comments: m.comments,
+        shares: m.shares,
+        views: m.views,
+        reach: m.reach,
+      }))
+      .sort((a, b) => b.capturedAt.localeCompare(a.capturedAt)),
+  };
 }
 
 function toAnalysis(r: Row | undefined): Analysis | null {
@@ -73,13 +102,14 @@ export class SupabaseRepository implements Repository {
     let q = db
       .from('social_comments')
       .select(
-        'id, organization_id, platform, body, author_display, published_at, is_synthetic, brands(name), data_sources(provider)',
+        'id, organization_id, post_id, platform, body, author_display, published_at, is_synthetic, brands(name), data_sources(provider)',
       )
       .eq('organization_id', orgId)
       .is('deleted_at_source', null)
       .order('published_at', { ascending: false })
       .limit(f.limit ?? 200);
     if (f.platform) q = q.eq('platform', f.platform);
+    if (f.postId) q = q.eq('post_id', f.postId);
     if (f.q) q = q.ilike('body', `%${f.q.replace(/[%_]/g, '')}%`);
     const { data, error } = await q;
     fail(error);
@@ -112,6 +142,7 @@ export class SupabaseRepository implements Repository {
         permalink: null,
         isSynthetic: r.is_synthetic,
         analysis: toAnalysis(analyses.get(r.id)),
+        postId: r.post_id ?? null,
       }))
       .filter((i) => !f.sentiment || i.analysis?.sentiment === f.sentiment)
       .filter((i) => !f.severity || i.analysis?.severity === f.severity)
@@ -433,6 +464,56 @@ export class SupabaseRepository implements Repository {
       status: d.status,
       reason: d.error ?? d.mode,
       idempotencyKey: d.idempotency_key,
+    }));
+  }
+
+  async posts(orgId: string, f: PostFilters = {}): Promise<Post[]> {
+    const db = await supabaseServer();
+    let q = db
+      .from('social_posts')
+      .select(POST_COLUMNS)
+      .eq('organization_id', orgId)
+      .is('deleted_at_source', null)
+      .order('published_at', { ascending: false })
+      .limit(f.limit ?? 100);
+    if (f.platform) q = q.eq('platform', f.platform);
+    if (f.q) q = q.ilike('body', `%${f.q.replace(/[%_]/g, '')}%`);
+    const { data, error } = await q;
+    fail(error);
+    return ((data ?? []) as Row[]).map(toPost);
+  }
+
+  async post(orgId: string, id: string): Promise<Post | null> {
+    const db = await supabaseServer();
+    const { data, error } = await db
+      .from('social_posts')
+      .select(POST_COLUMNS)
+      .eq('organization_id', orgId)
+      .eq('id', id)
+      .maybeSingle();
+    fail(error);
+    return data ? toPost(data as Row) : null;
+  }
+
+  async reports(orgId: string): Promise<DailyReport[]> {
+    const db = await supabaseServer();
+    const { data, error } = await db
+      .from('daily_reports')
+      .select(
+        'id, organization_id, report_date, summary, coverage_note, metrics, is_synthetic',
+      )
+      .eq('organization_id', orgId)
+      .order('report_date', { ascending: false })
+      .limit(30);
+    fail(error);
+    return ((data ?? []) as Row[]).map((r) => ({
+      id: r.id,
+      organizationId: r.organization_id,
+      reportDate: r.report_date,
+      summary: r.summary,
+      coverageNote: r.coverage_note,
+      metrics: (r.metrics ?? {}) as Record<string, number>,
+      isSynthetic: r.is_synthetic,
     }));
   }
 }

@@ -3,6 +3,7 @@ import type {
   ConversationItem,
   CoverageRow,
   DataSource,
+  DailyReport,
   Incident,
   IncidentStatus,
   Member,
@@ -12,6 +13,7 @@ import type {
   Severity,
   Layer,
   Platform,
+  Post,
 } from '@/lib/types';
 import type { WaDispatch, WaRecipient } from '@/lib/whatsapp/notifier';
 
@@ -34,6 +36,14 @@ export interface ItemFilters {
   severity?: Severity;
   layer?: Layer;
   reviewPending?: boolean;
+  /** Solo comentarios de esta publicación. */
+  postId?: string;
+  limit?: number;
+}
+
+export interface PostFilters {
+  q?: string;
+  platform?: Platform;
   limit?: number;
 }
 
@@ -94,4 +104,9 @@ export interface Repository {
   usage(orgId: string): Promise<UsageSummary>;
   waRecipients(orgId: string): Promise<WaRecipient[]>;
   waDispatches(orgId: string): Promise<WaDispatch[]>;
+  /** Publicaciones monitoreadas con su serie de métricas. */
+  posts(orgId: string, f?: PostFilters): Promise<Post[]>;
+  post(orgId: string, id: string): Promise<Post | null>;
+  /** Resúmenes ejecutivos diarios, del más reciente al más antiguo. */
+  reports(orgId: string): Promise<DailyReport[]>;
 }

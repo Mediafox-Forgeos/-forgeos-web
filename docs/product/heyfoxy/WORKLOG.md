@@ -265,3 +265,35 @@ Ejecutado, sin contratar, migrar ni desplegar:
 
 - **Advisors:** 0 ERROR; solo los WARN e INFO ya documentados.
 - **Sin cambios** en Site URL ni Redirect URLs (Gate C), Vercel, Production, Metricool, WhatsApp, MediaFOX OS ni MOVOS.
+
+## 2026-11-14 07:10–08:00 UTC — Gate C: Preview n.º 3, incidente de bypass y vistas nuevas (GO de Álvaro)
+
+- **Pre-flight:**
+  - `6009c9c` con el árbol limpio y publicado.
+  - `deploy-preview.sh check` en verde: proyecto `heyfoxy-web`, protección `all`, sin Git, Production congelado.
+  - MCP apuntando a `admbpgqtgmaaofcgajzh`.
+- **Variables**, por API y solo con target `preview`:
+  - `NEXT_PUBLIC_SUPABASE_URL` (`plain`) y `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (`encrypted`).
+  - Ninguna en Production, sin `service_role` ni secretos.
+- **Preview n.º 3:** `dpl_FYjif3NNiKS22aWFtBoWX9K1R5tL`, SHA `6009c9c`, `https://heyfoxy-iq46k62dl-mediafox.vercel.app`.
+  - Verificado: `target=preview`, sin alias de Production, Production en `dpl_CBLq2U37…`, acceso anónimo → SSO.
+- **Alias estable:** `heyfoxy-qa-mediafox.vercel.app`. Estaba libre, apunta solo al Preview n.º 3 y está protegido, incluidas `/auth/callback`, `/login/recuperar` y `/login/nueva-clave`.
+- **Incidente (HF-OPS-09):** `vercel curl` creó por su cuenta un secreto permanente de «Protection Bypass for Automation». Se detuvo el Gate y se informó.
+  - Con la autorización de Álvaro, se identificó sin ambigüedad: el único del proyecto, creado a las 07:13:36 UTC por esta sesión y sin otras automatizaciones.
+  - Se revocó sin imprimirlo.
+  - Verificado: 0 bypass, protección `all`, Production sin cambios; el Preview, el alias y Production responden 302 → SSO sin sesión.
+- **Decisión 3, URLs de Auth:** Site URL y Redirect URL exactas (10 §6). Para que el callback exacto baste por construcción, `redirectTo` pasa a ser `<origen>/auth/callback` sin query, y el callback lleva por defecto a `/login/nueva-clave`.
+- **Decisión 4, vistas nuevas** (en local, sin desplegar):
+  - `/publicaciones`: listado con filtros por texto, red y orden; métricas; sentimiento dominante; actividad inusual.
+  - `/publicaciones/[id]`: KPIs, historial de métricas y comentarios asociados mediante `items({ postId })`.
+  - `/reportes`: indicadores con comparación semanal, tendencia de 14 días, temas, cobertura y resúmenes ejecutivos diarios.
+  - Lógica compartida en `lib/insights.ts`. Resumen y Conversaciones refactorizados para reutilizarla, sin duplicar código.
+- **Regresión:**
+  - typecheck, lint y **60/60 unitarias** (6 nuevas de `insights`);
+  - build en modo demo y en modo Supabase;
+  - smoke demo **40/40** (8 nuevas, incluido el aislamiento por URL directa);
+  - sin sesión en modo Supabase: las rutas nuevas → `/login`, callback inválido y redirección abierta rechazados, 0 errores del servidor.
+- **QA autenticado:** el clasificador de seguridad bloqueó un E2E local que leía el llavero; coincide con la decisión de Álvaro de no extraer contraseñas. El script se eliminó.
+  - Alternativa sin contraseñas: con la identidad de cada usuario QA en el MCP (transacción revertida), las vistas nuevas ven solo su organización (0 filas ajenas).
+  - El QA por interfaz queda para el navegador asistido (12 §7).
+- **Sin cambios** en Supabase Auth (lo configura Álvaro), Production, Metricool, WhatsApp, MediaFOX OS ni MOVOS.
