@@ -113,13 +113,11 @@ export function KpiCard({
 }) {
   const body = (
     <>
-      <div className="flex items-start justify-between gap-2">
-        <IconBadge icon={icon} tone={tone} />
-        {delta && <Delta {...delta} />}
-      </div>
+      <IconBadge icon={icon} tone={tone} />
       <p className="mt-3 text-[28px] font-black tabular-nums leading-none tracking-tight">
         {value}
       </p>
+      {delta && <Delta {...delta} className="mt-2" />}
       <p className="mt-1.5 text-sm font-bold">{label}</p>
       <p className="text-muted-foreground text-xs">{period}</p>
       {spark && <Sparkline values={spark} className="mt-2" />}
@@ -320,7 +318,7 @@ export function FoxyInsightPanel({
       )}
       <footer className="border-border/70 mt-4 space-y-1 border-t pt-3">
         <p className="flex items-center gap-1.5">
-          <StatusPill tone="ai" icon={Info}>
+          <StatusPill tone="ai" icon={Info} className="whitespace-normal">
             {origin}
           </StatusPill>
         </p>

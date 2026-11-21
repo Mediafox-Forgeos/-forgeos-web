@@ -42,10 +42,24 @@ function Brand({ rail }: { rail?: boolean }) {
   );
 }
 
-function OrgSwitcher({ ctx, id }: { ctx: ShellContext; id: string }) {
+function OrgSwitcher({
+  ctx,
+  id,
+  row,
+}: {
+  ctx: ShellContext;
+  id: string;
+  row?: boolean;
+}) {
   const { memberships, active } = ctx;
   return (
-    <form action={switchOrg} className="flex items-center gap-1.5">
+    <form
+      action={switchOrg}
+      className={cn(
+        'flex gap-1',
+        row ? 'items-center' : 'flex-col items-stretch',
+      )}
+    >
       <label htmlFor={id} className="sr-only">
         Organización
       </label>
@@ -62,8 +76,13 @@ function OrgSwitcher({ ctx, id }: { ctx: ShellContext; id: string }) {
         ))}
       </select>
       {memberships.length > 1 && (
-        <button className="text-primary-text hover:bg-primary-pale shrink-0 rounded-lg px-2 py-2 text-xs font-extrabold">
-          Cambiar
+        <button
+          className={cn(
+            'text-primary-text hover:bg-primary-pale shrink-0 rounded-lg px-2 py-1 text-xs font-extrabold',
+            !row && 'self-end',
+          )}
+        >
+          {row ? 'Cambiar' : 'Cambiar organización'}
         </button>
       )}
     </form>
@@ -215,7 +234,7 @@ export function AppShell({
                 <Brand />
               </div>
               <div className="hidden min-w-0 max-w-[15rem] md:block xl:hidden">
-                <OrgSwitcher ctx={ctx} id="org-top" />
+                <OrgSwitcher ctx={ctx} id="org-top" row />
               </div>
               <form
                 action="/buscar"

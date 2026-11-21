@@ -141,9 +141,16 @@ export function AreaTrend({
           {shown !== null && points[shown] && (
             <div
               aria-hidden
-              className="bg-brand text-brand-foreground shadow-lift pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-[calc(100%+14px)] whitespace-nowrap rounded-lg px-2.5 py-1.5 text-center text-xs font-bold"
+              className={cn(
+                'bg-brand text-brand-foreground shadow-lift pointer-events-none absolute z-10 -translate-y-[calc(100%+14px)] whitespace-nowrap rounded-lg px-2.5 py-1.5 text-center text-xs font-bold',
+                x(shown) > 70
+                  ? '-translate-x-full'
+                  : x(shown) < 30
+                    ? ''
+                    : '-translate-x-1/2',
+              )}
               style={{
-                left: `${Math.min(88, Math.max(12, x(shown)))}%`,
+                left: `calc(${x(shown)}% + ${x(shown) > 70 ? 12 : x(shown) < 30 ? -12 : 0}px)`,
                 top: `${y(points[shown]!.value)}%`,
               }}
             >

@@ -23,7 +23,7 @@ export type QaRoute = {
 export const ROUTES: QaRoute[] = [
   { name: 'login', path: '/login', auth: false },
   { name: 'login-recuperar', path: '/login/recuperar', auth: false },
-  { name: 'resumen', path: '/', auth: true },
+  { name: 'resumen', path: '/', auth: true, v2: true },
   { name: 'conversaciones', path: '/conversaciones', auth: true },
   { name: 'alertas', path: '/alertas', auth: true },
   { name: 'revision', path: '/revision', auth: true },

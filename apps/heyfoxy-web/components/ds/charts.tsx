@@ -122,12 +122,21 @@ export function BarList({
         const p = pct(r.value, sum);
         const body = (
           <>
-            <span className="flex min-w-0 items-center gap-2">
+            <span className="flex items-center gap-2">
               {r.icon}
-              <span className="truncate text-sm font-semibold">{r.label}</span>
+              <span className="min-w-0 flex-1 text-sm font-semibold leading-snug">
+                {r.label}
+              </span>
+              <span className="text-sm font-extrabold tabular-nums">
+                {p}%
+                <span className="text-muted-foreground ml-1 text-xs font-semibold">
+                  ({r.value.toLocaleString('es-CO')})
+                </span>
+                <span className="sr-only"> {unit}</span>
+              </span>
             </span>
             <span
-              className="bg-muted relative h-2.5 overflow-hidden rounded-full"
+              className="bg-muted relative mt-1.5 block h-2 overflow-hidden rounded-full"
               aria-hidden
             >
               <span
@@ -135,17 +144,9 @@ export function BarList({
                 style={{ width: `${(r.value / max) * 100}%` }}
               />
             </span>
-            <span className="text-right text-sm font-extrabold tabular-nums">
-              {p}%
-              <span className="sr-only">
-                {' '}
-                ({r.value} {unit})
-              </span>
-            </span>
           </>
         );
-        const cls =
-          'grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_3rem] items-center gap-3';
+        const cls = 'block';
         return (
           <li key={r.label}>
             {r.href ? (

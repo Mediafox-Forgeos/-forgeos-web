@@ -75,7 +75,9 @@ for (const route of ROUTES) {
 
     // 3. Desbordamiento horizontal
     const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth > window.innerWidth + 1,
+      () =>
+        document.documentElement.scrollWidth >
+        document.documentElement.clientWidth + 1,
     );
 
     if (RECORD) {
