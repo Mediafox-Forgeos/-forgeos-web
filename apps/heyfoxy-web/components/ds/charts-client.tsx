@@ -171,7 +171,14 @@ export function AreaTrend({
             i % labelEvery === 0 || i === last ? (
               <span
                 key={p.label}
-                className="absolute -translate-x-1/2 whitespace-nowrap"
+                className={cn(
+                  'absolute whitespace-nowrap',
+                  i === 0
+                    ? ''
+                    : i === last
+                      ? '-translate-x-full'
+                      : '-translate-x-1/2',
+                )}
                 style={{ left: `${x(i)}%` }}
               >
                 {p.label}
@@ -199,10 +206,13 @@ export function Donut({
   segments,
   centerValue,
   centerLabel,
+  stacked = false,
 }: {
   segments: DonutSegment[];
   centerValue: string;
   centerLabel: string;
+  /** Anillo sobre la leyenda siempre (columnas estrechas). */
+  stacked?: boolean;
 }) {
   const [active, setActive] = useState<string | null>(null);
   const total = segments.reduce((a, s) => a + s.value, 0);
@@ -220,7 +230,12 @@ export function Donut({
   const pct = (v: number) => (total > 0 ? Math.round((v / total) * 100) : 0);
 
   return (
-    <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-center">
+    <div
+      className={cn(
+        'flex flex-col items-center gap-5',
+        !stacked && 'sm:flex-row sm:items-center',
+      )}
+    >
       <div className="relative h-40 w-40 shrink-0">
         <svg
           viewBox="0 0 100 100"
@@ -262,7 +277,7 @@ export function Donut({
           </span>
         </div>
       </div>
-      <ul className="w-full space-y-1.5">
+      <ul className="w-full min-w-0 space-y-1.5">
         {segments.map((s) => {
           const inner = (
             <>

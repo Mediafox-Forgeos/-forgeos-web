@@ -1,29 +1,79 @@
+import {
+  ArrowLeft,
+  ChartColumn,
+  Eye,
+  Heart,
+  Lightbulb,
+  MessagesSquare,
+  Radio,
+  Smile,
+  Tags,
+  TrendingUp,
+  TriangleAlert,
+  Users,
+} from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ItemCard } from '@/components/item-card';
+import { BarList, ChartCard } from '@/components/ds/charts';
+import { AreaTrend, Donut } from '@/components/ds/charts-client';
+import { ConversationRow } from '@/components/ds/conversation';
 import {
-  Badge,
-  Card,
-  EmptyState,
-  PageHeader,
-  Stat,
-  SyntheticTag,
-} from '@/components/ui';
+  FoxyInsightPanel,
+  KpiCard,
+  ModuleSurface,
+  type FoxyFindingView,
+} from '@/components/ds/layout';
+import {
+  AuthorChip,
+  OriginalLink,
+  PostMedia,
+  PostMetricsRow,
+  SentimentPill,
+  fmtNum,
+} from '@/components/ds/post';
+import {
+  Panel,
+  PanelHeader,
+  StatusPill,
+  SyntheticBadge,
+} from '@/components/ds/primitives';
+import { EmptyStateV2 } from '@/components/ds/states';
 import { requireContext } from '@/lib/auth/session';
-import { PLATFORM_LABEL, fmtDateTime } from '@/lib/format';
-import { interactions, postStats, sentimentBreakdown } from '@/lib/insights';
+import { SENTIMENT_LABEL, fmtDateTime } from '@/lib/format';
+import { pctOf } from '@/lib/home-insights';
+import {
+  dominantSentiment,
+  interactions,
+  postStats,
+  sentimentBreakdown,
+  topTopics,
+} from '@/lib/insights';
+import { PERIOD_PARAM, parsePeriod, withPeriod } from '@/lib/period';
+import { getUiTheme } from '@/lib/shell';
+import { isV2 } from '@/lib/ui-theme';
+import { LegacyPostDetail } from './legacy-post-detail';
 
 export const metadata = { title: 'Detalle de publicación' };
 
-const fmt = (n: number | null | undefined) =>
-  n === null || n === undefined ? '—' : n.toLocaleString('es-CO');
+const capLabel = new Intl.DateTimeFormat('es-CO', {
+  day: 'numeric',
+  month: 'short',
+  hour: 'numeric',
+  minute: '2-digit',
+  timeZone: 'America/Bogota',
+});
 
+/** Detalle de publicación de Social Explorer (WO-HF-V2-06) con análisis contextual de Foxy. */
 export default async function PostDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string>>;
 }) {
   const { id } = await params;
+  if (!isV2(await getUiTheme())) return <LegacyPostDetail id={id} />;
+  const period = parsePeriod((await searchParams)[PERIOD_PARAM]);
   const { active, repo } = await requireContext();
   const orgId = active.organization.id;
   // La publicación se busca SIEMPRE dentro de la organización activa (y RLS en Supabase).
@@ -32,109 +82,302 @@ export default async function PostDetailPage({
   const comments = await repo.items(orgId, { postId: post.id });
   const s = postStats(post);
   const b = sentimentBreakdown(comments);
+  const dominant = dominantSentiment(comments);
+  const topics = topTopics(comments, 5);
+  const history = [...post.metrics].reverse();
+  const negatives = comments.filter(
+    (c) => c.analysis?.sentiment === 'negative',
+  );
+  const negTopic = topTopics(negatives, 1)[0];
+
+  const findings: FoxyFindingView[] = [];
+  if (dominant)
+    findings.push({
+      id: 'dominant',
+      tone:
+        dominant === 'negative'
+          ? 'critical'
+          : dominant === 'positive'
+            ? 'success'
+            : 'neutral',
+      icon: Smile,
+      text: `Sentimiento dominante en los comentarios: ${SENTIMENT_LABEL[dominant].toLowerCase()}.`,
+      basis: `${b.positive} positivos · ${b.negative} negativos · ${b.neutral + b.mixed} neutrales o mixtos, de ${b.total} clasificados.`,
+      evidence: [{ label: 'Ver comentarios', href: '#comentarios' }],
+    });
+  if (negTopic && negTopic[1] >= 1)
+    findings.push({
+      id: 'neg-topic',
+      tone: 'high',
+      icon: Tags,
+      text: `Los comentarios negativos hablan sobre todo de «${negTopic[0]}».`,
+      basis: `${negTopic[1]} de ${negatives.length} comentarios negativos.`,
+      evidence: [{ label: 'Ver comentarios', href: '#comentarios' }],
+    });
+  if (s.unusual && s.growth !== null)
+    findings.push({
+      id: 'unusual',
+      tone: 'info',
+      icon: TrendingUp,
+      text: 'Actividad inusual: las interacciones al menos se duplicaron entre las dos últimas mediciones.',
+      basis: `+${fmtNum(s.growth)} interacciones.`,
+      evidence: [{ label: 'Ver historial', href: '#historial' }],
+    });
+  if (b.total > 0 && b.negativePct >= 50)
+    findings.push({
+      id: 'respond',
+      tone: 'critical',
+      icon: TriangleAlert,
+      text: 'Conviene revisar y responder: la mayoría de los comentarios son negativos.',
+      basis: `${b.negativePct} % negativos.`,
+      evidence: [
+        { label: 'Ver alertas', href: withPeriod('/alertas', period) },
+      ],
+    });
 
   return (
-    <>
+    <ModuleSurface module="explorer">
       <Link
-        href="/publicaciones"
-        className="text-primary-text text-sm hover:underline"
+        href={withPeriod('/publicaciones', period)}
+        className="text-primary-text mb-4 inline-flex items-center gap-1.5 text-sm font-extrabold"
       >
-        ← Publicaciones
+        <ArrowLeft aria-hidden className="h-4 w-4" /> Social Explorer
       </Link>
-      <PageHeader
-        layer="reputational"
-        title={post.body ?? 'Publicación sin texto'}
-        description={`${PLATFORM_LABEL[post.platform]}${post.accountHandle ? ` · ${post.accountHandle}` : ''} · publicada ${fmtDateTime(post.publishedAt)}`}
-        actions={
-          <div className="flex items-center gap-2">
-            {post.isSynthetic && <SyntheticTag />}
-            {s.unusual && <Badge t="amber">Actividad inusual</Badge>}
-          </div>
-        }
-      />
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat
-          label="Interacciones"
-          value={fmt(s.interactions)}
-          hint={
-            s.growth === null
-              ? 'Una sola medición'
-              : `${s.growth >= 0 ? '+' : ''}${fmt(s.growth)} desde la medición anterior`
-          }
-        />
-        <Stat
-          label="Alcance"
-          value={fmt(s.latest?.reach)}
-          hint="Última medición"
-        />
-        <Stat
-          label="Vistas"
-          value={fmt(s.latest?.views)}
-          hint="Última medición"
-        />
-        <Stat
-          label="Comentarios clasificados"
-          value={b.total}
-          hint={`${b.negativePct} % negativos`}
-        />
-      </div>
 
-      <Card className="mt-4">
-        <h2 className="text-sm font-medium">Historial de métricas</h2>
-        {post.metrics.length === 0 ? (
-          <p className="text-muted-foreground mt-2 text-sm">
-            Sin mediciones todavía.
-          </p>
-        ) : (
-          <div
-            className="mt-3 overflow-x-auto"
-            role="region"
-            aria-label="Historial de métricas"
-            tabIndex={0}
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-2 xl:grid-cols-12">
+        {/* Publicación original */}
+        <Panel
+          as="article"
+          className="self-start xl:sticky xl:top-24 xl:col-span-4"
+          aria-labelledby="post-title"
+        >
+          <div className="mb-4 flex items-start justify-between gap-2">
+            <AuthorChip post={post} size={40} />
+            {post.isSynthetic && <SyntheticBadge />}
+          </div>
+          <PostMedia post={post} variant="detail" />
+          <h1
+            id="post-title"
+            className="mt-4 text-lg font-extrabold leading-snug"
           >
-            <table className="w-full text-left text-sm tabular-nums">
-              <thead className="text-muted-foreground text-xs">
-                <tr>
-                  <th className="py-1 pr-4 font-normal">Medición</th>
-                  <th className="py-1 pr-4 font-normal">Me gusta</th>
-                  <th className="py-1 pr-4 font-normal">Comentarios</th>
-                  <th className="py-1 pr-4 font-normal">Compartidos</th>
-                  <th className="py-1 pr-4 font-normal">Interacciones</th>
-                  <th className="py-1 pr-4 font-normal">Alcance</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {post.metrics.map((m) => (
-                  <tr key={m.capturedAt}>
-                    <td className="py-1.5 pr-4">{fmtDateTime(m.capturedAt)}</td>
-                    <td className="py-1.5 pr-4">{fmt(m.likes)}</td>
-                    <td className="py-1.5 pr-4">{fmt(m.comments)}</td>
-                    <td className="py-1.5 pr-4">{fmt(m.shares)}</td>
-                    <td className="py-1.5 pr-4">{fmt(interactions(m))}</td>
-                    <td className="py-1.5 pr-4">{fmt(m.reach)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            {post.body ?? 'Publicación sin texto'}
+          </h1>
+          <p className="text-muted-foreground mt-1 text-xs">
+            Publicada {fmtDateTime(post.publishedAt)}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {dominant && (
+              <SentimentPill
+                s={dominant}
+                label={`Comentarios: ${SENTIMENT_LABEL[dominant].toLowerCase()}`}
+              />
+            )}
+            {s.unusual && (
+              <StatusPill tone="high" icon={TrendingUp}>
+                Actividad inusual
+              </StatusPill>
+            )}
           </div>
-        )}
-      </Card>
+          <PostMetricsRow
+            stats={s}
+            size="md"
+            className="border-border mt-4 border-t pt-4"
+          />
+          <OriginalLink post={post} className="mt-3" />
+        </Panel>
 
-      <h2 className="mb-2 mt-6 text-sm font-medium">
-        Comentarios asociados ({comments.length}) · {b.positive} positivos ·{' '}
-        {b.negative} negativos
-      </h2>
-      {comments.length === 0 ? (
-        <EmptyState title="Sin comentarios clasificados para esta publicación" />
-      ) : (
-        <ul className="space-y-2">
-          {comments.map((i) => (
-            <li key={i.id}>
-              <ItemCard i={i} />
-            </li>
-          ))}
-        </ul>
-      )}
-    </>
+        {/* Métricas y comentarios */}
+        <div className="space-y-5 xl:col-span-5">
+          <div className="grid grid-cols-2 gap-3">
+            <KpiCard
+              icon={Heart}
+              tone="high"
+              label="Interacciones"
+              value={fmtNum(s.interactions)}
+              period={
+                s.growth === null
+                  ? 'Una sola medición'
+                  : `${s.growth >= 0 ? '+' : ''}${fmtNum(s.growth)} desde la anterior`
+              }
+            />
+            <KpiCard
+              icon={Users}
+              tone="ai"
+              label="Alcance"
+              value={fmtNum(s.latest?.reach)}
+              period="Última medición"
+            />
+            <KpiCard
+              icon={Eye}
+              tone="info"
+              label="Vistas"
+              value={fmtNum(s.latest?.views)}
+              period="Última medición"
+            />
+            <KpiCard
+              icon={MessagesSquare}
+              tone="critical"
+              label="Comentarios clasificados"
+              value={fmtNum(b.total)}
+              period={
+                b.total ? `${b.negativePct} % negativos` : 'Sin comentarios'
+              }
+            />
+          </div>
+
+          <div id="historial" className="scroll-mt-24">
+            <ChartCard
+              icon={ChartColumn}
+              tone="info"
+              title="Historial de métricas"
+              description="Interacciones por medición."
+              table={{
+                caption: 'Historial de métricas de la publicación',
+                columns: [
+                  'Medición',
+                  'Me gusta',
+                  'Comentarios',
+                  'Compartidos',
+                  'Interacciones',
+                  'Alcance',
+                ],
+                rows: post.metrics.map((m) => [
+                  fmtDateTime(m.capturedAt),
+                  fmtNum(m.likes),
+                  fmtNum(m.comments),
+                  fmtNum(m.shares),
+                  fmtNum(interactions(m)),
+                  fmtNum(m.reach),
+                ]),
+              }}
+            >
+              {history.length < 2 ? (
+                <EmptyStateV2
+                  compact
+                  title={
+                    history.length
+                      ? 'Una sola medición'
+                      : 'Sin mediciones todavía'
+                  }
+                >
+                  La evolución aparece a partir de dos mediciones.
+                </EmptyStateV2>
+              ) : (
+                <AreaTrend
+                  height={170}
+                  unit="interacciones"
+                  points={history.map((m) => ({
+                    label: capLabel
+                      .format(Date.parse(m.capturedAt))
+                      .replace('.', ''),
+                    value: interactions(m),
+                    detail: `alcance ${fmtNum(m.reach)}`,
+                  }))}
+                />
+              )}
+            </ChartCard>
+          </div>
+
+          <Panel
+            aria-labelledby="comentarios-titulo"
+            id="comentarios"
+            className="scroll-mt-24"
+          >
+            <PanelHeader
+              icon={MessagesSquare}
+              title={`Comentarios asociados (${comments.length})`}
+              titleId="comentarios-titulo"
+              description={`${b.positive} positivos · ${b.negative} negativos`}
+            />
+            {comments.length === 0 ? (
+              <EmptyStateV2
+                compact
+                title="Sin comentarios clasificados para esta publicación"
+              />
+            ) : (
+              <div className="divide-border divide-y">
+                {comments.map((i) => (
+                  <ConversationRow key={i.id} i={i} />
+                ))}
+              </div>
+            )}
+          </Panel>
+        </div>
+
+        {/* Foxy contextual */}
+        <div className="space-y-5 lg:col-span-2 xl:col-span-3">
+          <FoxyInsightPanel
+            title="Análisis de Foxy IA"
+            subtitle="Sobre esta publicación y sus comentarios"
+            findings={findings}
+            limitation="Basado solo en los comentarios clasificados de esta publicación. Responder requiere permisos de la red y confirmación humana."
+          />
+          {b.total > 0 && (
+            <ChartCard
+              icon={Radio}
+              tone="ai"
+              title="Sentimiento de los comentarios"
+              table={{
+                caption: 'Sentimiento de los comentarios',
+                columns: ['Sentimiento', 'Comentarios', '%'],
+                rows: [
+                  ['Positivo', b.positive, pctOf(b.positive, b.total)],
+                  [
+                    'Neutral o mixto',
+                    b.neutral + b.mixed,
+                    pctOf(b.neutral + b.mixed, b.total),
+                  ],
+                  ['Negativo', b.negative, pctOf(b.negative, b.total)],
+                ],
+              }}
+            >
+              <Donut
+                stacked
+                centerValue={fmtNum(b.total)}
+                centerLabel="comentarios"
+                segments={[
+                  {
+                    key: 'pos',
+                    label: 'Positivo',
+                    value: b.positive,
+                    color: 'chart-pos',
+                  },
+                  {
+                    key: 'neu',
+                    label: 'Neutral o mixto',
+                    value: b.neutral + b.mixed,
+                    color: 'chart-neu',
+                  },
+                  {
+                    key: 'neg',
+                    label: 'Negativo',
+                    value: b.negative,
+                    color: 'chart-neg',
+                  },
+                ]}
+              />
+            </ChartCard>
+          )}
+          {topics.length > 0 && (
+            <ChartCard
+              icon={Lightbulb}
+              tone="high"
+              title="Temas detectados"
+              table={{
+                caption: 'Temas de los comentarios',
+                columns: ['Tema', 'Comentarios'],
+                rows: topics,
+              }}
+            >
+              <BarList
+                rows={topics.map(([label, value]) => ({ label, value }))}
+                total={b.total}
+                unit="comentarios"
+              />
+            </ChartCard>
+          )}
+        </div>
+      </div>
+    </ModuleSurface>
   );
 }

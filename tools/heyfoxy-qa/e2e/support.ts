@@ -35,11 +35,12 @@ export const ROUTES: QaRoute[] = [
     followLink: /^\/incidentes\/[^/]+$/,
   },
   { name: 'temas', path: '/temas', auth: true },
-  { name: 'publicaciones', path: '/publicaciones', auth: true },
+  { name: 'publicaciones', path: '/publicaciones', auth: true, v2: true },
   {
     name: 'publicacion-detalle',
     path: '/publicaciones/demo-clinica-aurora-post-instagram',
     auth: true,
+    v2: true,
   },
   { name: 'reportes', path: '/reportes', auth: true },
   { name: 'cobertura', path: '/cobertura', auth: true },

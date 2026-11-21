@@ -64,6 +64,18 @@ check "banco NO abre la publicación de la clínica por URL directa" '[[ "$(get 
 check "detalle muestra comentarios asociados" '[[ "$(body /publicaciones/demo-clinica-aurora-post-instagram "$OWNER")" == *"Comentarios asociados"* ]]'
 check "reportes muestran resúmenes ejecutivos" '[[ "$(body /reportes "$OWNER")" == *"Resúmenes ejecutivos"* ]]'
 
+# Interfaz V2 (por defecto) y tema clásico como alternativa (D-1)
+check "Inicio V2 por defecto" '[[ "$(body / "$OWNER")" == *"Hola, <!-- -->Laura"* ]]'
+check "tema clásico conserva el Resumen V1" '[[ "$(body / "$OWNER; hf_ui=legacy")" == *"Resumen · Clínica Aurora"* ]]'
+check "tema clásico: detalle con comentarios asociados" '[[ "$(body /publicaciones/demo-clinica-aurora-post-instagram "$OWNER; hf_ui=legacy")" == *"Comentarios asociados"* ]]'
+check "tema desconocido vuelve a V2" '[[ "$(body / "$OWNER; hf_ui=v9")" == *"Hola, <!-- -->Laura"* ]]'
+check "Social Explorer V2" '[[ "$(body /publicaciones "$OWNER")" == *"Vista previa no disponible"* ]]'
+check "catálogo /ds en demo → 200" '[[ "$(get /ds "$OWNER")" == "200" ]]'
+check "buscador global → 200" '[[ "$(get "/buscar?q=citas" "$OWNER")" == "200" ]]'
+BS="$(body "/buscar?q=a" "$BANK")"
+check "buscador del banco sin datos de la clínica" '[[ "$BS" != *"Clínica Aurora"* && "$BS" != *"clinica-aurora"* ]]'
+check "periodo inválido no rompe Inicio" '[[ "$(get "/?periodo=__proto__" "$OWNER")" == "200" ]]'
+
 # Roles
 VIEWER="hf_demo_user=demo-user-viewer; hf_org=$ORG_A"
 VW="$(body /whatsapp "$VIEWER")"
