@@ -106,7 +106,7 @@ export default async function WhatsAppPage() {
       <div className="grid gap-2 md:grid-cols-2">
         {Object.values(WA_TEMPLATES).map((t) => (
           <Card key={t.name} className="p-3">
-            <p className="text-brand font-mono text-xs">{t.name}</p>
+            <p className="text-primary-text font-mono text-xs">{t.name}</p>
             <p className="mt-1 text-sm">{t.body}</p>
             <p className="text-muted-foreground mt-1 text-xs">
               Botones: {t.buttons.join(' · ')}

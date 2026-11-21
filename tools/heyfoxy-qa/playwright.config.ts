@@ -46,9 +46,12 @@ export default defineConfig({
     reducedMotion: 'reduce',
     trace: 'retain-on-failure',
   },
+  // Proyectos «clásicos» (hf_ui=legacy): comparan con la línea base de Gate 2 (WO-HF-V2-00).
+  // Proyectos V2: claro en los 3 viewports y oscuro en móvil y escritorio.
   projects: [
     {
       name: 'mobile-390',
+      metadata: { theme: 'legacy' },
       use: {
         viewport: { width: 390, height: 844 },
         isMobile: true,
@@ -57,9 +60,48 @@ export default defineConfig({
     },
     {
       name: 'tablet-820',
+      metadata: { theme: 'legacy' },
       use: { viewport: { width: 820, height: 1180 }, hasTouch: true },
     },
-    { name: 'desktop-1440', use: { viewport: { width: 1440, height: 900 } } },
+    {
+      name: 'desktop-1440',
+      metadata: { theme: 'legacy' },
+      use: { viewport: { width: 1440, height: 900 } },
+    },
+    {
+      name: 'v2-light-390',
+      metadata: { theme: 'v2-light' },
+      use: {
+        viewport: { width: 390, height: 844 },
+        isMobile: true,
+        hasTouch: true,
+      },
+    },
+    {
+      name: 'v2-light-820',
+      metadata: { theme: 'v2-light' },
+      use: { viewport: { width: 820, height: 1180 }, hasTouch: true },
+    },
+    {
+      name: 'v2-light-1440',
+      metadata: { theme: 'v2-light' },
+      use: { viewport: { width: 1440, height: 900 } },
+    },
+    {
+      name: 'v2-dark-390',
+      metadata: { theme: 'v2-dark' },
+      use: {
+        viewport: { width: 390, height: 844 },
+        isMobile: true,
+        hasTouch: true,
+        colorScheme: 'dark',
+      },
+    },
+    {
+      name: 'v2-dark-1440',
+      metadata: { theme: 'v2-dark' },
+      use: { viewport: { width: 1440, height: 900 }, colorScheme: 'dark' },
+    },
   ],
   webServer: {
     command: `node node_modules/next/dist/bin/next start -p ${PORT} -H 127.0.0.1`,

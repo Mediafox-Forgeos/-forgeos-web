@@ -56,7 +56,10 @@ export default async function OverviewPage() {
           label="Alertas por revisar"
           value={pendingReview}
           hint={
-            <Link className="text-brand hover:underline" href="/revision">
+            <Link
+              className="text-primary-text hover:underline"
+              href="/revision"
+            >
               Ir a revisión humana
             </Link>
           }
@@ -65,7 +68,10 @@ export default async function OverviewPage() {
           label="Incidentes activos"
           value={openInc}
           hint={
-            <Link className="text-brand hover:underline" href="/incidentes">
+            <Link
+              className="text-primary-text hover:underline"
+              href="/incidentes"
+            >
               Ver incidentes
             </Link>
           }
@@ -107,7 +113,7 @@ export default async function OverviewPage() {
         </ul>
         <Link
           href="/alertas"
-          className="text-brand mt-2 inline-block text-sm hover:underline"
+          className="text-primary-text mt-2 inline-block text-sm hover:underline"
         >
           Ver todas las alertas
         </Link>

@@ -13,6 +13,8 @@ export type QaRoute = {
   auth: boolean;
   /** Ruta con id dinámico: se llega navegando desde `path` y pulsando el primer enlace que case. */
   followLink?: RegExp;
+  /** Vista migrada a V2: sus capturas V2 se versionan (D-2: solo capturas esenciales). */
+  v2?: boolean;
 };
 
 /** Todas las vistas actuales del Command Center + autenticación (línea base pre-V2). */
@@ -43,6 +45,17 @@ export const ROUTES: QaRoute[] = [
   { name: 'uso', path: '/uso', auth: true },
   { name: 'configuracion', path: '/configuracion', auth: true },
 ];
+
+export type QaTheme = 'legacy' | 'v2-light' | 'v2-dark';
+
+/** Preferencia de tema de la app (cookie hf_ui), también en rutas sin sesión. */
+export async function setTheme(
+  context: BrowserContext,
+  baseURL: string,
+  theme: QaTheme,
+) {
+  await context.addCookies([{ name: 'hf_ui', value: theme, url: baseURL }]);
+}
 
 export async function signInDemo(context: BrowserContext, baseURL: string) {
   await context.addCookies([

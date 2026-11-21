@@ -42,7 +42,7 @@ export function PageHeader({
     <header className="mb-5 flex flex-wrap items-end justify-between gap-3">
       <div>
         {tag && (
-          <p className="text-brand text-xs font-medium uppercase tracking-wider">
+          <p className="text-primary-text text-xs font-medium uppercase tracking-wider">
             {tag}
           </p>
         )}
@@ -60,12 +60,12 @@ export function PageHeader({
 
 const tone = {
   neutral: 'bg-muted text-muted-foreground',
-  green: 'bg-emerald-500/15 text-emerald-300',
-  red: 'bg-red-500/15 text-red-300',
-  amber: 'bg-amber-500/15 text-amber-300',
-  orange: 'bg-orange-500/15 text-orange-300',
-  blue: 'bg-sky-500/15 text-sky-300',
-  violet: 'bg-violet-500/15 text-violet-300',
+  green: 'bg-success-bg text-success-fg',
+  red: 'bg-critical-bg text-critical-fg',
+  amber: 'bg-warning-bg text-warning-fg',
+  orange: 'bg-high-bg text-high-fg',
+  blue: 'bg-info-bg text-info-fg',
+  violet: 'bg-ai-bg text-ai-fg',
 } as const;
 export type Tone = keyof typeof tone;
 
@@ -136,7 +136,7 @@ export function DemoBanner() {
   return (
     <div
       role="status"
-      className="bg-demo flex items-center justify-center gap-2 px-4 py-1.5 text-center text-xs font-semibold uppercase tracking-wider text-black"
+      className="bg-demo text-demo-foreground flex items-center justify-center gap-2 px-4 py-1.5 text-center text-xs font-semibold uppercase tracking-wider"
     >
       <FlaskConical aria-hidden className="h-4 w-4" />
       Datos de demostración: organizaciones, personas y conversaciones ficticias
@@ -153,8 +153,8 @@ export function CoverageNotice({
   missing: string[];
 }) {
   return (
-    <div className="mb-5 flex gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm">
-      <Info aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
+    <div className="border-warning-border bg-warning-soft mb-5 flex gap-3 rounded-lg border p-3 text-sm">
+      <Info aria-hidden className="text-warning-fg mt-0.5 h-4 w-4 shrink-0" />
       <p className="text-muted-foreground">
         <span className="text-foreground font-medium">Cobertura parcial.</span>{' '}
         Estos datos provienen solo de:{' '}
@@ -163,7 +163,7 @@ export function CoverageNotice({
         No representan la conversación total del mercado.{' '}
         <Link
           href="/cobertura"
-          className="text-brand underline-offset-2 hover:underline"
+          className="text-primary-text underline underline-offset-2"
         >
           Ver cobertura
         </Link>
@@ -193,7 +193,7 @@ export function ErrorNote({ children }: { children: ReactNode }) {
   return (
     <p
       role="alert"
-      className="flex items-center gap-2 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200"
+      className="border-critical-border bg-critical-soft text-critical-strong flex items-center gap-2 rounded-md border px-3 py-2 text-sm"
     >
       <AlertTriangle aria-hidden className="h-4 w-4" /> {children}
     </p>
@@ -220,9 +220,9 @@ export function Stat({
 
 export const buttonCls = {
   primary:
-    'inline-flex items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-black hover:opacity-90 disabled:opacity-40',
+    'inline-flex items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-brand-foreground hover:opacity-90 disabled:opacity-40',
   ghost:
     'inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-40',
   danger:
-    'inline-flex items-center gap-1.5 rounded-md border border-red-500/40 px-3 py-1.5 text-sm text-red-200 hover:bg-red-500/10',
+    'inline-flex items-center gap-1.5 rounded-md border border-critical-border-strong px-3 py-1.5 text-sm text-critical-strong hover:bg-critical-soft',
 };

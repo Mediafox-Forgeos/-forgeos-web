@@ -15,7 +15,7 @@ export default async function NewPasswordPage() {
   }
   return (
     <main className="mx-auto flex min-h-[80vh] max-w-md flex-col justify-center px-4 py-10">
-      <p className="text-brand text-sm font-semibold uppercase tracking-widest">
+      <p className="text-primary-text text-sm font-semibold uppercase tracking-widest">
         Hey Foxy
       </p>
       <h1 className="mt-1 text-2xl font-semibold">Nueva contraseña</h1>
@@ -28,7 +28,7 @@ export default async function NewPasswordPage() {
           </p>
           <Link
             href="/login/recuperar"
-            className="text-brand mt-4 text-sm hover:underline"
+            className="text-primary-text mt-4 text-sm hover:underline"
           >
             Solicitar un nuevo enlace
           </Link>

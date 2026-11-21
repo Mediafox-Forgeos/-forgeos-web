@@ -37,7 +37,7 @@ export default async function PostDetailPage({
     <>
       <Link
         href="/publicaciones"
-        className="text-brand text-sm hover:underline"
+        className="text-primary-text text-sm hover:underline"
       >
         ← Publicaciones
       </Link>

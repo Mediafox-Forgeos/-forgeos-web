@@ -1,27 +1,16 @@
 {
   "a11y": {
-    "desktop-1440/alertas": ["link-in-text-block"],
-    "desktop-1440/conversaciones": ["link-in-text-block"],
-    "desktop-1440/publicaciones": ["link-in-text-block"],
-    "desktop-1440/reportes": ["link-in-text-block"],
-    "desktop-1440/resumen": ["link-in-text-block"],
-    "desktop-1440/temas": ["link-in-text-block"],
-    "mobile-390/alertas": ["link-in-text-block"],
     "mobile-390/cobertura": ["scrollable-region-focusable"],
-    "mobile-390/conversaciones": ["link-in-text-block"],
     "mobile-390/publicacion-detalle": ["scrollable-region-focusable"],
-    "mobile-390/publicaciones": ["link-in-text-block"],
-    "mobile-390/reportes": ["link-in-text-block"],
-    "mobile-390/resumen": ["link-in-text-block"],
-    "mobile-390/temas": ["link-in-text-block"],
     "mobile-390/whatsapp": ["scrollable-region-focusable"],
-    "tablet-820/alertas": ["link-in-text-block"],
     "tablet-820/cobertura": ["scrollable-region-focusable"],
-    "tablet-820/conversaciones": ["link-in-text-block"],
-    "tablet-820/publicaciones": ["link-in-text-block"],
-    "tablet-820/reportes": ["link-in-text-block"],
-    "tablet-820/resumen": ["link-in-text-block"],
-    "tablet-820/temas": ["link-in-text-block"]
+    "v2-dark-390/cobertura": ["scrollable-region-focusable"],
+    "v2-dark-390/publicacion-detalle": ["scrollable-region-focusable"],
+    "v2-dark-390/whatsapp": ["scrollable-region-focusable"],
+    "v2-light-390/cobertura": ["scrollable-region-focusable"],
+    "v2-light-390/publicacion-detalle": ["scrollable-region-focusable"],
+    "v2-light-390/whatsapp": ["scrollable-region-focusable"],
+    "v2-light-820/cobertura": ["scrollable-region-focusable"]
   },
   "overflow": []
 }

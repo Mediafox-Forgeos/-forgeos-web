@@ -2,6 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Tokens de Hey Foxy.
+ * - :root            → tema legado (V1, oscuro). Valores idénticos a los de Gate 2.
+ * - [data-theme=v2-*] → Design System V2 (docs/product/heyfoxy/design-system, v0.2).
+ * Todos los colores son tripletes HSL; algunos tokens legados llevan alfa incorporado
+ * para reproducir exactamente las clases translúcidas de Tailwind que sustituyen.
+ * El contraste de los temas V2 se verifica con `node scripts/check-contrast.mjs`.
+ */
 @layer base {
   :root {
     --background: 230 14% 6%;
@@ -11,9 +19,138 @@
     --muted-foreground: 230 7% 66%;
     --border: 230 9% 18%;
     --brand: 24 95% 56%;
+    --brand-foreground: 0 0% 0%;
     --demo: 45 96% 56%;
+    --demo-foreground: 0 0% 0%;
     --radius: 0.75rem;
+    /* Estados (legado: equivalentes exactos de las clases emerald/red/amber/orange/sky/violet). */
+    --success-bg: 160 84% 39% / 0.15;
+    --success-fg: 156 72% 67%;
+    --critical-bg: 0 84% 60% / 0.15;
+    --critical-fg: 0 94% 82%;
+    --warning-bg: 38 92% 50% / 0.15;
+    --warning-fg: 46 97% 65%;
+    --high-bg: 25 95% 53% / 0.15;
+    --high-fg: 31 97% 72%;
+    --info-bg: 199 89% 48% / 0.15;
+    --info-fg: 199 95% 74%;
+    --ai-bg: 258 90% 66% / 0.15;
+    --ai-fg: 252 95% 85%;
+    --warning-border: 38 92% 50% / 0.3;
+    --warning-soft: 38 92% 50% / 0.05;
+    --critical-border: 0 84% 60% / 0.3;
+    --critical-soft: 0 84% 60% / 0.1;
+    --critical-strong: 0 96% 89%;
+    --critical-border-strong: 0 84% 60% / 0.4;
+    --chart-pos: 158 64% 52% / 0.8;
+    --chart-neu: 215 16% 47% / 0.7;
+    --chart-neg: 0 91% 71% / 0.8;
+    /* Solo V2 (valores de reserva en legado). */
+    --primary-text: 24 95% 56%;
+    --primary-pale: 230 9% 14%;
+    --accent-2: 24 95% 56%;
+    --control: 230 7% 46%;
+    --mod-home: 230 12% 9%;
+    --mod-explorer: 230 12% 9%;
+    --foxy-fur: 21.4 100% 59.2%;
+    --foxy-fur-dark: 18.2 78.6% 47.6%;
+    --foxy-cream: 28.6 100% 95.5%;
+    --foxy-ink: 270 40.5% 17.1%;
+    --shadow: 0 0% 0%;
   }
+
+  [data-theme='v2-light'] {
+    color-scheme: light;
+    --background: 222.9 100% 98.6%; /* #F8FAFF */
+    --foreground: 237.7 39.4% 12.9%; /* #14152E */
+    --card: 0 0% 100%; /* #FFFFFF */
+    --muted: 226.7 47.4% 96.3%; /* #F1F3FA */
+    --muted-foreground: 230 13.8% 42.7%; /* #5E637C */
+    --border: 224 36.6% 92%; /* #E3E7F2 */
+    --control: 228.8 14.2% 55.7%; /* #7E849E */
+    --brand: 256.3 100% 60.4%; /* #6C35FF */
+    --brand-foreground: 0 0% 100%; /* #FFFFFF */
+    --primary-text: 255.6 86.5% 56.5%; /* #6230F0 */
+    --primary-pale: 255 100% 95.3%; /* #EDE7FF */
+    --success-bg: 148.2 58.6% 94.3%; /* #E8F9F0 */
+    --success-fg: 153.1 78.1% 26.9%; /* #0F7A4A */
+    --info-bg: 210 100% 95.3%; /* #E7F3FF */
+    --info-fg: 211.5 70.6% 38.6%; /* #1D5FA8 */
+    --warning-bg: 40.8 100% 95.1%; /* #FFF7E6 */
+    --warning-fg: 39.1 100% 27.1%; /* #8A5A00 */
+    --critical-bg: 350.5 100% 96.3%; /* #FFECEF */
+    --critical-fg: 349.7 67.4% 42.2%; /* #B4233C */
+    --high-bg: 26.7 100% 94.7%; /* #FFF0E4 */
+    --high-fg: 25.3 100% 32.5%; /* #A64600 */
+    --ai-bg: 255 100% 95.3%; /* #EDE7FF */
+    --ai-fg: 256.3 74.8% 51.8%; /* #5A28E0 */
+    --chart-pos: 155.7 76.2% 36.3%; /* #16A36A */
+    --chart-neu: 229.1 16.4% 60.6%; /* #8A90AB */
+    --chart-neg: 349.5 74% 56.3%; /* #E23D5A */
+    --mod-home: 255.8 100% 96.3%; /* #F1ECFF */
+    --mod-explorer: 211.4 100% 95.9%; /* #EAF4FF */
+    --foxy-fur: 21.6 100% 59.2%; /* #FF7A2F */
+    --foxy-fur-dark: 18.2 78.6% 47.6%; /* #D9541A */
+    --foxy-cream: 28.7 100% 95.5%; /* #FFF3E8 */
+    --foxy-ink: 267.4 40.2% 17.1%; /* #2A1A3D */
+    --accent-2: 258.8 100% 71.2%; /* #9A6CFF */
+    --demo: 45 93.5% 58%; /* #F8C630 */
+    --demo-foreground: 0 0% 0%; /* #000000 */
+    --shadow: 232.8 45.6% 28.8%; /* #28306B */
+    --warning-border: 40.5 74.1% 77.3%; /* #F0D49A */
+    --warning-soft: 44 100% 97.1%; /* #FFFBF0 */
+    --critical-border: 349.5 70.8% 82.5%; /* #F2B3BE */
+    --critical-soft: 349.1 100% 97.8%; /* #FFF4F6 */
+    --critical-strong: 349.7 67.4% 42.2%; /* #B4233C */
+    --critical-border-strong: 349.8 67.1% 72.5%; /* #E88A9A */
+  }
+
+  [data-theme='v2-dark'] {
+    color-scheme: dark;
+    --background: 236.5 37.8% 8.8%; /* #0E0F1F */
+    --foreground: 230 54.5% 95.7%; /* #EEF0FA */
+    --card: 235.7 37.8% 14.5%; /* #171933 */
+    --muted: 234 31.3% 18.8%; /* #21243F */
+    --muted-foreground: 232.3 22% 72.4%; /* #A9ADC8 */
+    --border: 234.9 28.5% 24.1%; /* #2C2F4F */
+    --control: 232.7 18.7% 57.1%; /* #7D82A6 */
+    --brand: 255.6 100% 63.7%; /* #7646FF */
+    --brand-foreground: 0 0% 100%; /* #FFFFFF */
+    --primary-text: 254.8 100% 81.8%; /* #B9A2FF */
+    --primary-pale: 251 42.6% 22.5%; /* #2A2152 */
+    --success-bg: 156.8 50.8% 12%; /* #0F2E22 */
+    --success-fg: 150.9 67.7% 62.4%; /* #5EE0A1 */
+    --info-bg: 211.8 62% 15.5%; /* #0F2640 */
+    --info-fg: 210.8 100% 77.5%; /* #8CC4FF */
+    --warning-bg: 42.4 67.2% 12%; /* #33270A */
+    --warning-fg: 40.9 85.3% 65.3%; /* #F2C25B */
+    --critical-bg: 341.1 48.7% 15.3%; /* #3A1420 */
+    --critical-fg: 351.1 100% 78.8%; /* #FF93A3 */
+    --high-bg: 25.7 56.8% 14.5%; /* #3A2210 */
+    --high-fg: 25.3 100% 73.9%; /* #FFB27A */
+    --ai-bg: 251 42.6% 22.5%; /* #2A2152 */
+    --ai-fg: 255.2 100% 85.3%; /* #C7B4FF */
+    --chart-pos: 152.7 57.9% 51.6%; /* #3CCB8A */
+    --chart-neu: 231 21.3% 63.1%; /* #8D93B5 */
+    --chart-neg: 351.1 100% 71%; /* #FF6B81 */
+    --mod-home: 246.5 41.6% 17.5%; /* #1E1A3F */
+    --mod-explorer: 215.4 49.4% 15.5%; /* #14243B */
+    --foxy-fur: 22.3 100% 63.5%; /* #FF8A45 */
+    --foxy-fur-dark: 17.8 74.6% 52.2%; /* #E0602A */
+    --foxy-cream: 28.7 100% 95.5%; /* #FFF3E8 */
+    --foxy-ink: 258.8 50% 12.5%; /* #1A1030 */
+    --accent-2: 258.8 100% 71.2%; /* #9A6CFF */
+    --demo: 45 93.5% 58%; /* #F8C630 */
+    --demo-foreground: 0 0% 0%; /* #000000 */
+    --shadow: 0 0% 0%; /* #000000 */
+    --warning-border: 41.7 62.2% 21.8%; /* #5A4515 */
+    --warning-soft: 42.9 63.6% 8.6%; /* #241C08 */
+    --critical-border: 345.2 48.3% 28%; /* #6A2536 */
+    --critical-soft: 340 47.4% 11.2%; /* #2A0F18 */
+    --critical-strong: 351.1 100% 78.8%; /* #FF93A3 */
+    --critical-border-strong: 346.7 48.4% 36.5%; /* #8A3044 */
+  }
+
   * {
     @apply border-border;
   }
@@ -30,5 +167,38 @@
   :focus-visible {
     outline: 2px solid hsl(var(--brand));
     outline-offset: 2px;
+  }
+
+  /* Ámbito V2: tipografía Nunito, superficie, foco y movimiento reducido. */
+  .hf-v2 {
+    font-family:
+      var(--font-nunito),
+      ui-sans-serif,
+      system-ui,
+      -apple-system,
+      'Segoe UI',
+      sans-serif;
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    --radius: 1rem;
+  }
+  .hf-v2 :focus-visible {
+    outline: 2px solid hsl(var(--primary-text));
+    outline-offset: 2px;
+  }
+  .hf-v2 .tabular-nums,
+  .hf-v2 table {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hf-v2 *,
+  .hf-v2 *::before,
+  .hf-v2 *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

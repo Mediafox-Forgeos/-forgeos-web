@@ -20,17 +20,17 @@ export function SentimentDays({ days }: { days: DaySentiment[] }) {
               style={{ height: `${((d.pos + d.neg + d.other) / max) * 100}%` }}
             >
               <div
-                className="bg-emerald-400/80"
+                className="bg-chart-pos"
                 style={{ flex: d.pos }}
                 title={`${d.pos} positivas`}
               />
               <div
-                className="bg-slate-500/70"
+                className="bg-chart-neu"
                 style={{ flex: d.other }}
                 title={`${d.other} neutrales/mixtas`}
               />
               <div
-                className="bg-red-400/80"
+                className="bg-chart-neg"
                 style={{ flex: d.neg }}
                 title={`${d.neg} negativas`}
               />
@@ -43,15 +43,15 @@ export function SentimentDays({ days }: { days: DaySentiment[] }) {
       </div>
       <p className="text-muted-foreground mt-3 flex gap-4 text-xs">
         <span>
-          <i className="mr-1 inline-block h-2 w-2 rounded-sm bg-emerald-400/80" />
+          <i className="bg-chart-pos mr-1 inline-block h-2 w-2 rounded-sm" />
           Positivo
         </span>
         <span>
-          <i className="mr-1 inline-block h-2 w-2 rounded-sm bg-slate-500/70" />
+          <i className="bg-chart-neu mr-1 inline-block h-2 w-2 rounded-sm" />
           Neutral/mixto
         </span>
         <span>
-          <i className="mr-1 inline-block h-2 w-2 rounded-sm bg-red-400/80" />
+          <i className="bg-chart-neg mr-1 inline-block h-2 w-2 rounded-sm" />
           Negativo
         </span>
       </p>

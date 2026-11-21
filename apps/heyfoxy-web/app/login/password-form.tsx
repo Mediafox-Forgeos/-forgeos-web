@@ -34,7 +34,7 @@ export function PasswordForm() {
         />
       </label>
       {state.error && (
-        <p role="alert" className="text-sm text-red-300">
+        <p role="alert" className="text-critical-fg text-sm">
           {state.error}
         </p>
       )}
@@ -46,7 +46,10 @@ export function PasswordForm() {
       </button>
       <p className="text-muted-foreground text-xs">
         El acceso es por invitación. No existe registro público.{' '}
-        <Link href="/login/recuperar" className="text-brand hover:underline">
+        <Link
+          href="/login/recuperar"
+          className="text-primary-text hover:underline"
+        >
           ¿Olvidaste tu contraseña?
         </Link>
       </p>

@@ -1,5 +1,8 @@
-import { Badge, Card, PageHeader } from '@/components/ui';
+import { Badge, Card, PageHeader, buttonCls } from '@/components/ui';
 import { requireContext } from '@/lib/auth/session';
+import { getUiTheme } from '@/lib/shell';
+import { UI_THEMES, UI_THEME_LABEL } from '@/lib/ui-theme';
+import { setUiTheme } from '../theme-actions';
 
 export const metadata = { title: 'Configuración' };
 
@@ -14,6 +17,7 @@ const ROLE_DESC: Record<string, string> = {
 export default async function SettingsPage() {
   const { active, repo } = await requireContext();
   const members = await repo.members(active.organization.id);
+  const theme = await getUiTheme();
   return (
     <>
       <PageHeader
@@ -67,6 +71,26 @@ export default async function SettingsPage() {
             Acceso solo por invitación. Los permisos se aplican en la base de
             datos (RLS), no solo en la interfaz.
           </p>
+        </Card>
+        <Card>
+          <h2 className="text-sm font-medium">Apariencia</h2>
+          <p className="text-muted-foreground mt-1 text-sm">
+            Interfaz V2 en claro u oscuro, o la interfaz clásica (V1) mientras
+            dura la transición. Solo cambia la presentación.
+          </p>
+          <form action={setUiTheme} className="mt-3 flex flex-wrap gap-2">
+            {UI_THEMES.map((t) => (
+              <button
+                key={t}
+                name="theme"
+                value={t}
+                aria-pressed={theme === t}
+                className={t === theme ? buttonCls.primary : buttonCls.ghost}
+              >
+                {UI_THEME_LABEL[t]}
+              </button>
+            ))}
+          </form>
         </Card>
       </div>
     </>

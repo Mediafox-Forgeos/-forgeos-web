@@ -17,7 +17,7 @@ export default async function LoginPage({
     <>
       {demo && <DemoBanner />}
       <main className="mx-auto flex min-h-[80vh] max-w-md flex-col justify-center px-4 py-10">
-        <p className="text-brand text-sm font-semibold uppercase tracking-widest">
+        <p className="text-primary-text text-sm font-semibold uppercase tracking-widest">
           Hey Foxy
         </p>
         <h1 className="mt-1 text-2xl font-semibold">Command Center</h1>
@@ -27,7 +27,7 @@ export default async function LoginPage({
         {error === 'enlace-invalido' && (
           <p
             role="alert"
-            className="mt-4 rounded-md border border-red-500/30 bg-red-500/10 p-2 text-sm"
+            className="border-critical-border bg-critical-soft mt-4 rounded-md border p-2 text-sm"
           >
             El enlace no es válido o expiró. Solicita uno nuevo.
           </p>
@@ -35,7 +35,7 @@ export default async function LoginPage({
         {error === 'sin-organizacion' && (
           <p
             role="alert"
-            className="mt-4 rounded-md border border-red-500/30 bg-red-500/10 p-2 text-sm"
+            className="border-critical-border bg-critical-soft mt-4 rounded-md border p-2 text-sm"
           >
             Tu usuario no pertenece a ninguna organización.
           </p>

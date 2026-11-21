@@ -30,7 +30,7 @@ export function ResetRequestForm() {
         />
       </label>
       {state.error && (
-        <p role="alert" className="text-sm text-red-300">
+        <p role="alert" className="text-critical-fg text-sm">
           {state.error}
         </p>
       )}

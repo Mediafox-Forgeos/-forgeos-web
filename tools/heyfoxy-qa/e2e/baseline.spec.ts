@@ -5,8 +5,10 @@ import {
   ROUTES,
   openRoute,
   readDebt,
+  setTheme,
   signInDemo,
   writeDebt,
+  type QaTheme,
 } from './support';
 
 /**
@@ -48,6 +50,8 @@ for (const route of ROUTES) {
     });
     page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
 
+    const theme = (info.project.metadata.theme ?? 'legacy') as QaTheme;
+    await setTheme(context, baseURL!, theme);
     if (route.auth) await signInDemo(context, baseURL!);
 
     // 1. Funcional
@@ -94,9 +98,11 @@ for (const route of ROUTES) {
       }
     }
 
-    // 4. Visual
-    await expect(page).toHaveScreenshot(`${route.name}.png`, {
-      fullPage: true,
-    });
+    // 4. Visual: todas las vistas en el tema clásico; en V2, solo las vistas migradas (D-2).
+    if (theme === 'legacy' || route.v2) {
+      await expect(page).toHaveScreenshot(`${route.name}.png`, {
+        fullPage: true,
+      });
+    }
   });
 }
