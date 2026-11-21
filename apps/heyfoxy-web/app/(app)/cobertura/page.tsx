@@ -39,7 +39,10 @@ export default async function CoveragePage() {
         title="Fuentes y cobertura"
         description="Qué se escucha realmente, de qué cuentas, en qué periodo y qué tipo de dato. Lo que no aparece como conectado NO se está escuchando."
       />
-      <Card className="overflow-x-auto p-0">
+      <Card
+        className="overflow-x-auto p-0"
+        scrollLabel="Tabla de fuentes conectadas"
+      >
         <table className="w-full text-sm">
           <thead className="text-muted-foreground text-left text-xs">
             <tr>
@@ -80,7 +83,10 @@ export default async function CoveragePage() {
       <h2 className="mb-2 mt-6 text-sm font-medium">
         Matriz de cobertura por red y tipo de dato
       </h2>
-      <Card className="overflow-x-auto p-0">
+      <Card
+        className="overflow-x-auto p-0"
+        scrollLabel="Tabla de cobertura por red y tipo de dato"
+      >
         <table className="w-full text-sm">
           <thead className="text-muted-foreground text-left text-xs">
             <tr>

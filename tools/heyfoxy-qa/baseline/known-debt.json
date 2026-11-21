@@ -1,16 +1,4 @@
 {
-  "a11y": {
-    "mobile-390/cobertura": ["scrollable-region-focusable"],
-    "mobile-390/publicacion-detalle": ["scrollable-region-focusable"],
-    "mobile-390/whatsapp": ["scrollable-region-focusable"],
-    "tablet-820/cobertura": ["scrollable-region-focusable"],
-    "v2-dark-390/cobertura": ["scrollable-region-focusable"],
-    "v2-dark-390/publicacion-detalle": ["scrollable-region-focusable"],
-    "v2-dark-390/whatsapp": ["scrollable-region-focusable"],
-    "v2-light-390/cobertura": ["scrollable-region-focusable"],
-    "v2-light-390/publicacion-detalle": ["scrollable-region-focusable"],
-    "v2-light-390/whatsapp": ["scrollable-region-focusable"],
-    "v2-light-820/cobertura": ["scrollable-region-focusable"]
-  },
+  "a11y": {},
   "overflow": []
 }

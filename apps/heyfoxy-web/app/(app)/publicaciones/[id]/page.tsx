@@ -86,7 +86,12 @@ export default async function PostDetailPage({
             Sin mediciones todavía.
           </p>
         ) : (
-          <div className="mt-3 overflow-x-auto">
+          <div
+            className="mt-3 overflow-x-auto"
+            role="region"
+            aria-label="Historial de métricas"
+            tabIndex={0}
+          >
             <table className="w-full text-left text-sm tabular-nums">
               <thead className="text-muted-foreground text-xs">
                 <tr>

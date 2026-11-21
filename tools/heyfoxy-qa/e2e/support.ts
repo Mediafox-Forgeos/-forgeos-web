@@ -15,6 +15,8 @@ export type QaRoute = {
   followLink?: RegExp;
   /** Vista migrada a V2: sus capturas V2 se versionan (D-2: solo capturas esenciales). */
   v2?: boolean;
+  /** Solo existe en la interfaz V2 (p. ej. el catálogo /ds). */
+  v2Only?: boolean;
 };
 
 /** Todas las vistas actuales del Command Center + autenticación (línea base pre-V2). */
@@ -44,6 +46,7 @@ export const ROUTES: QaRoute[] = [
   { name: 'whatsapp', path: '/whatsapp', auth: true },
   { name: 'uso', path: '/uso', auth: true },
   { name: 'configuracion', path: '/configuracion', auth: true },
+  { name: 'catalogo-ds', path: '/ds', auth: true, v2: true, v2Only: true },
 ];
 
 export type QaTheme = 'legacy' | 'v2-light' | 'v2-dark';

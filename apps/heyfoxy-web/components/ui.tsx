@@ -8,12 +8,20 @@ import type { ReactNode } from 'react';
 export function Card({
   className,
   children,
+  scrollLabel,
 }: {
   className?: string;
   children: ReactNode;
+  /** Si el contenido tiene scroll horizontal: región enfocable con teclado (WCAG 2.1.1). */
+  scrollLabel?: string;
 }) {
   return (
-    <section className={cn('bg-card rounded-lg border p-4', className)}>
+    <section
+      className={cn('bg-card rounded-lg border p-4', className)}
+      {...(scrollLabel
+        ? { role: 'region', 'aria-label': scrollLabel, tabIndex: 0 }
+        : {})}
+    >
       {children}
     </section>
   );

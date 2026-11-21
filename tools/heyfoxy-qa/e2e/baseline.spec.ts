@@ -51,6 +51,7 @@ for (const route of ROUTES) {
     page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
 
     const theme = (info.project.metadata.theme ?? 'legacy') as QaTheme;
+    test.skip(theme === 'legacy' && !!route.v2Only, 'vista solo V2');
     await setTheme(context, baseURL!, theme);
     if (route.auth) await signInDemo(context, baseURL!);
 

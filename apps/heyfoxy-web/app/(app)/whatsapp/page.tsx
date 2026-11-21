@@ -35,7 +35,10 @@ export default async function WhatsAppPage() {
         </p>
       ) : (
         <>
-          <Card className="overflow-x-auto p-0">
+          <Card
+            className="overflow-x-auto p-0"
+            scrollLabel="Tabla de destinatarios de WhatsApp"
+          >
             <table className="w-full text-sm">
               <thead className="text-muted-foreground text-left text-xs">
                 <tr>

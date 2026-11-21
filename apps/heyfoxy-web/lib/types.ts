@@ -141,6 +141,33 @@ export interface Post {
   isSynthetic: boolean;
   /** Serie de métricas, de la más reciente a la más antigua. */
   metrics: PostMetrics[];
+  /**
+   * Medios de la publicación, solo si la fuente los entrega y los permisos lo permiten.
+   * Ninguna fuente los entrega todavía (sin columna en el esquema; Metricool sin conectar):
+   * la interfaz muestra un fallback con enlace al original. Nunca se inventan.
+   */
+  media?: PostMediaItem[];
+  /** Autor o cuenta de la publicación, si la fuente lo entrega. */
+  author?: PostAuthor | null;
+}
+
+/** Un medio de una publicación (varios = carrusel). */
+export interface PostMediaItem {
+  kind: 'image' | 'video';
+  url: string;
+  /** Miniatura o póster (obligatorio para mostrar un video sin descargarlo). */
+  previewUrl?: string | null;
+  /** Texto alternativo entregado por la fuente; sin él se usa una descripción genérica. */
+  alt?: string | null;
+  width?: number | null;
+  height?: number | null;
+  durationSec?: number | null;
+}
+
+export interface PostAuthor {
+  displayName: string | null;
+  handle: string | null;
+  avatarUrl: string | null;
 }
 
 export interface DailyReport {

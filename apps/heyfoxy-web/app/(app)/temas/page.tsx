@@ -37,7 +37,7 @@ export default async function TopicsPage() {
       {rows.length === 0 ? (
         <EmptyState title="Sin temas detectados" />
       ) : (
-        <Card className="overflow-x-auto p-0">
+        <Card className="overflow-x-auto p-0" scrollLabel="Tabla de temas">
           <table className="w-full text-sm">
             <thead className="text-muted-foreground text-left text-xs">
               <tr>
