@@ -1,3 +1,4 @@
+import { AppShell } from '@/components/shell/app-shell';
 import { requireContext } from '@/lib/auth/session';
 import { getUiTheme } from '@/lib/shell';
 import { isV2 } from '@/lib/ui-theme';
@@ -10,13 +11,17 @@ export default async function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { viewer, memberships, active } = await requireContext();
+  const { viewer, memberships, active, repo } = await requireContext();
   const theme = await getUiTheme();
   const ctx = { viewer, memberships, active };
   if (!isV2(theme)) return <LegacyShell ctx={ctx}>{children}</LegacyShell>;
+  // Contador del menú: las alertas se leen siempre dentro de la organización activa (y RLS).
+  const pendingAlerts = (await repo.alerts(active.organization.id)).filter(
+    (a) => a.reviewStatus === 'pending',
+  ).length;
   return (
-    <div data-theme={theme} className="hf-v2 min-h-screen">
-      <LegacyShell ctx={ctx}>{children}</LegacyShell>
-    </div>
+    <AppShell ctx={ctx} theme={theme} pendingAlerts={pendingAlerts}>
+      {children}
+    </AppShell>
   );
 }

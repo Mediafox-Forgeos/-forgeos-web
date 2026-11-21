@@ -47,6 +47,7 @@ export const ROUTES: QaRoute[] = [
   { name: 'uso', path: '/uso', auth: true },
   { name: 'configuracion', path: '/configuracion', auth: true },
   { name: 'catalogo-ds', path: '/ds', auth: true, v2: true, v2Only: true },
+  { name: 'buscar', path: '/buscar?q=citas', auth: true, v2Only: true },
 ];
 
 export type QaTheme = 'legacy' | 'v2-light' | 'v2-dark';
@@ -83,8 +84,30 @@ export async function openRoute(page: Page, route: QaRoute): Promise<number> {
     const detail = await page.goto(target!, { waitUntil: 'networkidle' });
     status = detail?.status() ?? 0;
   }
-  // Fuentes cargadas antes de capturar o auditar.
-  await page.evaluate(() => document.fonts.ready.then(() => undefined));
+  // Recorre la página para que carguen las imágenes diferidas (loading="lazy") y vuelve arriba;
+  // fuentes cargadas antes de capturar o auditar.
+  await page.evaluate(async () => {
+    for (let y = 0; y < document.body.scrollHeight; y += window.innerHeight) {
+      window.scrollTo(0, y);
+      await new Promise((r) => setTimeout(r, 30));
+    }
+    window.scrollTo(0, 0);
+    // Solo imágenes visibles (las diapositivas ocultas de un carrusel no cargan nunca) y con tope.
+    const pending = [...document.images]
+      .filter((img) => !img.complete && img.checkVisibility())
+      .map(
+        (img) =>
+          new Promise((r) => {
+            img.addEventListener('load', r, { once: true });
+            img.addEventListener('error', r, { once: true });
+          }),
+      );
+    await Promise.race([
+      Promise.all(pending),
+      new Promise((r) => setTimeout(r, 3000)),
+    ]);
+    await document.fonts.ready;
+  });
   return status;
 }
 
