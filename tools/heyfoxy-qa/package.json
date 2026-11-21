@@ -1,0 +1,20 @@
+{
+  "name": "@mediafox/heyfoxy-qa",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Hey Foxy V2 — QA visual, de accesibilidad y funcional con Playwright sobre heyfoxy-web en modo demo. Solo local; fuera del workspace pnpm (lockfile propio) para no alterar las dependencias de otras apps.",
+  "packageManager": "pnpm@11.5.3",
+  "scripts": {
+    "build:app": "cd ../../apps/heyfoxy-web && env -u NEXT_PUBLIC_SUPABASE_URL -u NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY pnpm run build",
+    "e2e": "playwright test",
+    "e2e:record": "HF_QA_RECORD=1 playwright test --update-snapshots",
+    "e2e:report": "playwright show-report",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
+    "@playwright/test": "1.65.0",
+    "@types/node": "^22.10.1",
+    "typescript": "^5.7.2"
+  }
+}

@@ -318,3 +318,49 @@ Ejecutado, sin contratar, migrar ni desplegar:
   - sin errores de consola y sin 500 en las rutas visitadas.
   - La API de logs de runtime devolvió 0 registros, también a nivel de proyecto, así que no sirve como evidencia en esta ventana.
 - **Pendiente:** Álvaro configura Site URL y Redirect URL (10 §6) y valida manualmente (12 §7). Gate 2 sigue abierto.
+
+## 2026-11-20 — V2 UX/UI: WO-HF-V2-DOC y WO-HF-V2-00 (autorizadas por Álvaro)
+
+- **Decisiones de Álvaro** sobre el plan V2 (13 §0):
+  - Gate D se cierra antes de la implementación visual general; solo Álvaro lo declara cerrado.
+  - Navegación opción A: `/` es Intelligence Home e integra el Resumen.
+  - Playwright y axe aprobados como dependencias de desarrollo.
+  - Foxy como SVG original.
+  - Benchmark y Audiencia: «Próximamente» o «Sin datos disponibles».
+  - Claro y oscuro con adopción progresiva.
+  - Componentes listos para medios, autores y comentarios reales, sin Metricool.
+  - Sin cambios en Supabase, RLS, Auth, MediaFOX OS, MOVOS ni Production.
+- **Rama:** `feat/heyfoxy-v2-uxui`, desde `6ac992f`.
+- **WO-HF-V2-DOC:**
+  - Versionados el doc 13 (con decisiones y correcciones) y `design-system/` (DS **v0.2** y el concepto PNG).
+  - DS v0.2: tokens con contraste corregido, superficies por módulo, mascota SVG, estados «Próximamente», componentes de medios y estrategia de temas por ámbito.
+  - Nuevo plan detallado: [14](./14_V2_PHASE_PLAN.md).
+  - Corrección del diagnóstico: hay 35 colores fijos (no 27); los 8 restantes están en el login y en dos formularios.
+- **WO-HF-V2-00:**
+  - `@playwright/test` 1.65.0 y `@axe-core/playwright` 4.14.0 (versiones exactas, publicadas hace más de 2 semanas).
+  - Primer intento como devDependencies de `heyfoxy-web`: **revertido**. `@playwright/test` es un peer opcional de `next`, y pnpm cambiaba la entrada de `next` de `forgeos-web`, `forge-labs` y `movos-web` en el lockfile raíz, que además pasaban a instalar Playwright.
+  - Mismo resultado como paquete separado dentro del workspace. **Solución:** `tools/heyfoxy-qa`, fuera del workspace, con lockfile propio.
+  - **`pnpm-lock.yaml` raíz sin cambios.** El `node_modules` local se restauró con `pnpm install --frozen-lockfile`; `movos-web` vuelve a enlazar la instancia original de `next`.
+  - Una prueba por vista y viewport (16 × 3 = 48): funcional (HTTP 200, 0 errores de consola o red, `<h1>`), axe WCAG 2.0/2.1/2.2 A/AA contra la deuda conocida, desbordamiento horizontal y captura de página completa.
+  - Reloj del servidor fijado solo en QA (`support/fixed-clock.cjs`, por `NODE_OPTIONS`), sin tocar la app.
+  - Chrome del sistema; no se descargan navegadores.
+- **Línea base registrada** (14 §2):
+  - **QA visual:** 48/48 al grabar y 48/48 en la verificación siguiente, sin diferencias. Capturas: 8,4 MB.
+  - **axe:** 0 críticas; 2 reglas «serious» como deuda: `link-in-text-block` (18 vistas) y `scrollable-region-focusable` (4).
+  - **Sin desbordamiento horizontal.**
+  - **Funcional existente:**
+    - typecheck y lint en verde;
+    - unitarias 60/60;
+    - SQL local 122/122 y contrato OK (Postgres efímero; sin Supabase);
+    - build en modo demo y en modo Supabase (valores de relleno, sin red), con `check-trace` OK;
+    - smoke HTTP 40/40.
+- **Hallazgos registrados:**
+  - HF-QA-04: deuda de accesibilidad.
+  - HF-UX-02: falta el favicon.
+  - HF-UX-03: «Asignado a Asignado» en el seed demo.
+  - HF-OPS-10: store de pnpm.
+  - HF-OPS-11: `.vercelignore`.
+  - HF-QA-05: peso de las capturas.
+- **Entorno:** el servidor de QA, las pruebas SQL y la instalación con el store pnpm del volumen se ejecutaron fuera del sandbox de Claude Code (puerto local, memoria compartida, store fuera del repo).
+- **Sin cambios** en Supabase, migraciones, RLS, Auth, Vercel (sin despliegues), Production, Metricool, WhatsApp, MediaFOX OS ni MOVOS.
+- **Gate 2 / Gate D siguen abiertos.** Las WO V2-01 a V2-09 están preparadas (14 §4) y no se implementan sin autorización.
