@@ -27,6 +27,7 @@ Plataforma SaaS multiempresa de escucha social con IA, monitoreo reputacional, a
 | 12  | [Usuarios QA, credenciales privadas y acceso al Preview](./12_QA_USERS_AND_ACCESS.md)                                       | Gate 2                                |
 | 13  | [V2: arquitectura UX/UI, decisiones y Work Orders](./13_V2_UX_UI_ARCHITECTURE.md)                                           | V2                                    |
 | 14  | [V2: plan detallado por fases](./14_V2_PHASE_PLAN.md)                                                                       | V2                                    |
+| 15  | [V2: revisión de Intelligence Home y Social Explorer (antes/después y pruebas)](./15_V2_REVIEW_HOME_EXPLORER.md)            | V2                                    |
 | DS  | [Design System V2 v0.2](./design-system/HEY_FOXY_V2_DESIGN_SYSTEM.md) · [concepto](./design-system/HEY_FOXY_V2_CONCEPT.png) | V2                                    |
 | —   | [WORKLOG](./WORKLOG.md) · [TECH_BACKLOG](./TECH_BACKLOG.md)                                                                 | Seguimiento                           |
 

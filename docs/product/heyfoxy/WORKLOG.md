@@ -364,3 +364,46 @@ Ejecutado, sin contratar, migrar ni desplegar:
 - **Entorno:** el servidor de QA, las pruebas SQL y la instalación con el store pnpm del volumen se ejecutaron fuera del sandbox de Claude Code (puerto local, memoria compartida, store fuera del repo).
 - **Sin cambios** en Supabase, migraciones, RLS, Auth, Vercel (sin despliegues), Production, Metricool, WhatsApp, MediaFOX OS ni MOVOS.
 - **Gate 2 / Gate D siguen abiertos.** Las WO V2-01 a V2-09 están preparadas (14 §4) y no se implementan sin autorización.
+
+## 2026-11-21 — V2 UX/UI: WO V2-01, V2-02, V2-03, V2-04 y V2-06 (autorizadas por Álvaro; solo local)
+
+- **Decisiones aplicadas:** D-1 (el tema Clásico V1 queda como alternativa; V2 claro por defecto), D-2 (capturas V2 solo de vistas migradas) y D-3 (sin tocar `.vercelignore`).
+- **WO-HF-V2-01** (`1fbba5b`):
+  - Tokens V2 claro y oscuro junto al legado intacto; preferencia `hf_ui` y tarjeta «Apariencia».
+  - Nunito autoalojada (HF-OPS-12) e icono SVG.
+  - 35 colores fijos y `text-brand` sustituidos por tokens (mismo valor en legado).
+  - Contraste AA verificado por script (68 pares). Deuda `link-in-text-block` cerrada.
+- **WO-HF-V2-02** (`f75e30e`):
+  - Biblioteca `components/ds`: primitivas, estados («Próximamente», «Sin datos disponibles») y Foxy SVG original.
+  - Iconos de redes oficiales (Simple Icons CC0; LinkedIn con Lucide).
+  - Gráficos interactivos accesibles con tabla alternativa.
+  - Componentes de medios (foto, video y carrusel) con fallback honesto; tipos opcionales `Post.media`/`author`, sin cambios de esquema.
+  - Catálogo `/ds` solo en demo. Deuda `scrollable-region-focusable` cerrada: **deuda axe vacía**.
+- **WO-HF-V2-03** (`c47a26c`):
+  - AppShell: riel en tablet, menú modal en móvil, `switchOrg` sin cambios, tarjeta de usuario con tema.
+  - Periodo `?periodo` conservado al navegar y buscador `/buscar`.
+  - Corregidos con las pruebas: `parsePeriod('__proto__')` y nombres accesibles (WCAG 2.5.3).
+- **WO-HF-V2-04** (`b934458`):
+  - Intelligence Home integra el Resumen (opción A).
+  - `lib/home-insights.ts` añade funciones puras y probadas, sin tocar `lib/insights.ts`.
+  - Hallazgos de Foxy por reglas con base y evidencia.
+  - Detectado y corregido un desbordamiento real de 459 px a 390 px. La prueba de QA lo ocultaba: con `isMobile`, `innerWidth` crece; ahora compara contra `clientWidth`.
+- **WO-HF-V2-06** (`cc45e92`):
+  - Social Explorer: galería, chips por red y filtros del repositorio.
+  - Aviso «0 de N con fotos o videos».
+  - Detalle con historial, comentarios y Foxy contextual. Aislamiento intacto: una publicación ajena da 404.
+- **Regresión en `cc45e92`:**
+  - typecheck y lint en verde;
+  - unitarias 88/88;
+  - SQL local 122/122 y contrato OK;
+  - build demo y Supabase en verde;
+  - smoke 49/49 (+9 de V2);
+  - QA 138/138 en 8 proyectos, con 0 violaciones axe graves y 0 desbordamientos;
+  - capturas clásicas sin cambios salvo Configuración.
+- **Revisión visual:** [15](./15_V2_REVIEW_HOME_EXPLORER.md), antes y después con capturas reales.
+- **Sin cambios** en migraciones, RLS, Auth, Supabase, Vercel (sin despliegues), Production, Metricool, WhatsApp, MediaFOX OS ni MOVOS. Archivos congelados verificados por `git diff --stat` en cada WO.
+- **Pendiente:**
+  - Gate D (Álvaro);
+  - GO por SHA para un Preview V2;
+  - validación con `heyfoxy-qa` (HF-QA-06);
+  - V2-05, V2-07, V2-08 y V2-09 sin autorizar.
