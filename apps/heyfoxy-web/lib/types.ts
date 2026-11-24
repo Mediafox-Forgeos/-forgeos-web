@@ -162,6 +162,11 @@ export interface PostMediaItem {
   width?: number | null;
   height?: number | null;
   durationSec?: number | null;
+  /**
+   * false si la fuente solo entrega la miniatura de un video (Metricool): se muestra la
+   * miniatura con su duración y el enlace al original, sin reproductor.
+   */
+  playable?: boolean;
 }
 
 export interface PostAuthor {

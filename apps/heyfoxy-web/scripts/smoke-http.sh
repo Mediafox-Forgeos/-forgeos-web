@@ -74,6 +74,14 @@ check "Social Explorer V2" '[[ "$(body /publicaciones "$OWNER")" == *"Sin vista 
 check "detalle: volver conserva filtros y periodo" '[[ "$(body "/publicaciones/demo-clinica-aurora-post-instagram?platform=instagram&periodo=30d" "$OWNER")" == *"href=\"/publicaciones?platform=instagram&amp;periodo=30d\""* ]]'
 check "detalle: análisis IA, prioridad y confianza por comentario" '[[ "$(body /publicaciones/demo-clinica-aurora-post-instagram "$OWNER")" == *"Clasificación por reglas"*"Confianza"* ]]'
 check "filtro inválido en el detalle se descarta" '[[ "$(get "/publicaciones/demo-clinica-aurora-post-instagram?platform=__proto__" "$OWNER")" == "200" ]]'
+VIEWER0="hf_demo_user=demo-user-viewer; hf_org=$ORG_A"
+# Fuentes y cobertura V2 + Metricool (WO-HF-METRICOOL-INTEGRATION-001)
+SRC="$(body /cobertura "$OWNER")"
+check "fuentes V2: tarjeta de Metricool en simulación" '[[ "$SRC" == *"Metricool"* && "$SRC" == *"Simulación"* ]]'
+check "fuentes V2: sin token en el HTML" '[[ "$SRC" != *"fixture-token"* && "$SRC" != *"X-Mc-Auth"* ]]'
+check "fuentes clásico conserva la vista V1" '[[ "$(body /cobertura "$OWNER; hf_ui=legacy")" == *"Etapa técnica"* ]]'
+check "sync programada desactivada (503)" '[[ "$(get /api/sync/cron "$OWNER")" == "503" ]]'
+check "viewer sin acciones de fuente" '[[ "$(body /cobertura "$VIEWER0")" != *"Conectar marca"* ]]'
 check "login V2 por defecto" '[[ "$(body /login "")" == *"Ingresa a tu espacio"* ]]'
 check "login clásico con tema legacy" '[[ "$(body /login "hf_ui=legacy")" == *"Command Center"* && "$(body /login "hf_ui=legacy")" != *"Ingresa a tu espacio"* ]]'
 check "catálogo /ds en demo → 200" '[[ "$(get /ds "$OWNER")" == "200" ]]'

@@ -4,8 +4,6 @@ import { PROVIDER_CATALOG } from '@/lib/connectors/registry';
 import { PLATFORM_LABEL, fmtDateTime } from '@/lib/format';
 import type { SourceStatus } from '@/lib/types';
 
-export const metadata = { title: 'Fuentes y cobertura' };
-
 const STATUS: Record<
   SourceStatus,
   { label: string; t: 'green' | 'amber' | 'red' | 'neutral' }
@@ -26,7 +24,7 @@ const KIND: Record<string, string> = {
   reviews: 'Reseñas',
 };
 
-export default async function CoveragePage() {
+export async function LegacyCoverage() {
   const { active, repo } = await requireContext();
   const [sources, coverage] = await Promise.all([
     repo.sources(active.organization.id),

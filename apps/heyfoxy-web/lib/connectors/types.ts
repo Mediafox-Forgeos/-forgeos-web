@@ -27,6 +27,24 @@ export interface FetchWindow {
   limit: number;
 }
 
+export type ContentType =
+  | 'image'
+  | 'video'
+  | 'carousel'
+  | 'reel'
+  | 'story'
+  | 'text'
+  | 'link'
+  | 'unknown';
+
+/** Medio entregado por la fuente (nunca se inventa). */
+export interface NormalizedMedia {
+  kind: 'image' | 'video';
+  sourceUrl: string;
+  previewUrl?: string | null;
+  durationSec?: number | null;
+}
+
 export interface NormalizedPost {
   externalId: string;
   platform: Platform;
@@ -34,12 +52,31 @@ export interface NormalizedPost {
   body: string | null;
   permalink: string | null;
   publishedAt: string | null;
+  contentType?: ContentType;
+  title?: string | null;
+  author?: {
+    display: string | null;
+    handle: string | null;
+    avatarUrl: string | null;
+  } | null;
+  /** Medios entregados (puede ser parcial: p. ej. una sola imagen de un carrusel). */
+  media?: NormalizedMedia[];
+  /** Cuántos medios declara la fuente, si lo declara (para avisar de carruseles parciales). */
+  mediaCountReported?: number | null;
   metrics: {
     likes?: number;
     comments?: number;
     shares?: number;
     views?: number;
+    /** Alcance real (Instagram). Nunca se rellena con impresiones únicas. */
     reach?: number;
+    impressions?: number;
+    impressionsUnique?: number;
+    interactions?: number;
+    saves?: number;
+    videoViews?: number;
+    engagement?: number;
+    reactions?: Record<string, number>;
   };
 }
 
@@ -54,6 +91,7 @@ export interface NormalizedComment {
   authorDisplay: string | null;
   publishedAt: string;
   permalink: string | null;
+  mediaUrl?: string | null;
 }
 
 export interface FetchPage<T> {

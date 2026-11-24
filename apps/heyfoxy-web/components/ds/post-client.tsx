@@ -69,3 +69,45 @@ export function MediaCarousel({
     </div>
   );
 }
+
+/**
+ * Imagen externa con caída honesta: si la URL caducó o fue retirada por la red, se muestra
+ * «Vista previa caducada» en lugar de un hueco o de una imagen inventada (fase D).
+ */
+export function SafeImage({
+  src,
+  alt,
+  className,
+}: {
+  src: string;
+  alt: string;
+  className?: string;
+}) {
+  const [failed, setFailed] = useState(false);
+  if (failed)
+    return (
+      <span
+        role="img"
+        aria-label={`${alt} (vista previa caducada)`}
+        className={cn(
+          'bg-muted text-muted-foreground flex h-full w-full flex-col items-center justify-center gap-1 p-3 text-center text-xs font-bold',
+          className,
+        )}
+      >
+        Vista previa caducada
+        <span className="font-semibold">Ábrela en la red original</span>
+      </span>
+    );
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- URL externa de la red; sin optimizador de imágenes.
+    <img
+      src={src}
+      alt={alt}
+      loading="lazy"
+      decoding="async"
+      referrerPolicy="no-referrer"
+      onError={() => setFailed(true)}
+      className={cn('h-full w-full object-cover', className)}
+    />
+  );
+}

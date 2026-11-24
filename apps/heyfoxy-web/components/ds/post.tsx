@@ -4,6 +4,7 @@ import {
   Heart,
   ImageOff,
   MessageCircle,
+  Play,
   Repeat2,
   TrendingUp,
   Users,
@@ -13,7 +14,7 @@ import { cn } from '@/lib/cn';
 import { PLATFORM_LABEL, SENTIMENT_LABEL, fmtRelative } from '@/lib/format';
 import type { PostStats } from '@/lib/insights';
 import type { Post, PostMediaItem, Sentiment } from '@/lib/types';
-import { MediaCarousel } from './post-client';
+import { MediaCarousel, SafeImage } from './post-client';
 import { NetworkIcon } from './network-icons';
 import { Avatar, StatusPill, SyntheticBadge, type Tone } from './primitives';
 
@@ -54,6 +55,25 @@ export function MediaItem({
   className?: string;
 }) {
   const alt = mediaAlt(post, item, index, count);
+  // Video del que la fuente solo entrega miniatura: miniatura + duración, sin reproductor.
+  if (item.kind === 'video' && item.playable === false)
+    return (
+      <span className={cn('relative block h-full w-full', className)}>
+        {item.previewUrl ? (
+          <SafeImage src={item.previewUrl} alt={alt} />
+        ) : (
+          <span className="bg-muted block h-full w-full" />
+        )}
+        <span
+          aria-hidden
+          className="absolute inset-0 flex items-center justify-center"
+        >
+          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-white">
+            <Play className="h-6 w-6" />
+          </span>
+        </span>
+      </span>
+    );
   if (item.kind === 'video')
     return (
       <video
@@ -68,14 +88,10 @@ export function MediaItem({
       </video>
     );
   return (
-    // eslint-disable-next-line @next/next/no-img-element -- URL externa de la red; sin optimizador de imágenes.
-    <img
+    <SafeImage
       src={item.previewUrl ?? item.url}
       alt={alt}
-      loading="lazy"
-      decoding="async"
-      referrerPolicy="no-referrer"
-      className={cn('h-full w-full object-cover', className)}
+      className={className}
     />
   );
 }

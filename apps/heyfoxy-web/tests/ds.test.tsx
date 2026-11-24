@@ -179,3 +179,27 @@ describe('Foxy y estados', () => {
     expect(html(<NotAvailableState />)).toContain('Sin datos disponibles');
   });
 });
+
+describe('Medios de Metricool (fase D)', () => {
+  it('video con solo miniatura: muestra la miniatura, sin reproductor', () => {
+    const h = html(
+      <PostMedia
+        post={{
+          ...base,
+          media: [
+            {
+              kind: 'video',
+              url: 'https://cdn.example/t.jpg',
+              previewUrl: 'https://cdn.example/t.jpg',
+              durationSec: 42,
+              playable: false,
+            },
+          ],
+        }}
+      />,
+    );
+    expect(h).toContain('src="https://cdn.example/t.jpg"');
+    expect(h).not.toContain('<video');
+    expect(h).toContain('0:42');
+  });
+});
