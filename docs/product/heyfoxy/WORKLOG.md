@@ -418,3 +418,10 @@ Ejecutado, sin contratar, migrar ni desplegar:
 - **Revisión visual asistida** (Álvaro inició sesión; 30 capturas con datos de `heyfoxy-qa`, galería en `/Volumes/MediaFOX_DEV/QA/HeyFoxy/V2/2026-11-24/`, fuera de Git).
 - **WO-HF-V2-REFINEMENT-001** (local): fases A y B, preparación de Metricool. Detalle y pruebas en [17](./17_V2_REFINEMENT_001.md); WO de Metricool en [16](./16_WO_HF_METRICOOL_INTEGRATION.md).
 - **Sin cambios** en migraciones, RLS, Auth, Supabase remoto, Vercel, Production, Metricool, WhatsApp, MediaFOX OS ni MOVOS.
+
+## 2026-11-24 — WO-HF-METRICOOL-INTEGRATION-001
+
+- **Preview refinado** con GO por SHA `a6879cd`: `dpl_H5mNpzaWHognPSVV88qLATwi7ouz` (`heyfoxy-gd3gjh4mk-mediafox.vercel.app`), `target=preview`, sin alias; Preview V1 (alias) y Preview V2 anterior intactos; Production congelado; protección `all`; 0 bypass; Supabase de Preview = `heyfoxy-qa`.
+- **Datos QA (preparado, sin escrituras remotas)**: `qa_fix_002_date_spread`, `qa_refresh_dates`, exportación de rollback y rollback de `qa_fix_001`; probado sobre el seed de Gate B envejecido (`scripts/test-qa-seed.sh`).
+- **Metricool local**: conector de solo lectura ampliado, motor de sincronización, simulación con servidor sintético, adaptador Supabase (inactivo), pantalla V2 _Fuentes y cobertura_, migración 0006 en `migrations-pending/` probada con rollback. Detalle en [18](./18_METRICOOL_INTEGRATION_001.md).
+- **Sin cambios** en migraciones aplicadas, RLS remota, Auth/middleware, Supabase remoto, Production, WhatsApp, MediaFOX OS ni MOVOS. Sin cuentas reales ni datos de MedPlus.

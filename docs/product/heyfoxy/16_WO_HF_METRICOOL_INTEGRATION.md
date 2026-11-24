@@ -1,12 +1,12 @@
 # 16 — WO-HF-METRICOOL-01: integración real de Metricool Advanced (preparada)
 
-| Propiedad | Valor                                                                                                                         |
-| --------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| Fecha     | 2026-11-24                                                                                                                    |
-| Estado    | **Preparada, no autorizada.** Sin cuentas reales, sin tokens, sin migraciones ejecutadas                                      |
-| Fuente    | OpenAPI oficial `https://app.metricool.com/api/swagger.json` (API 2.0.0, 601 rutas), descargada el 2026-11-24                 |
-| Base      | [08_METRICOOL_CONNECTION.md](./08_METRICOOL_CONNECTION.md) (conector de solo lectura con lista blanca, deshabilitado)         |
-| Regla     | Todo lo marcado «por confirmar» se valida con la cuenta real en el paso 6 del procedimiento; no se asume en la implementación |
+| Propiedad | Valor                                                                                                                                                           |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Fecha     | 2026-11-24                                                                                                                                                      |
+| Estado    | Implementación local autorizada el 2026-11-24 y entregada: ver [18](./18_METRICOOL_INTEGRATION_001.md). Sin cuentas reales, sin tokens, sin migraciones remotas |
+| Fuente    | OpenAPI oficial `https://app.metricool.com/api/swagger.json` (API 2.0.0, 601 rutas), descargada el 2026-11-24                                                   |
+| Base      | [08_METRICOOL_CONNECTION.md](./08_METRICOOL_CONNECTION.md) (conector de solo lectura con lista blanca, deshabilitado)                                           |
+| Regla     | Todo lo marcado «por confirmar» se valida con la cuenta real en el paso 6 del procedimiento; no se asume en la implementación                                   |
 
 ## 1. Qué campos entrega la API, por red
 
