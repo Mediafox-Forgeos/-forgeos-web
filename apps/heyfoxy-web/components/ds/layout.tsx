@@ -15,9 +15,9 @@ import { Delta, IconBadge, Panel, StatusPill, type Tone } from './primitives';
 /* Piezas de página: cabecera de módulo, KPI, cobertura y panel de Foxy. */
 
 export type Module = 'home' | 'explorer';
-const MODULE_BG: Record<Module, string> = {
-  home: 'from-mod-home',
-  explorer: 'from-mod-explorer',
+const MODULE_VAR: Record<Module, string> = {
+  home: '--mod-home',
+  explorer: '--mod-explorer',
 };
 
 /** Fondo tonal del módulo (DS: superficies diferenciadas por módulo). */
@@ -30,10 +30,13 @@ export function ModuleSurface({
 }) {
   return (
     <div
-      className={cn(
-        'via-background/60 to-background -mx-4 -mt-6 bg-gradient-to-b px-4 pb-8 pt-6 md:-mx-8 md:px-8',
-        MODULE_BG[module],
-      )}
+      data-module={module}
+      className="-mx-4 -mt-6 px-4 pb-8 pt-6 md:-mx-8 md:px-8"
+      style={{
+        // Banda tonal del módulo que se funde con el fondo: diferencia Home (lavanda)
+        // de Explorer (azul) sin colorear las tarjetas.
+        backgroundImage: `linear-gradient(to bottom, hsl(var(${MODULE_VAR[module]})) 0, hsl(var(${MODULE_VAR[module]}) / 0.75) 320px, hsl(var(--background)) 760px)`,
+      }}
     >
       {children}
     </div>
@@ -106,6 +109,7 @@ export function KpiCard({
     comparable: boolean;
     unit?: string;
     goodWhen?: 'up' | 'down' | 'neutral';
+    reason?: 'no_base' | 'no_current';
   };
   href?: string;
   spark?: number[];
@@ -113,19 +117,27 @@ export function KpiCard({
 }) {
   const body = (
     <>
-      <IconBadge icon={icon} tone={tone} />
-      <p className="mt-3 text-[28px] font-black tabular-nums leading-none tracking-tight">
-        {value}
+      <div className="flex items-center gap-2.5">
+        <IconBadge icon={icon} tone={tone} size="sm" />
+        <p className="line-clamp-2 text-[13px] font-extrabold leading-tight">
+          {label}
+        </p>
+      </div>
+      <div className="mt-2.5 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        <p className="text-[26px] font-black tabular-nums leading-none tracking-tight">
+          {value}
+        </p>
+        {delta && <Delta {...delta} />}
+      </div>
+      <p className="text-muted-foreground mt-1.5 line-clamp-2 text-xs leading-snug">
+        {period}
       </p>
-      {delta && <Delta {...delta} className="mt-2" />}
-      <p className="mt-1.5 text-sm font-bold">{label}</p>
-      <p className="text-muted-foreground text-xs">{period}</p>
-      {spark && <Sparkline values={spark} className="mt-2" />}
+      {spark && <Sparkline values={spark} className="mt-2 h-6" />}
       {hint && <div className="text-muted-foreground mt-1 text-xs">{hint}</div>}
     </>
   );
   const cls =
-    'rounded-card border-border/80 bg-card shadow-card block h-full border p-4 transition-shadow duration-base';
+    'rounded-card border-border/80 bg-card shadow-card block border p-3.5 transition-shadow duration-base';
   return href ? (
     <Link
       href={href}
@@ -150,7 +162,7 @@ export function CoverageBannerV2({
   return (
     <div
       className={cn(
-        'rounded-card mb-6 flex gap-3 border p-3.5 text-sm',
+        'rounded-card mb-4 flex gap-2.5 border px-3.5 py-2.5 text-[13px]',
         partial
           ? 'border-warning-border bg-warning-soft'
           : 'border-border bg-card',
@@ -159,42 +171,49 @@ export function CoverageBannerV2({
       {partial ? (
         <TriangleAlert
           aria-hidden
-          className="text-warning-fg mt-0.5 h-5 w-5 shrink-0"
+          className="text-warning-fg mt-px h-4 w-4 shrink-0"
         />
       ) : (
         <CircleCheck
           aria-hidden
-          className="text-success-fg mt-0.5 h-5 w-5 shrink-0"
+          className="text-success-fg mt-px h-4 w-4 shrink-0"
         />
       )}
-      <div className="min-w-0">
-        <p>
+      <details className="group min-w-0 flex-1">
+        <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-2 gap-y-0.5 [&::-webkit-details-marker]:hidden">
           <span className="font-extrabold">
-            {partial ? 'Cobertura parcial.' : 'Cobertura completa.'}
-          </span>{' '}
+            {partial ? 'Cobertura parcial' : 'Cobertura completa'}
+          </span>
           <span className="text-muted-foreground">
-            Fuentes:{' '}
-            {connected.length ? connected.join(', ') : 'ninguna fuente'}. Las
-            conclusiones no representan la conversación total del mercado.
-          </span>{' '}
+            {connected.length} {connected.length === 1 ? 'fuente' : 'fuentes'}{' '}
+            conectadas
+            {missing.length > 0 ? ` · ${missing.length} sin escuchar` : ''} · no
+            representa la conversación total del mercado
+          </span>
+          <span className="text-primary-text font-bold underline underline-offset-2">
+            <span className="group-open:hidden">Ver fuentes</span>
+            <span className="hidden group-open:inline">Ocultar fuentes</span>
+          </span>
+        </summary>
+        <div className="text-muted-foreground mt-1.5 space-y-0.5 text-xs">
+          <p>
+            <b className="text-foreground">Conectadas:</b>{' '}
+            {connected.length ? connected.join(', ') : 'ninguna fuente'}.
+          </p>
+          {missing.length > 0 && (
+            <p>
+              <b className="text-foreground">Sin escuchar:</b>{' '}
+              {missing.join(', ')}.
+            </p>
+          )}
           <Link
             href="/cobertura"
-            className="text-primary-text font-bold underline underline-offset-2"
+            className="text-primary-text inline-block font-bold underline underline-offset-2"
           >
             Ver cobertura
           </Link>
-        </p>
-        {missing.length > 0 && (
-          <details className="mt-1">
-            <summary className="text-muted-foreground cursor-pointer text-xs font-bold">
-              {missing.length} fuentes sin escuchar
-            </summary>
-            <p className="text-muted-foreground mt-1 text-xs">
-              {missing.join(', ')}.
-            </p>
-          </details>
-        )}
-      </div>
+        </div>
+      </details>
     </div>
   );
 }
@@ -220,6 +239,7 @@ export function FoxyInsightPanel({
   limitation,
   origin = 'Generado por reglas sobre los datos del periodo · sin IA generativa',
   actions,
+  wide,
   className,
 }: {
   title?: string;
@@ -228,6 +248,8 @@ export function FoxyInsightPanel({
   limitation?: string;
   origin?: string;
   actions?: Array<{ label: string; href: string; icon?: LucideIcon }>;
+  /** Hallazgos en dos columnas desde sm (panel ancho). */
+  wide?: boolean;
   className?: string;
 }) {
   return (
@@ -252,11 +274,12 @@ export function FoxyInsightPanel({
         </div>
       </header>
       {findings.length === 0 ? (
-        <p className="text-muted-foreground text-sm">
-          Sin hallazgos destacables con los datos del periodo.
+        <p className="text-muted-foreground bg-card/70 rounded-xl p-3 text-sm">
+          Sin hallazgos: no hay datos suficientes en el periodo para sostener
+          una conclusión. Prueba con un periodo más amplio.
         </p>
       ) : (
-        <ul className="space-y-3">
+        <ul className={cn('grid gap-3', wide && 'sm:grid-cols-2')}>
           {findings.map((f) => (
             <li
               key={f.id}
@@ -296,12 +319,12 @@ export function FoxyInsightPanel({
           <p className="text-muted-foreground mb-2 text-xs font-bold uppercase tracking-wide">
             Acciones sugeridas
           </p>
-          <ul className="space-y-1.5">
+          <ul className={cn('grid gap-1.5', wide && 'sm:grid-cols-2')}>
             {actions.map((a) => (
               <li key={a.href}>
                 <Link
                   href={a.href}
-                  className="hover:bg-card flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-semibold transition-colors"
+                  className="bg-card/70 border-border/70 hover:border-control/50 hover:bg-card flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold transition-colors"
                 >
                   {a.icon && (
                     <a.icon aria-hidden className="text-primary-text h-4 w-4" />

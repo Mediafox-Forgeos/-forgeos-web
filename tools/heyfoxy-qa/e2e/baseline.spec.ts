@@ -102,7 +102,10 @@ for (const route of ROUTES) {
     }
 
     // 4. Visual: todas las vistas en el tema clásico; en V2, solo las vistas migradas (D-2).
-    if (theme === 'legacy' || route.v2) {
+    if (
+      info.project.metadata.shots !== false &&
+      (theme === 'legacy' || route.v2)
+    ) {
       await expect(page).toHaveScreenshot(`${route.name}.png`, {
         fullPage: true,
       });

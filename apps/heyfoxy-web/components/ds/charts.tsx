@@ -117,7 +117,7 @@ export function BarList({
   const sum = total ?? rows.reduce((a, r) => a + r.value, 0);
   const max = Math.max(1, ...rows.map((r) => r.value));
   return (
-    <ul className="space-y-3">
+    <ul className="space-y-2">
       {rows.map((r) => {
         const p = pct(r.value, sum);
         const body = (
@@ -183,21 +183,37 @@ export function ChannelShare({
 }) {
   const sum = rows.reduce((a, r) => a + r.value, 0);
   return (
-    <ul className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+    <ul
+      className="grid gap-2"
+      style={{
+        gridTemplateColumns: `repeat(${Math.min(Math.max(rows.length, 1), 4)}, minmax(0, 1fr))`,
+      }}
+    >
       {rows.map((r) => (
         <li key={r.platform}>
           <Link
             href={r.href}
-            className="border-border hover:border-control hover:bg-muted flex flex-col items-center gap-1.5 rounded-xl border px-2 py-3 transition-colors"
+            className="border-border bg-card hover:border-control hover:shadow-card flex flex-col items-center gap-1 rounded-xl border px-2 py-3 transition-all"
           >
-            <NetworkIcon platform={r.platform} size={26} />
-            <span className="text-base font-extrabold tabular-nums">
+            <span className="bg-muted flex h-11 w-11 items-center justify-center rounded-xl">
+              <NetworkIcon platform={r.platform} size={26} />
+            </span>
+            <span className="mt-1 text-lg font-black tabular-nums leading-none">
               {pct(r.value, sum)}%
             </span>
             <span className="text-muted-foreground text-[11px] font-semibold">
-              {r.label}
+              {r.label} · {r.value.toLocaleString('es-CO')}
             </span>
-            <span className="sr-only">{r.value} conversaciones</span>
+            <span
+              aria-hidden
+              className="bg-muted mt-1 h-1 w-full overflow-hidden rounded-full"
+            >
+              <span
+                className="bg-brand block h-full rounded-full"
+                style={{ width: `${pct(r.value, sum)}%` }}
+              />
+            </span>
+            <span className="sr-only"> conversaciones</span>
           </Link>
         </li>
       ))}

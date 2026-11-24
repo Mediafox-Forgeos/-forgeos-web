@@ -8,6 +8,8 @@ import {
   MessagesSquare,
   Radio,
   ShieldAlert,
+  Frown,
+  Meh,
   Smile,
   Tags,
   TrendingUp,
@@ -17,8 +19,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import Link from 'next/link';
-import { BarList, ChartCard } from '@/components/ds/charts';
-import { NetworkIcon } from '@/components/ds/network-icons';
+import { BarList, ChannelShare, ChartCard } from '@/components/ds/charts';
 import { AreaTrend, Donut } from '@/components/ds/charts-client';
 import { FoxyMark } from '@/components/ds/foxy';
 import {
@@ -43,6 +44,8 @@ import { summarizeCoverage } from '@/lib/coverage';
 import { PLATFORM_LABEL, SEVERITY_LABEL, fmtRelative } from '@/lib/format';
 import {
   channelBreakdown,
+  compareWhen,
+  foxyActions,
   foxyFindings,
   inWindow,
   netSentiment,
@@ -51,6 +54,7 @@ import {
   postTotals,
   ptsDelta,
   type FindingKind,
+  type FoxyActionKind,
 } from '@/lib/home-insights';
 import {
   dailySentiment,
@@ -78,6 +82,12 @@ const FINDING_STYLE: Record<FindingKind, { tone: Tone; icon: LucideIcon }> = {
   negative_topic: { tone: 'high', icon: Tags },
   unusual_post: { tone: 'info', icon: Radio },
   positive_topic: { tone: 'success', icon: Lightbulb },
+};
+
+const ACTION_ICON: Record<FoxyActionKind, LucideIcon> = {
+  review_pending: BellRing,
+  explore_negative: MessagesSquare,
+  explore_unusual: Radio,
 };
 
 const num = (n: number) => n.toLocaleString('es-CO');
@@ -141,15 +151,23 @@ export default async function HomePage({
   const topAlerts = alerts.slice(0, 5);
   const firstName = viewer.name.split(' ')[0] ?? viewer.name;
   const P = (href: string) => withPeriod(href, period);
-  const lastDay = daily[daily.length - 1];
-  const prevDay = daily[daily.length - 2];
-  const lastDelta =
-    lastDay && prevDay
-      ? pctDelta(
-          lastDay.pos + lastDay.neg + lastDay.other,
-          prevDay.pos + prevDay.neg + prevDay.other,
-        )
-      : null;
+  const dailyTotals = daily.map((d) => d.pos + d.neg + d.other);
+  const peak = dailyTotals.reduce(
+    (best, v, i) => (v > (dailyTotals[best] ?? 0) ? i : best),
+    0,
+  );
+  const unusual = curPosts.find((p) => postStats(p).unusual);
+  const actions = foxyActions({
+    pendingReview,
+    negatives: cur.negative,
+    unusualPostId: unusual?.id ?? null,
+  }).map((a) => ({
+    label: a.label,
+    href: P(a.href),
+    icon: ACTION_ICON[a.kind],
+  }));
+  const hasConv = cur.total > 0;
+  const hasPosts = pt.posts > 0;
 
   const findingViews: FoxyFindingView[] = findings.map((f) => ({
     ...f,
@@ -162,16 +180,16 @@ export default async function HomePage({
       {/* Saludo */}
       <section
         aria-labelledby="home-title"
-        className="rounded-panel border-border/70 from-card to-primary-pale/60 shadow-card relative mb-5 overflow-hidden border bg-gradient-to-br p-5 sm:p-7"
+        className="rounded-panel border-border/70 from-card to-primary-pale/60 shadow-card relative mb-4 overflow-hidden border bg-gradient-to-br p-5 lg:pr-48"
       >
-        <div className="relative z-10 max-w-2xl">
+        <div className="relative z-10 max-w-3xl">
           <p className="text-primary-text flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-[0.12em]">
             <Gauge aria-hidden className="h-4 w-4" /> Inicio · Inteligencia
             reputacional
           </p>
           <h1
             id="home-title"
-            className="mt-1 text-[28px] font-black leading-tight tracking-tight sm:text-[34px]"
+            className="mt-1 text-[26px] font-black leading-tight tracking-tight sm:text-[30px]"
           >
             Hola, {firstName}
           </h1>
@@ -182,14 +200,16 @@ export default async function HomePage({
             </strong>{' '}
             en los canales digitales · {periodLabel(period).toLowerCase()}.
           </p>
-          <div className="mt-4 flex flex-wrap gap-2">
+          <div className="mt-3 flex flex-wrap gap-2">
             <StatusPill
               tone={
-                cur.negativePct >= 50
-                  ? 'critical'
-                  : cur.negativePct >= 30
-                    ? 'warning'
-                    : 'success'
+                !hasConv
+                  ? 'neutral'
+                  : cur.negativePct >= 50
+                    ? 'critical'
+                    : cur.negativePct >= 30
+                      ? 'warning'
+                      : 'success'
               }
             >
               {cur.total
@@ -211,8 +231,8 @@ export default async function HomePage({
         </div>
         <FoxyMark
           variant="illustration"
-          size={150}
-          className="pointer-events-none absolute -bottom-3 right-2 hidden opacity-95 sm:block lg:right-8"
+          size={124}
+          className="pointer-events-none absolute -bottom-3 right-8 hidden opacity-95 lg:block"
         />
       </section>
 
@@ -220,29 +240,47 @@ export default async function HomePage({
 
       {/* KPI */}
       <h2 className="sr-only">Indicadores del periodo</h2>
-      <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+      <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <KpiCard
           icon={MessagesSquare}
           tone="ai"
           label="Conversaciones analizadas"
           value={num(cur.total)}
-          period={periodLabel(period)}
-          delta={{ ...pctDelta(cur.total, prev.total), goodWhen: 'neutral' }}
+          period={
+            hasConv ? periodLabel(period) : 'Sin conversaciones en el periodo'
+          }
+          delta={{
+            ...compareWhen(hasConv, pctDelta(cur.total, prev.total)),
+            goodWhen: 'neutral',
+          }}
           href={P('/conversaciones')}
-          spark={daily.map((d) => d.pos + d.neg + d.other)}
+          spark={hasConv ? dailyTotals : undefined}
         />
         <KpiCard
           icon={Smile}
-          tone={netSentiment(cur) >= 0 ? 'success' : 'critical'}
+          tone={
+            !hasConv
+              ? 'neutral'
+              : netSentiment(cur) >= 0
+                ? 'success'
+                : 'critical'
+          }
           label="Sentimiento neto"
           value={
-            cur.total
+            hasConv
               ? `${netSentiment(cur) > 0 ? '+' : ''}${netSentiment(cur)} pts`
               : '—'
           }
-          period={`${cur.positive} positivas · ${cur.negative} negativas`}
+          period={
+            hasConv
+              ? `${cur.positive} positivas · ${cur.negative} negativas`
+              : 'Sin conversaciones clasificadas'
+          }
           delta={{
-            ...ptsDelta(netSentiment(cur), netSentiment(prev), prev.total),
+            ...compareWhen(
+              hasConv,
+              ptsDelta(netSentiment(cur), netSentiment(prev), prev.total),
+            ),
             unit: ' pts',
           }}
         />
@@ -251,21 +289,33 @@ export default async function HomePage({
           tone="info"
           label="Alcance total"
           value={pt.reach === null ? '—' : num(pt.reach)}
-          period={`${pt.posts} ${pt.posts === 1 ? 'publicación' : 'publicaciones'} propias`}
-          delta={
-            pt.reach === null
-              ? undefined
-              : pctDelta(pt.reach, ptPrev.reach ?? 0)
+          period={
+            !hasPosts
+              ? 'Sin publicaciones en el periodo'
+              : pt.reach === null
+                ? 'Las fuentes no entregan alcance'
+                : `${pt.posts} ${pt.posts === 1 ? 'publicación propia' : 'publicaciones propias'}`
           }
+          delta={compareWhen(
+            pt.reach !== null,
+            pctDelta(pt.reach ?? 0, ptPrev.reach ?? 0),
+          )}
           href={P('/publicaciones')}
         />
         <KpiCard
           icon={Heart}
           tone="high"
           label="Interacciones"
-          value={num(pt.interactions)}
-          period="Me gusta, comentarios y compartidos"
-          delta={pctDelta(pt.interactions, ptPrev.interactions)}
+          value={hasPosts ? num(pt.interactions) : '—'}
+          period={
+            hasPosts
+              ? 'Me gusta, comentarios y compartidos'
+              : 'Sin publicaciones en el periodo'
+          }
+          delta={compareWhen(
+            hasPosts,
+            pctDelta(pt.interactions, ptPrev.interactions),
+          )}
           href={P('/publicaciones?orden=interacciones')}
         />
         <KpiCard
@@ -287,7 +337,7 @@ export default async function HomePage({
       </div>
 
       {/* Evolución y sentimiento */}
-      <div className="mb-5 grid grid-cols-[minmax(0,1fr)] gap-5 xl:grid-cols-12">
+      <div className="mb-4 grid grid-cols-[minmax(0,1fr)] items-start gap-4 xl:grid-cols-12">
         <ChartCard
           className="xl:col-span-7"
           icon={ChartColumn}
@@ -315,12 +365,16 @@ export default async function HomePage({
             <EmptyStateV2 compact title="Sin conversaciones en el periodo" />
           ) : (
             <AreaTrend
+              height={190}
               unit="conversaciones"
-              highlight={
-                lastDelta?.comparable && lastDelta.value !== null
-                  ? `${lastDelta.value > 0 ? '+' : ''}${lastDelta.value}% vs. día anterior`
-                  : 'Último día'
-              }
+              highlight={`Pico · ${shortDay(daily[peak]!.d)}`}
+              highlightIndex={peak}
+              primaryLabel="Total de conversaciones"
+              secondary={{
+                label: 'Negativas',
+                values: daily.map((d) => d.neg),
+                color: 'chart-neg',
+              }}
               points={daily.map((d) => ({
                 label: shortDay(d.d),
                 value: d.pos + d.neg + d.other,
@@ -361,6 +415,9 @@ export default async function HomePage({
                   label: 'Positivo',
                   value: cur.positive,
                   color: 'chart-pos',
+                  icon: (
+                    <Smile aria-hidden className="text-success-fg h-4 w-4" />
+                  ),
                   href: P('/conversaciones?sentiment=positive'),
                 },
                 {
@@ -368,6 +425,12 @@ export default async function HomePage({
                   label: 'Neutral o mixto',
                   value: cur.neutral + cur.mixed,
                   color: 'chart-neu',
+                  icon: (
+                    <Meh
+                      aria-hidden
+                      className="text-muted-foreground h-4 w-4"
+                    />
+                  ),
                   href: P('/conversaciones?sentiment=neutral'),
                 },
                 {
@@ -375,6 +438,9 @@ export default async function HomePage({
                   label: 'Negativo',
                   value: cur.negative,
                   color: 'chart-neg',
+                  icon: (
+                    <Frown aria-hidden className="text-critical-fg h-4 w-4" />
+                  ),
                   href: P('/conversaciones?sentiment=negative'),
                 },
               ]}
@@ -383,92 +449,76 @@ export default async function HomePage({
         </ChartCard>
       </div>
 
-      {/* Temas, Foxy y canales */}
-      <div className="mb-5 grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-2 xl:grid-cols-12">
-        <ChartCard
-          className="xl:col-span-4"
-          icon={Tags}
-          tone="high"
-          title="Temas principales"
-          description="Abre el detalle por tema."
-          table={{
-            caption: 'Temas principales',
-            columns: ['Tema', 'Conversaciones'],
-            rows: topics,
-          }}
-        >
-          {topics.length === 0 ? (
-            <EmptyStateV2 compact title="Sin temas en el periodo" />
-          ) : (
-            <BarList
-              rows={topics.map(([label, value]) => ({
-                label,
-                value,
-                href: P('/temas'),
-              }))}
-              total={cur.total}
-            />
-          )}
-        </ChartCard>
-        <div id="foxy" className="scroll-mt-24 lg:col-span-1 xl:col-span-5">
+      {/* Foxy (ancho) y, a su lado, temas y canales apilados: sin columnas estiradas. */}
+      <div className="mb-4 grid grid-cols-[minmax(0,1fr)] items-start gap-4 xl:grid-cols-12">
+        <div id="foxy" className="scroll-mt-24 xl:col-span-7">
           <FoxyInsightPanel
-            className="h-full"
+            wide
             title="Tendencias y hallazgos de Foxy IA"
             subtitle={`Con base en ${num(cur.total)} conversaciones y ${num(curPosts.length)} publicaciones del periodo`}
             findings={findingViews}
             limitation="Solo considera las fuentes conectadas (ver cobertura). Foxy no ejecuta acciones: propone y enlaza la evidencia."
-            actions={[
-              ...(pendingReview > 0
-                ? [
-                    {
-                      label: 'Revisar alertas pendientes',
-                      href: P('/revision'),
-                      icon: BellRing,
-                    },
-                  ]
-                : []),
-              {
-                label: 'Explorar conversaciones negativas',
-                href: P('/conversaciones?sentiment=negative'),
-                icon: MessagesSquare,
-              },
-            ]}
+            actions={actions}
           />
         </div>
-        <ChartCard
-          className="lg:col-span-2 xl:col-span-3"
-          icon={Radio}
-          tone="info"
-          title="Menciones por canal"
-          description="Solo redes con fuente conectada."
-          table={{
-            caption: 'Conversaciones por red',
-            columns: ['Red', 'Conversaciones', '%'],
-            rows: channels.map((c) => [
-              PLATFORM_LABEL[c.platform],
-              c.count,
-              pctOf(c.count, cur.total),
-            ]),
-          }}
-        >
-          {channels.length === 0 ? (
-            <EmptyStateV2 compact title="Sin conversaciones en el periodo" />
-          ) : (
-            <BarList
-              total={cur.total}
-              rows={channels.map((c) => ({
-                label: PLATFORM_LABEL[c.platform],
-                value: c.count,
-                icon: <NetworkIcon platform={c.platform} size={20} />,
-                href: P(`/conversaciones?platform=${c.platform}`),
-              }))}
-            />
-          )}
-        </ChartCard>
+        <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-4 lg:grid-cols-2 xl:col-span-5 xl:grid-cols-1">
+          <ChartCard
+            icon={Radio}
+            tone="info"
+            title="Menciones por canal"
+            description="Solo redes con fuente conectada. Abre las conversaciones."
+            table={{
+              caption: 'Conversaciones por red',
+              columns: ['Red', 'Conversaciones', '%'],
+              rows: channels.map((c) => [
+                PLATFORM_LABEL[c.platform],
+                c.count,
+                pctOf(c.count, cur.total),
+              ]),
+            }}
+          >
+            {channels.length === 0 ? (
+              <EmptyStateV2 compact title="Sin conversaciones en el periodo" />
+            ) : (
+              <ChannelShare
+                rows={channels.map((c) => ({
+                  platform: c.platform,
+                  label: PLATFORM_LABEL[c.platform],
+                  value: c.count,
+                  href: P(`/conversaciones?platform=${c.platform}`),
+                }))}
+              />
+            )}
+          </ChartCard>
+          <ChartCard
+            icon={Tags}
+            tone="high"
+            title="Temas principales"
+            description="Abre el detalle por tema."
+            table={{
+              caption: 'Temas principales',
+              columns: ['Tema', 'Conversaciones'],
+              rows: topics,
+            }}
+          >
+            {topics.length === 0 ? (
+              <EmptyStateV2 compact title="Sin temas en el periodo" />
+            ) : (
+              <BarList
+                rows={topics.map(([label, value]) => ({
+                  label,
+                  value,
+                  href: P('/temas'),
+                }))}
+                total={cur.total}
+              />
+            )}
+          </ChartCard>
+        </div>
       </div>
 
       {/* Publicaciones relevantes y alertas */}
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 xl:grid-cols-12">
+      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-4 xl:grid-cols-12">
         <Panel className="xl:col-span-8" aria-labelledby="home-posts">
           <PanelHeader
             icon={Images}

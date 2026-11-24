@@ -4,25 +4,33 @@ import Link from 'next/link';
 import { useActionState } from 'react';
 import { loginPassword } from '@/app/actions';
 import { buttonCls } from '@/components/ui';
+import { cn } from '@/lib/cn';
 
-export function PasswordForm() {
+/** Formulario de acceso. `v2` solo cambia la presentación; la lógica de autenticación es la misma. */
+export function PasswordForm({ v2 = false }: { v2?: boolean }) {
   const [state, action, pending] = useActionState(
     loginPassword,
     {} as { error?: string },
   );
+  const field = v2
+    ? 'border-border bg-card hover:border-control mt-1.5 w-full rounded-xl border px-3.5 py-2.5 text-[15px]'
+    : 'bg-background mt-1 w-full rounded-md border px-3 py-2';
   return (
-    <form action={action} className="mt-6 space-y-3">
-      <label className="block text-sm">
+    <form
+      action={action}
+      className={cn('mt-6', v2 ? 'space-y-4' : 'space-y-3')}
+    >
+      <label className={cn('block text-sm', v2 && 'font-bold')}>
         Correo
         <input
           name="email"
           type="email"
           required
           autoComplete="email"
-          className="bg-background mt-1 w-full rounded-md border px-3 py-2"
+          className={field}
         />
       </label>
-      <label className="block text-sm">
+      <label className={cn('block text-sm', v2 && 'font-bold')}>
         Contraseña
         <input
           name="password"
@@ -30,7 +38,7 @@ export function PasswordForm() {
           required
           minLength={8}
           autoComplete="current-password"
-          className="bg-background mt-1 w-full rounded-md border px-3 py-2"
+          className={field}
         />
       </label>
       {state.error && (
@@ -40,7 +48,11 @@ export function PasswordForm() {
       )}
       <button
         disabled={pending}
-        className={buttonCls.primary + ' w-full justify-center py-2'}
+        className={cn(
+          buttonCls.primary,
+          'w-full justify-center',
+          v2 ? 'rounded-xl py-2.5 text-[15px] font-extrabold' : 'py-2',
+        )}
       >
         {pending ? 'Ingresando…' : 'Ingresar'}
       </button>

@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
+import { useState, type FocusEvent, type MouseEvent } from 'react';
 import { cn } from '@/lib/cn';
 import { PERIOD_PARAM, parsePeriod, withPeriod } from '@/lib/period';
 import { NAV, isActive } from './nav-items';
@@ -10,6 +11,9 @@ import { NAV, isActive } from './nav-items';
  * Navegación principal V2. `rail`: en tablet (md–xl) solo iconos con tooltip; desde
  * xl, iconos y texto. En el panel móvil se muestra siempre con texto.
  * Conserva `?periodo` al navegar.
+ *
+ * El tooltip del riel es `position: fixed` y se coloca junto al enlace: así no lo recorta
+ * el `overflow` del riel ni crea scroll horizontal (defecto del Preview V2, captura 18).
  */
 export function SideNav({
   pendingAlerts,
@@ -23,6 +27,29 @@ export function SideNav({
   const path = usePathname();
   const period = parsePeriod(useSearchParams().get(PERIOD_PARAM));
   const rail = variant === 'rail';
+  const [tip, setTip] = useState<{
+    label: string;
+    top: number;
+    left: number;
+  } | null>(null);
+  const showTip =
+    (label: string) =>
+    (e: MouseEvent<HTMLElement> | FocusEvent<HTMLElement>) => {
+      // Solo en el riel de iconos (md–xl); desde xl el texto ya es visible.
+      if (
+        !rail ||
+        !window.matchMedia('(min-width: 768px) and (max-width: 1279.98px)')
+          .matches
+      )
+        return;
+      const r = e.currentTarget.getBoundingClientRect();
+      // Se ancla al borde del riel (no del enlace) para no quedar sobre él.
+      const edge =
+        e.currentTarget.closest('aside')?.getBoundingClientRect().right ??
+        r.right;
+      setTip({ label, top: r.top + r.height / 2, left: edge + 8 });
+    };
+  const hideTip = () => setTip(null);
   return (
     <nav aria-label="Principal" className="space-y-5">
       {NAV.map((g, gi) => (
@@ -48,10 +75,19 @@ export function SideNav({
               const active = isActive(it.href, path);
               const count = it.badge === 'alerts' ? pendingAlerts : 0;
               return (
-                <li key={it.href} className="group relative">
+                <li
+                  key={it.href}
+                  onMouseEnter={showTip(it.label)}
+                  onMouseLeave={hideTip}
+                  onFocus={showTip(it.label)}
+                  onBlur={hideTip}
+                >
                   <Link
                     href={withPeriod(it.href, period)}
-                    onClick={onNavigate}
+                    onClick={() => {
+                      hideTip();
+                      onNavigate?.();
+                    }}
                     aria-current={active ? 'page' : undefined}
                     className={cn(
                       'duration-fast flex items-center gap-3 rounded-xl px-3 py-2 text-[14px] font-semibold transition-colors',
@@ -93,20 +129,21 @@ export function SideNav({
                       </span>
                     )}
                   </Link>
-                  {rail && (
-                    <span
-                      aria-hidden
-                      className="bg-foreground text-background shadow-lift pointer-events-none absolute left-full top-1/2 z-30 ml-2 hidden -translate-y-1/2 whitespace-nowrap rounded-lg px-2.5 py-1 text-xs font-bold opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 md:block xl:hidden"
-                    >
-                      {it.label}
-                    </span>
-                  )}
                 </li>
               );
             })}
           </ul>
         </div>
       ))}
+      {tip && (
+        <span
+          aria-hidden
+          className="bg-foreground text-background shadow-lift pointer-events-none fixed z-50 -translate-y-1/2 whitespace-nowrap rounded-lg px-2.5 py-1 text-xs font-bold"
+          style={{ top: tip.top, left: tip.left }}
+        >
+          {tip.label}
+        </span>
+      )}
     </nav>
   );
 }

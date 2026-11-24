@@ -1,5 +1,7 @@
 import {
   BellRing,
+  Building2,
+  ChevronsUpDown,
   History,
   LogOut,
   Moon,
@@ -19,13 +21,14 @@ import { PERIODS, periodRange, type PeriodKey } from '@/lib/period';
 import type { ShellContext } from '@/lib/shell';
 import { UI_THEME_LABEL, type UiTheme } from '@/lib/ui-theme';
 import { MobileNav } from './mobile-nav';
+import { PeriodLink } from './period-link';
 import { PeriodPicker } from './period-picker';
 import { SideNav } from './side-nav';
 
 function Brand({ rail }: { rail?: boolean }) {
   // Nombre accesible = texto visible (WCAG 2.5.3). En el riel (md–xl) el texto queda solo para lectores.
   return (
-    <Link href="/" className="flex items-center gap-2 rounded-xl px-1">
+    <PeriodLink href="/" className="flex items-center gap-2 rounded-xl px-1">
       <FoxyMark size={34} />
       <span
         className={cn(
@@ -38,10 +41,15 @@ function Brand({ rail }: { rail?: boolean }) {
           v2
         </span>
       </span>
-    </Link>
+    </PeriodLink>
   );
 }
 
+/**
+ * Selector de organización: muestra el nombre completo (hasta dos líneas, sin cortes) con
+ * icono. Con varias organizaciones, el `<select>` nativo cubre la tarjeta (accesible y
+ * operable con teclado) y «Cambiar» envía el formulario (funciona sin JavaScript).
+ */
 function OrgSwitcher({
   ctx,
   id,
@@ -52,30 +60,72 @@ function OrgSwitcher({
   row?: boolean;
 }) {
   const { memberships, active } = ctx;
+  const many = memberships.length > 1;
+  const name = active.organization.name;
   return (
     <form
       action={switchOrg}
       className={cn(
-        'flex gap-1',
+        'flex gap-1.5',
         row ? 'items-center' : 'flex-col items-stretch',
       )}
     >
-      <label htmlFor={id} className="sr-only">
-        Organización
-      </label>
-      <select
-        id={id}
-        name="org"
-        defaultValue={active.organization.id}
-        className="border-border bg-card hover:border-control w-full min-w-0 rounded-xl border px-3 py-2 text-sm font-bold"
+      <div
+        className={cn(
+          'border-border bg-card focus-within:ring-primary-text relative flex min-w-0 items-center gap-2.5 rounded-xl border px-2.5 focus-within:ring-2',
+          row ? 'py-1.5' : 'py-2',
+          many && 'hover:border-control',
+        )}
+        title={name}
       >
-        {memberships.map((m) => (
-          <option key={m.organization.id} value={m.organization.id}>
-            {m.organization.name}
-          </option>
-        ))}
-      </select>
-      {memberships.length > 1 && (
+        <span
+          aria-hidden
+          className="bg-primary-pale text-primary-text flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+        >
+          <Building2 className="h-4 w-4" strokeWidth={1.9} />
+        </span>
+        <span className="min-w-0 flex-1">
+          {!row && (
+            <span className="text-muted-foreground block text-[10.5px] font-extrabold uppercase tracking-wider">
+              Organización
+            </span>
+          )}
+          <span
+            className={cn(
+              'block text-[13px] font-extrabold leading-tight',
+              row ? 'truncate' : 'line-clamp-2',
+            )}
+          >
+            {name}
+          </span>
+        </span>
+        {many ? (
+          <>
+            <ChevronsUpDown
+              aria-hidden
+              className="text-muted-foreground h-4 w-4 shrink-0"
+            />
+            <label htmlFor={id} className="sr-only">
+              Organización
+            </label>
+            <select
+              id={id}
+              name="org"
+              defaultValue={active.organization.id}
+              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+            >
+              {memberships.map((m) => (
+                <option key={m.organization.id} value={m.organization.id}>
+                  {m.organization.name}
+                </option>
+              ))}
+            </select>
+          </>
+        ) : (
+          <span className="sr-only">Organización activa</span>
+        )}
+      </div>
+      {many && (
         <button
           className={cn(
             'text-primary-text hover:bg-primary-pale shrink-0 rounded-lg px-2 py-1 text-xs font-extrabold',
@@ -200,9 +250,9 @@ export function AppShell({
       >
         Saltar al contenido
       </a>
-      {ctx.active.organization.isDemo && <DemoBanner />}
+      {ctx.active.organization.isDemo && <DemoBanner v2 />}
       <div className="md:flex">
-        <aside className="border-border bg-card sticky top-0 hidden h-screen shrink-0 flex-col gap-5 overflow-y-auto border-r px-3 py-5 md:flex md:w-[84px] xl:w-[252px]">
+        <aside className="hf-scroll-thin border-border bg-card sticky top-0 hidden h-screen shrink-0 flex-col gap-5 overflow-y-auto overflow-x-hidden border-r px-3 py-5 md:flex md:w-[84px] xl:w-[252px]">
           <Brand rail />
           <div className="hidden xl:block">
             <OrgSwitcher ctx={ctx} id="org-side" />
@@ -233,7 +283,7 @@ export function AppShell({
               <div className="md:hidden">
                 <Brand />
               </div>
-              <div className="hidden min-w-0 max-w-[15rem] md:block xl:hidden">
+              <div className="hidden min-w-0 max-w-[19rem] md:block xl:hidden">
                 <OrgSwitcher ctx={ctx} id="org-top" row />
               </div>
               <form
@@ -272,7 +322,7 @@ export function AppShell({
                     <PeriodPicker ranges={ranges} />
                   </Suspense>
                 </div>
-                <Link
+                <PeriodLink
                   href="/alertas"
                   className="hover:bg-muted relative rounded-xl p-2"
                 >
@@ -289,15 +339,15 @@ export function AppShell({
                       ? `: ${pendingAlerts} pendientes de revisión`
                       : ''}
                   </span>
-                </Link>
-                <Link
+                </PeriodLink>
+                <PeriodLink
                   href="/#foxy"
                   className="bg-primary-pale text-primary-text hover:bg-primary-pale/70 flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-sm font-extrabold"
                 >
                   <Sparkles aria-hidden className="h-5 w-5" strokeWidth={1.9} />
                   <span className="hidden lg:inline">Foxy IA</span>
                   <span className="sr-only lg:hidden">Foxy IA</span>
-                </Link>
+                </PeriodLink>
               </div>
             </div>
             <div className="border-border flex items-center justify-between gap-2 border-t px-4 py-2 sm:hidden">

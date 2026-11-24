@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   channelBreakdown,
+  compareWhen,
+  foxyActions,
   foxyFindings,
   inWindow,
   netSentiment,
@@ -196,5 +198,42 @@ describe('hallazgos de Foxy (reglas)', () => {
     });
     expect(f[0]?.kind).toBe('unusual_post');
     expect(f[0]?.evidence[0]?.href).toBe('/publicaciones/p5');
+  });
+});
+
+describe('comparaciones sin base válida (Preview V2)', () => {
+  it('sin datos actuales no hay variación, aunque el periodo anterior tenga datos', () => {
+    expect(compareWhen(false, pctDelta(0, 14))).toEqual({
+      value: null,
+      comparable: false,
+      reason: 'no_current',
+    });
+  });
+  it('sin base anterior se marca como no comparable', () => {
+    expect(compareWhen(true, pctDelta(5, 0)).reason).toBe('no_base');
+    expect(compareWhen(true, pctDelta(12, 10))).toEqual({
+      value: 20,
+      comparable: true,
+    });
+  });
+});
+
+describe('acciones sugeridas de Foxy', () => {
+  it('no propone nada sin evidencia', () => {
+    expect(foxyActions({ pendingReview: 0, negatives: 0 })).toEqual([]);
+  });
+  it('cada acción se apoya en un conteo real', () => {
+    const a = foxyActions({
+      pendingReview: 1,
+      negatives: 9,
+      unusualPostId: 'p 1',
+    });
+    expect(a.map((x) => x.kind)).toEqual([
+      'review_pending',
+      'explore_negative',
+      'explore_unusual',
+    ]);
+    expect(a[1]!.label).toBe('Explorar las 9 conversaciones negativas');
+    expect(a[2]!.href).toBe('/publicaciones/p%201');
   });
 });

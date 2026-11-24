@@ -21,7 +21,7 @@ export type QaRoute = {
 
 /** Todas las vistas actuales del Command Center + autenticación (línea base pre-V2). */
 export const ROUTES: QaRoute[] = [
-  { name: 'login', path: '/login', auth: false },
+  { name: 'login', path: '/login', auth: false, v2: true },
   { name: 'login-recuperar', path: '/login/recuperar', auth: false },
   { name: 'resumen', path: '/', auth: true, v2: true },
   { name: 'conversaciones', path: '/conversaciones', auth: true },

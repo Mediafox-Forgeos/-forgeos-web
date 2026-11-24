@@ -37,7 +37,7 @@ const base: Post = {
 describe('PostMedia: nunca inventa medios', () => {
   it('sin medios muestra el fallback y ninguna imagen', () => {
     const h = html(<PostMedia post={base} />);
-    expect(h).toContain('Vista previa no disponible');
+    expect(h).toContain('Sin vista previa');
     expect(h).not.toContain('<img');
     expect(h).not.toContain('<video');
   });

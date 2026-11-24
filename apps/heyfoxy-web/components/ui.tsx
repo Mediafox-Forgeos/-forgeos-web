@@ -140,14 +140,30 @@ export function SyntheticTag() {
   );
 }
 
-export function DemoBanner() {
+export function DemoBanner({ v2 = false }: { v2?: boolean }) {
+  // El tema clásico conserva el marcado original (capturas de Gate 2 sin cambios, D-1).
+  if (!v2)
+    return (
+      <div
+        role="status"
+        className="bg-demo text-demo-foreground flex items-center justify-center gap-2 px-4 py-1.5 text-center text-xs font-semibold uppercase tracking-wider"
+      >
+        <FlaskConical aria-hidden className="h-4 w-4" />
+        Datos de demostración: organizaciones, personas y conversaciones
+        ficticias
+      </div>
+    );
+  // V2: visible pero sereno (tokens de advertencia; ver .hf-demo-banner).
   return (
     <div
       role="status"
-      className="bg-demo text-demo-foreground flex items-center justify-center gap-2 px-4 py-1.5 text-center text-xs font-semibold uppercase tracking-wider"
+      className="hf-demo-banner flex items-center justify-center gap-2 px-4 py-1.5 text-center text-xs"
     >
-      <FlaskConical aria-hidden className="h-4 w-4" />
-      Datos de demostración: organizaciones, personas y conversaciones ficticias
+      <FlaskConical aria-hidden className="h-4 w-4 shrink-0" />
+      <span>
+        <span className="hf-demo-strong">Datos de demostración</span>:
+        organizaciones, personas y conversaciones ficticias
+      </span>
     </div>
   );
 }

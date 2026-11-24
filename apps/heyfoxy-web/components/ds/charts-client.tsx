@@ -23,17 +23,29 @@ const niceMax = (v: number) => {
   return (n <= 2 ? 2 : n <= 5 ? 5 : 10) * p;
 };
 
-/** Área con línea; el último punto se destaca. Coordenadas en %, nítido a cualquier ancho. */
+/**
+ * Área con línea. Se destaca un punto (por defecto el último; p. ej. el pico) y puede
+ * superponerse una serie secundaria (p. ej. negativas). Coordenadas en %, nítido a cualquier ancho.
+ */
 export function AreaTrend({
   points,
   unit,
   highlight,
+  highlightIndex,
+  secondary,
+  primaryLabel,
   height = 220,
 }: {
   points: TrendPoint[];
   unit: string;
-  /** Texto del globo del último punto (p. ej. variación). */
+  /** Texto del globo del punto destacado (p. ej. «Pico del periodo»). */
   highlight?: string;
+  /** Índice del punto destacado; por defecto, el último. */
+  highlightIndex?: number;
+  /** Serie superpuesta (misma longitud que `points`), sin área. */
+  secondary?: { label: string; values: number[]; color: string };
+  /** Nombre de la serie principal en la leyenda (solo si hay secundaria). */
+  primaryLabel?: string;
   height?: number;
 }) {
   const gid = useId().replace(/:/g, '');
@@ -43,11 +55,18 @@ export function AreaTrend({
   const x = (i: number) => (n === 1 ? 50 : (i / (n - 1)) * 100);
   const y = (v: number) => 100 - (v / max) * 100;
   const line = points.map((p, i) => `${x(i)},${y(p.value)}`).join(' ');
+  const line2 = secondary
+    ? secondary.values.map((v, i) => `${x(i)},${y(v ?? 0)}`).join(' ')
+    : null;
   const area = `0,100 ${line} 100,100`;
   const ticks = [0, 0.25, 0.5, 0.75, 1].map((t) => Math.round(max * t));
   const labelEvery = Math.max(1, Math.ceil(n / 7));
   const last = n - 1;
-  const shown = active ?? (highlight ? last : null);
+  const hi =
+    highlightIndex !== undefined && highlightIndex >= 0 && highlightIndex < n
+      ? highlightIndex
+      : last;
+  const shown = active ?? (highlight ? hi : null);
 
   return (
     <div className="flex gap-2">
@@ -106,6 +125,18 @@ export function AreaTrend({
               strokeLinejoin="round"
               strokeLinecap="round"
             />
+            {line2 && secondary && (
+              <polyline
+                points={line2}
+                fill="none"
+                stroke={`hsl(var(--${secondary.color}))`}
+                strokeWidth="2"
+                strokeDasharray="4 3"
+                vectorEffect="non-scaling-stroke"
+                strokeLinejoin="round"
+                strokeLinecap="round"
+              />
+            )}
           </svg>
           {points.map((p, i) => {
             const isActive = shown === i;
@@ -113,8 +144,8 @@ export function AreaTrend({
             const dot = (
               <span
                 className={cn(
-                  'border-brand bg-card block rounded-full border-[3px] transition-transform',
-                  isActive ? 'h-4 w-4' : 'h-2.5 w-2.5',
+                  'border-brand bg-card block rounded-full transition-transform',
+                  isActive ? 'h-4 w-4 border-[3px]' : 'h-2 w-2 border-2',
                 )}
               />
             );
@@ -186,6 +217,24 @@ export function AreaTrend({
             ) : null,
           )}
         </div>
+        {secondary && (
+          <p
+            className="text-muted-foreground mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs font-semibold"
+            aria-hidden
+          >
+            <span className="inline-flex items-center gap-1.5">
+              <span className="bg-brand h-0.5 w-4 rounded" />
+              {primaryLabel ?? 'Total'}
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span
+                className="h-0 w-4 border-t-2 border-dashed"
+                style={{ borderColor: `hsl(var(--${secondary.color}))` }}
+              />
+              {secondary.label}
+            </span>
+          </p>
+        )}
       </div>
     </div>
   );

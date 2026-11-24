@@ -28,9 +28,24 @@ export function inWindow<T extends { publishedAt: string | null }>(
   });
 }
 
+/** Motivo por el que no se muestra variación. */
+export type NoCompareReason = 'no_base' | 'no_current';
+
 export interface Comparable {
   value: number | null;
   comparable: boolean;
+  reason?: NoCompareReason;
+}
+
+/**
+ * Una variación solo es válida si el periodo actual tiene datos. Sin datos actuales se
+ * informa «sin datos en el periodo» en lugar de un «−100 %» o de una diferencia sobre «—»
+ * (defecto del Preview V2, captura 01). Sin base anterior: «sin base comparable».
+ */
+export function compareWhen(hasCurrent: boolean, c: Comparable): Comparable {
+  if (!hasCurrent)
+    return { value: null, comparable: false, reason: 'no_current' };
+  return c.comparable ? c : { ...c, reason: 'no_base' };
 }
 
 /** Variación porcentual; sin base (anterior = 0) no hay porcentaje. Regla del DS. */
@@ -213,4 +228,44 @@ export function foxyFindings(input: {
     });
 
   return out.slice(0, 4);
+}
+
+export type FoxyActionKind =
+  'review_pending' | 'explore_negative' | 'explore_unusual';
+
+export interface FoxyAction {
+  kind: FoxyActionKind;
+  label: string;
+  href: string;
+}
+
+/**
+ * Acciones sugeridas por Foxy: solo se proponen si hay evidencia en los datos que las
+ * respalde (nunca «explorar negativas» con cero negativas). Máximo tres.
+ */
+export function foxyActions(input: {
+  pendingReview: number;
+  negatives: number;
+  unusualPostId?: string | null;
+}): FoxyAction[] {
+  const out: FoxyAction[] = [];
+  if (input.pendingReview > 0)
+    out.push({
+      kind: 'review_pending',
+      label: `Revisar ${input.pendingReview === 1 ? 'la alerta pendiente' : `las ${input.pendingReview} alertas pendientes`}`,
+      href: '/revision',
+    });
+  if (input.negatives > 0)
+    out.push({
+      kind: 'explore_negative',
+      label: `Explorar ${input.negatives === 1 ? 'la conversación negativa' : `las ${input.negatives} conversaciones negativas`}`,
+      href: '/conversaciones?sentiment=negative',
+    });
+  if (input.unusualPostId)
+    out.push({
+      kind: 'explore_unusual',
+      label: 'Abrir la publicación con actividad inusual',
+      href: `/publicaciones/${encodeURIComponent(input.unusualPostId)}`,
+    });
+  return out.slice(0, 3);
 }

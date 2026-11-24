@@ -39,6 +39,7 @@ import {
 } from '@/components/ds/primitives';
 import { EmptyStateV2 } from '@/components/ds/states';
 import { requireContext } from '@/lib/auth/session';
+import { explorerQuery, parseExplorerFilters } from '@/lib/explorer-filters';
 import { SENTIMENT_LABEL, fmtDateTime } from '@/lib/format';
 import { pctOf } from '@/lib/home-insights';
 import {
@@ -73,7 +74,10 @@ export default async function PostDetailPage({
 }) {
   const { id } = await params;
   if (!isV2(await getUiTheme())) return <LegacyPostDetail id={id} />;
-  const period = parsePeriod((await searchParams)[PERIOD_PARAM]);
+  const sp = await searchParams;
+  const period = parsePeriod(sp[PERIOD_PARAM]);
+  // «Volver» conserva los filtros con los que se llegó desde la galería.
+  const fq = explorerQuery(parseExplorerFilters(sp));
   const { active, repo } = await requireContext();
   const orgId = active.organization.id;
   // La publicación se busca SIEMPRE dentro de la organización activa (y RLS en Supabase).
@@ -138,17 +142,17 @@ export default async function PostDetailPage({
   return (
     <ModuleSurface module="explorer">
       <Link
-        href={withPeriod('/publicaciones', period)}
+        href={withPeriod(`/publicaciones${fq ? `?${fq}` : ''}`, period)}
         className="text-primary-text mb-4 inline-flex items-center gap-1.5 text-sm font-extrabold"
       >
         <ArrowLeft aria-hidden className="h-4 w-4" /> Social Explorer
       </Link>
 
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-2 xl:grid-cols-12">
+      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-4 lg:grid-cols-12">
         {/* Publicación original */}
         <Panel
           as="article"
-          className="self-start xl:sticky xl:top-24 xl:col-span-4"
+          className="self-start lg:sticky lg:top-24 lg:col-span-4"
           aria-labelledby="post-title"
         >
           <div className="mb-4 flex items-start justify-between gap-2">
@@ -186,9 +190,9 @@ export default async function PostDetailPage({
           <OriginalLink post={post} className="mt-3" />
         </Panel>
 
-        {/* Métricas y comentarios */}
-        <div className="space-y-5 xl:col-span-5">
-          <div className="grid grid-cols-2 gap-3">
+        {/* Métricas, Foxy (ancho), historial, sentimiento y comentarios */}
+        <div className="min-w-0 space-y-4 lg:col-span-8">
+          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
             <KpiCard
               icon={Heart}
               tone="high"
@@ -225,59 +229,134 @@ export default async function PostDetailPage({
             />
           </div>
 
-          <div id="historial" className="scroll-mt-24">
-            <ChartCard
-              icon={ChartColumn}
-              tone="info"
-              title="Historial de métricas"
-              description="Interacciones por medición."
-              table={{
-                caption: 'Historial de métricas de la publicación',
-                columns: [
-                  'Medición',
-                  'Me gusta',
-                  'Comentarios',
-                  'Compartidos',
-                  'Interacciones',
-                  'Alcance',
-                ],
-                rows: post.metrics.map((m) => [
-                  fmtDateTime(m.capturedAt),
-                  fmtNum(m.likes),
-                  fmtNum(m.comments),
-                  fmtNum(m.shares),
-                  fmtNum(interactions(m)),
-                  fmtNum(m.reach),
-                ]),
-              }}
-            >
-              {history.length < 2 ? (
-                <EmptyStateV2
-                  compact
-                  title={
-                    history.length
-                      ? 'Una sola medición'
-                      : 'Sin mediciones todavía'
-                  }
-                >
-                  La evolución aparece a partir de dos mediciones.
-                </EmptyStateV2>
-              ) : (
-                <AreaTrend
-                  height={170}
-                  unit="interacciones"
-                  points={history.map((m) => ({
-                    label: capLabel
-                      .format(Date.parse(m.capturedAt))
-                      .replace('.', ''),
-                    value: interactions(m),
-                    detail: `alcance ${fmtNum(m.reach)}`,
-                  }))}
-                />
-              )}
-            </ChartCard>
-          </div>
+          <FoxyInsightPanel
+            wide
+            title="Análisis de Foxy IA"
+            subtitle="Sobre esta publicación y sus comentarios"
+            findings={findings}
+            limitation="Basado solo en los comentarios clasificados de esta publicación. Responder requiere permisos de la red y confirmación humana."
+          />
+          <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-4 xl:grid-cols-2">
+            <div id="historial" className="scroll-mt-24">
+              <ChartCard
+                icon={ChartColumn}
+                tone="info"
+                title="Historial de métricas"
+                description="Interacciones por medición."
+                table={{
+                  caption: 'Historial de métricas de la publicación',
+                  columns: [
+                    'Medición',
+                    'Me gusta',
+                    'Comentarios',
+                    'Compartidos',
+                    'Interacciones',
+                    'Alcance',
+                  ],
+                  rows: post.metrics.map((m) => [
+                    fmtDateTime(m.capturedAt),
+                    fmtNum(m.likes),
+                    fmtNum(m.comments),
+                    fmtNum(m.shares),
+                    fmtNum(interactions(m)),
+                    fmtNum(m.reach),
+                  ]),
+                }}
+              >
+                {history.length < 2 ? (
+                  <EmptyStateV2
+                    compact
+                    title={
+                      history.length
+                        ? 'Una sola medición'
+                        : 'Sin mediciones todavía'
+                    }
+                  >
+                    La evolución aparece a partir de dos mediciones.
+                  </EmptyStateV2>
+                ) : (
+                  <AreaTrend
+                    height={170}
+                    unit="interacciones"
+                    points={history.map((m) => ({
+                      label: capLabel
+                        .format(Date.parse(m.capturedAt))
+                        .replace('.', ''),
+                      value: interactions(m),
+                      detail: `alcance ${fmtNum(m.reach)}`,
+                    }))}
+                  />
+                )}
+              </ChartCard>
+            </div>
 
+            <div className="space-y-4">
+              {b.total > 0 && (
+                <ChartCard
+                  icon={Radio}
+                  tone="ai"
+                  title="Sentimiento de los comentarios"
+                  table={{
+                    caption: 'Sentimiento de los comentarios',
+                    columns: ['Sentimiento', 'Comentarios', '%'],
+                    rows: [
+                      ['Positivo', b.positive, pctOf(b.positive, b.total)],
+                      [
+                        'Neutral o mixto',
+                        b.neutral + b.mixed,
+                        pctOf(b.neutral + b.mixed, b.total),
+                      ],
+                      ['Negativo', b.negative, pctOf(b.negative, b.total)],
+                    ],
+                  }}
+                >
+                  <Donut
+                    stacked
+                    centerValue={fmtNum(b.total)}
+                    centerLabel="comentarios"
+                    segments={[
+                      {
+                        key: 'pos',
+                        label: 'Positivo',
+                        value: b.positive,
+                        color: 'chart-pos',
+                      },
+                      {
+                        key: 'neu',
+                        label: 'Neutral o mixto',
+                        value: b.neutral + b.mixed,
+                        color: 'chart-neu',
+                      },
+                      {
+                        key: 'neg',
+                        label: 'Negativo',
+                        value: b.negative,
+                        color: 'chart-neg',
+                      },
+                    ]}
+                  />
+                </ChartCard>
+              )}
+              {topics.length > 0 && (
+                <ChartCard
+                  icon={Lightbulb}
+                  tone="high"
+                  title="Temas detectados"
+                  table={{
+                    caption: 'Temas de los comentarios',
+                    columns: ['Tema', 'Comentarios'],
+                    rows: topics,
+                  }}
+                >
+                  <BarList
+                    rows={topics.map(([label, value]) => ({ label, value }))}
+                    total={b.total}
+                    unit="comentarios"
+                  />
+                </ChartCard>
+              )}
+            </div>
+          </div>
           <Panel
             aria-labelledby="comentarios-titulo"
             id="comentarios"
@@ -302,80 +381,6 @@ export default async function PostDetailPage({
               </div>
             )}
           </Panel>
-        </div>
-
-        {/* Foxy contextual */}
-        <div className="space-y-5 lg:col-span-2 xl:col-span-3">
-          <FoxyInsightPanel
-            title="Análisis de Foxy IA"
-            subtitle="Sobre esta publicación y sus comentarios"
-            findings={findings}
-            limitation="Basado solo en los comentarios clasificados de esta publicación. Responder requiere permisos de la red y confirmación humana."
-          />
-          {b.total > 0 && (
-            <ChartCard
-              icon={Radio}
-              tone="ai"
-              title="Sentimiento de los comentarios"
-              table={{
-                caption: 'Sentimiento de los comentarios',
-                columns: ['Sentimiento', 'Comentarios', '%'],
-                rows: [
-                  ['Positivo', b.positive, pctOf(b.positive, b.total)],
-                  [
-                    'Neutral o mixto',
-                    b.neutral + b.mixed,
-                    pctOf(b.neutral + b.mixed, b.total),
-                  ],
-                  ['Negativo', b.negative, pctOf(b.negative, b.total)],
-                ],
-              }}
-            >
-              <Donut
-                stacked
-                centerValue={fmtNum(b.total)}
-                centerLabel="comentarios"
-                segments={[
-                  {
-                    key: 'pos',
-                    label: 'Positivo',
-                    value: b.positive,
-                    color: 'chart-pos',
-                  },
-                  {
-                    key: 'neu',
-                    label: 'Neutral o mixto',
-                    value: b.neutral + b.mixed,
-                    color: 'chart-neu',
-                  },
-                  {
-                    key: 'neg',
-                    label: 'Negativo',
-                    value: b.negative,
-                    color: 'chart-neg',
-                  },
-                ]}
-              />
-            </ChartCard>
-          )}
-          {topics.length > 0 && (
-            <ChartCard
-              icon={Lightbulb}
-              tone="high"
-              title="Temas detectados"
-              table={{
-                caption: 'Temas de los comentarios',
-                columns: ['Tema', 'Comentarios'],
-                rows: topics,
-              }}
-            >
-              <BarList
-                rows={topics.map(([label, value]) => ({ label, value }))}
-                total={b.total}
-                unit="comentarios"
-              />
-            </ChartCard>
-          )}
         </div>
       </div>
     </ModuleSurface>

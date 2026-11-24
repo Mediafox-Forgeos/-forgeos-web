@@ -126,23 +126,26 @@ export function PostMedia({
         )}
       </div>
     );
+  // Sin medios: franja compacta (no un bloque vacío del tamaño de una foto).
   return (
     <div
       className={cn(
-        box,
-        'from-mod-explorer to-primary-pale/60 flex flex-col items-center justify-center gap-2 bg-gradient-to-br p-4 text-center',
+        'from-mod-explorer to-primary-pale/50 flex items-center gap-3 bg-gradient-to-br px-4',
+        variant === 'card' ? 'rounded-t-card h-[76px]' : 'rounded-card h-24',
       )}
     >
-      <span className="bg-card shadow-card flex h-14 w-14 items-center justify-center rounded-2xl">
-        <NetworkIcon platform={post.platform} size={30} />
+      <span className="bg-card shadow-card flex h-11 w-11 shrink-0 items-center justify-center rounded-xl">
+        <NetworkIcon platform={post.platform} size={24} />
       </span>
-      <p className="flex items-center gap-1.5 text-sm font-bold">
-        <ImageOff aria-hidden className="text-muted-foreground h-4 w-4" />
-        Vista previa no disponible
-      </p>
-      <p className="text-muted-foreground max-w-[16rem] text-xs">
-        La fuente no entregó fotos ni videos de esta publicación.
-      </p>
+      <div className="min-w-0">
+        <p className="flex items-center gap-1.5 text-[13px] font-extrabold">
+          <ImageOff aria-hidden className="text-muted-foreground h-3.5 w-3.5" />
+          Sin vista previa
+        </p>
+        <p className="text-muted-foreground text-xs leading-snug">
+          La fuente no entregó fotos ni videos.
+        </p>
+      </div>
     </div>
   );
 }
@@ -308,12 +311,16 @@ export function SocialPostCard({
             </StatusPill>
           )}
         </div>
-        <div className="border-border mt-auto flex items-center justify-between gap-2 border-t pt-3">
+        <div className="border-border mt-auto border-t pt-3">
           <PostMetricsRow stats={stats} />
         </div>
         <p className="text-muted-foreground -mt-1 text-xs">
+          <span className="text-foreground font-bold tabular-nums">
+            {fmtNum(stats.interactions)}
+          </span>{' '}
+          interacciones ·{' '}
           <span className="text-foreground font-bold">{comments}</span>{' '}
-          comentarios analizados
+          {comments === 1 ? 'comentario analizado' : 'comentarios analizados'}
         </p>
       </div>
     </article>

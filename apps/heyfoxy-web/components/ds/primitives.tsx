@@ -236,12 +236,15 @@ export function Delta({
   unit = '%',
   comparable,
   goodWhen = 'up',
+  reason,
   className,
 }: {
   value: number | null;
   unit?: string;
   comparable: boolean;
   goodWhen?: 'up' | 'down' | 'neutral';
+  /** 'no_current': el periodo actual no tiene datos; si no, falta base anterior. */
+  reason?: 'no_base' | 'no_current';
   className?: string;
 }) {
   if (!comparable || value === null)
@@ -252,7 +255,10 @@ export function Delta({
           className,
         )}
       >
-        <Minus aria-hidden width={12} height={12} /> Sin base comparable
+        <Minus aria-hidden width={12} height={12} />{' '}
+        {reason === 'no_current'
+          ? 'Sin datos en el periodo'
+          : 'Sin base comparable'}
       </span>
     );
   const up = value > 0;

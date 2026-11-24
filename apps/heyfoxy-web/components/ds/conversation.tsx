@@ -1,4 +1,4 @@
-import { CircleAlert } from 'lucide-react';
+import { CircleAlert, Cog, Gauge, Sparkles } from 'lucide-react';
 import {
   INTENT_LABEL,
   PLATFORM_LABEL,
@@ -18,11 +18,15 @@ export const SEVERITY_TONE: Record<Severity, Tone> = {
 };
 
 /**
- * Fila de conversación (comentario o mención). Sin fotos de perfil: el autor de
+ * Fila de conversación (comentario o mención). Incluye el análisis IA, la capa
+ * (operativa/reputacional), la prioridad y la confianza que mostraba V1 (Fase A, punto 8). Sin fotos de perfil: el autor de
  * comentarios se minimiza (author_hash), solo se muestran iniciales del alias.
  */
 export function ConversationRow({ i }: { i: ConversationItem }) {
   const a = i.analysis;
+  // Honestidad sobre el origen: el clasificador heurístico no es IA generativa.
+  const byRules = a?.provider === 'heuristic';
+  const OriginIcon = byRules ? Cog : Sparkles;
   return (
     <article className="flex gap-3 py-3">
       <span className="relative flex h-fit shrink-0 self-start">
@@ -56,16 +60,50 @@ export function ConversationRow({ i }: { i: ConversationItem }) {
                 </StatusPill>
               )}
               <StatusPill tone="neutral">{INTENT_LABEL[a.intent]}</StatusPill>
-              {a.topics.slice(0, 2).map((t) => (
+              <StatusPill tone={a.layer === 'reputational' ? 'ai' : 'info'}>
+                {a.layer === 'reputational' ? 'Reputacional' : 'Operativa'}
+              </StatusPill>
+              {a.topics.map((t) => (
                 <StatusPill key={t} tone="neutral">
                   #{t}
                 </StatusPill>
               ))}
             </>
           ) : (
-            <StatusPill tone="neutral">Sin analizar</StatusPill>
+            <StatusPill tone="neutral">
+              Sin analizar (presupuesto o cola)
+            </StatusPill>
           )}
         </div>
+        {a && (
+          <div className="bg-muted/60 mt-2 rounded-xl px-3 py-2 text-xs">
+            <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span
+                className="text-primary-text inline-flex items-center gap-1 font-extrabold"
+                title={`${a.provider} · ${a.model}`}
+              >
+                <OriginIcon aria-hidden className="h-3.5 w-3.5" />{' '}
+                {byRules ? 'Clasificación por reglas' : 'Análisis IA'}
+              </span>
+              <span className="text-muted-foreground inline-flex items-center gap-1 tabular-nums">
+                <Gauge aria-hidden className="h-3.5 w-3.5" />
+                Prioridad{' '}
+                <b className="text-foreground">{Math.round(a.priorityScore)}</b>
+              </span>
+              <span className="text-muted-foreground tabular-nums">
+                Confianza{' '}
+                <b className="text-foreground">
+                  {Math.round(a.confidence * 100)} %
+                </b>
+              </span>
+            </p>
+            {a.explanation && (
+              <p className="text-muted-foreground mt-1 leading-snug">
+                {a.explanation}
+              </p>
+            )}
+          </div>
+        )}
       </div>
     </article>
   );

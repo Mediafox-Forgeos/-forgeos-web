@@ -7,7 +7,6 @@ import {
   Search,
   Users,
 } from 'lucide-react';
-import { z } from 'zod';
 import {
   CoverageBannerV2,
   ModuleSurface,
@@ -23,6 +22,7 @@ import {
 } from '@/components/ds/primitives';
 import { EmptyStateV2 } from '@/components/ds/states';
 import { requireContext } from '@/lib/auth/session';
+import { explorerQuery, parseExplorerFilters } from '@/lib/explorer-filters';
 import { summarizeCoverage } from '@/lib/coverage';
 import { PLATFORM_LABEL } from '@/lib/format';
 import { inWindow, postTotals } from '@/lib/home-insights';
@@ -41,22 +41,6 @@ import { LegacyPosts } from './legacy-posts';
 
 export const metadata = { title: 'Social Explorer' };
 
-const PLATFORMS = [
-  'facebook',
-  'instagram',
-  'linkedin',
-  'youtube',
-  'tiktok',
-  'x',
-  'web',
-  'other',
-] as const;
-const Filters = z.object({
-  q: z.string().trim().max(100).optional(),
-  platform: z.enum(PLATFORMS).optional(),
-  orden: z.enum(['recientes', 'interacciones']).optional(),
-});
-
 /** Social Explorer (WO-HF-V2-06): galería de publicaciones monitoreadas. */
 export default async function SocialExplorerPage({
   searchParams,
@@ -66,9 +50,8 @@ export default async function SocialExplorerPage({
   const sp = await searchParams;
   if (!isV2(await getUiTheme())) return <LegacyPosts params={sp} />;
 
-  const raw = Object.fromEntries(Object.entries(sp).filter(([, v]) => v));
-  const parsed = Filters.safeParse(raw);
-  const f = parsed.success ? parsed.data : {};
+  const f = parseExplorerFilters(sp);
+  const fq = explorerQuery(f);
   const period = parsePeriod(sp[PERIOD_PARAM]);
   const { active, repo } = await requireContext();
   const orgId = active.organization.id;
@@ -257,7 +240,7 @@ export default async function SocialExplorerPage({
                   comments={comments.length}
                   dominant={dominant}
                   href={withPeriod(
-                    `/publicaciones/${encodeURIComponent(p.id)}`,
+                    `/publicaciones/${encodeURIComponent(p.id)}${fq ? `?${fq}` : ''}`,
                     period,
                   )}
                 />

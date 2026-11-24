@@ -69,7 +69,13 @@ check "Inicio V2 por defecto" '[[ "$(body / "$OWNER")" == *"Hola, <!-- -->Laura"
 check "tema clásico conserva el Resumen V1" '[[ "$(body / "$OWNER; hf_ui=legacy")" == *"Resumen · Clínica Aurora"* ]]'
 check "tema clásico: detalle con comentarios asociados" '[[ "$(body /publicaciones/demo-clinica-aurora-post-instagram "$OWNER; hf_ui=legacy")" == *"Comentarios asociados"* ]]'
 check "tema desconocido vuelve a V2" '[[ "$(body / "$OWNER; hf_ui=v9")" == *"Hola, <!-- -->Laura"* ]]'
-check "Social Explorer V2" '[[ "$(body /publicaciones "$OWNER")" == *"Vista previa no disponible"* ]]'
+check "Social Explorer V2" '[[ "$(body /publicaciones "$OWNER")" == *"Sin vista previa"* ]]'
+# Refinamiento V2 (WO-HF-V2-REFINEMENT-001)
+check "detalle: volver conserva filtros y periodo" '[[ "$(body "/publicaciones/demo-clinica-aurora-post-instagram?platform=instagram&periodo=30d" "$OWNER")" == *"href=\"/publicaciones?platform=instagram&amp;periodo=30d\""* ]]'
+check "detalle: análisis IA, prioridad y confianza por comentario" '[[ "$(body /publicaciones/demo-clinica-aurora-post-instagram "$OWNER")" == *"Clasificación por reglas"*"Confianza"* ]]'
+check "filtro inválido en el detalle se descarta" '[[ "$(get "/publicaciones/demo-clinica-aurora-post-instagram?platform=__proto__" "$OWNER")" == "200" ]]'
+check "login V2 por defecto" '[[ "$(body /login "")" == *"Ingresa a tu espacio"* ]]'
+check "login clásico con tema legacy" '[[ "$(body /login "hf_ui=legacy")" == *"Command Center"* && "$(body /login "hf_ui=legacy")" != *"Ingresa a tu espacio"* ]]'
 check "catálogo /ds en demo → 200" '[[ "$(get /ds "$OWNER")" == "200" ]]'
 check "buscador global → 200" '[[ "$(get "/buscar?q=citas" "$OWNER")" == "200" ]]'
 BS="$(body "/buscar?q=a" "$BANK")"

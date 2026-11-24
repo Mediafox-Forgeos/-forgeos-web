@@ -190,6 +190,23 @@
   .hf-v2 table {
     font-variant-numeric: tabular-nums;
   }
+  /* Aviso de datos sintéticos en V2: visible pero sereno (tokens de advertencia, no amarillo pleno). */
+  .hf-v2 .hf-demo-banner {
+    background-color: hsl(var(--warning-bg));
+    color: hsl(var(--warning-fg));
+    border-bottom: 1px solid hsl(var(--warning-border));
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 600;
+  }
+  .hf-v2 .hf-demo-strong {
+    font-weight: 800;
+  }
+  /* Scroll discreto (riel lateral): sin barras gruesas del sistema. */
+  .hf-scroll-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

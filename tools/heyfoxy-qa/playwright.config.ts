@@ -78,6 +78,13 @@ export default defineConfig({
       },
     },
     {
+      // 500 px: ancho mínimo de ventana de Chrome de escritorio (revisión del Preview V2).
+      // Solo comprobaciones funcionales, axe y desbordamiento; sin capturas (D-2).
+      name: 'v2-light-500',
+      metadata: { theme: 'v2-light', shots: false },
+      use: { viewport: { width: 500, height: 900 }, hasTouch: true },
+    },
+    {
       name: 'v2-light-820',
       metadata: { theme: 'v2-light' },
       use: { viewport: { width: 820, height: 1180 }, hasTouch: true },
