@@ -407,3 +407,14 @@ Ejecutado, sin contratar, migrar ni desplegar:
   - GO por SHA para un Preview V2;
   - validación con `heyfoxy-qa` (HF-QA-06);
   - V2-05, V2-07, V2-08 y V2-09 sin autorizar.
+
+## 2026-11-24 — Preview V2, revisión visual y WO-HF-V2-REFINEMENT-001
+
+- **Preview V2** con GO por SHA (`cdbd36f`) mediante `deploy-preview.sh`:
+  - `dpl_CCkrqpDzqUdJTLnVRqogogvzjQ27`, URL `heyfoxy-9xxrzsq21-mediafox.vercel.app`, `target=preview`, **sin alias**;
+  - alias V1 `heyfoxy-qa-mediafox` intacto (Preview n.º 4), Production congelado, protección `all`, 0 secretos de bypass;
+  - URL de Supabase de Preview verificada contra `heyfoxy-qa` (sin imprimir el valor).
+  - Anomalía previa resuelta por Álvaro: la sesión del CLI caducó y luego no tenía el equipo `mediafox` (403); se detuvo el despliegue hasta que Álvaro inició sesión.
+- **Revisión visual asistida** (Álvaro inició sesión; 30 capturas con datos de `heyfoxy-qa`, galería en `/Volumes/MediaFOX_DEV/QA/HeyFoxy/V2/2026-11-24/`, fuera de Git).
+- **WO-HF-V2-REFINEMENT-001** (local): fases A y B, preparación de Metricool. Detalle y pruebas en [17](./17_V2_REFINEMENT_001.md); WO de Metricool en [16](./16_WO_HF_METRICOOL_INTEGRATION.md).
+- **Sin cambios** en migraciones, RLS, Auth, Supabase remoto, Vercel, Production, Metricool, WhatsApp, MediaFOX OS ni MOVOS.

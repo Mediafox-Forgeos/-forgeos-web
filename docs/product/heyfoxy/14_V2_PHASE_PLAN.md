@@ -1,12 +1,12 @@
 # 14 — Hey Foxy V2: plan detallado por fases
 
-| Propiedad    | Valor                                                                                                                                                                                     |
-| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Fecha        | 2026-11-20                                                                                                                                                                                |
-| Rama         | `feat/heyfoxy-v2-uxui` (desde `6ac992f` de `feat/heyfoxy-gate2-foundation`)                                                                                                               |
-| Base         | [13 — Arquitectura UX/UI](./13_V2_UX_UI_ARCHITECTURE.md) (§0 decisiones) y [Design System v0.2](./design-system/HEY_FOXY_V2_DESIGN_SYSTEM.md)                                             |
-| Estado       | **Hechas:** DOC, V2-00, V2-01, V2-02, V2-03, V2-04 y V2-06 (local, sin desplegar; ver [15](./15_V2_REVIEW_HOME_EXPLORER.md)). **Pendientes de autorización:** V2-05, V2-07, V2-08 y V2-09 |
-| Precondición | **Gate D cerrado por Álvaro** antes de WO-HF-V2-01 (implementación visual general)                                                                                                        |
+| Propiedad    | Valor                                                                                                                                                                                                                                                                 |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Fecha        | 2026-11-20                                                                                                                                                                                                                                                            |
+| Rama         | `feat/heyfoxy-v2-uxui` (desde `6ac992f` de `feat/heyfoxy-gate2-foundation`)                                                                                                                                                                                           |
+| Base         | [13 — Arquitectura UX/UI](./13_V2_UX_UI_ARCHITECTURE.md) (§0 decisiones) y [Design System v0.2](./design-system/HEY_FOXY_V2_DESIGN_SYSTEM.md)                                                                                                                         |
+| Estado       | **Hechas:** DOC, V2-00, V2-01, V2-02, V2-03, V2-04 y V2-06 (Preview V2 `cdbd36f` el 2026-11-24; ver [15](./15_V2_REVIEW_HOME_EXPLORER.md)) y REFINEMENT-001 (local; ver [17](./17_V2_REFINEMENT_001.md)). **Pendientes de autorización:** V2-05, V2-07, V2-08 y V2-09 |
+| Precondición | **Gate D cerrado por Álvaro** antes de WO-HF-V2-01 (implementación visual general)                                                                                                                                                                                    |
 
 ## 1. Reglas comunes a todas las WO
 

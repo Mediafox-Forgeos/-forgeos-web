@@ -28,6 +28,8 @@ Plataforma SaaS multiempresa de escucha social con IA, monitoreo reputacional, a
 | 13  | [V2: arquitectura UX/UI, decisiones y Work Orders](./13_V2_UX_UI_ARCHITECTURE.md)                                           | V2                                    |
 | 14  | [V2: plan detallado por fases](./14_V2_PHASE_PLAN.md)                                                                       | V2                                    |
 | 15  | [V2: revisión de Intelligence Home y Social Explorer (antes/después y pruebas)](./15_V2_REVIEW_HOME_EXPLORER.md)            | V2                                    |
+| 16  | [WO Metricool Advanced: campos por red, modelo de datos y conexión segura (preparada)](./16_WO_HF_METRICOOL_INTEGRATION.md) | Metricool                             |
+| 17  | [V2: refinamiento de Home y Social Explorer (WO-HF-V2-REFINEMENT-001)](./17_V2_REFINEMENT_001.md)                           | V2                                    |
 | DS  | [Design System V2 v0.2](./design-system/HEY_FOXY_V2_DESIGN_SYSTEM.md) · [concepto](./design-system/HEY_FOXY_V2_CONCEPT.png) | V2                                    |
 | —   | [WORKLOG](./WORKLOG.md) · [TECH_BACKLOG](./TECH_BACKLOG.md)                                                                 | Seguimiento                           |
 
