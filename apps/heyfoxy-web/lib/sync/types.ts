@@ -25,7 +25,16 @@ export interface SyncBrand {
   label: string;
   networks: Platform[];
   tokenExpirations: Partial<Record<Platform, string>>;
+  /** Imagen de la marca en Metricool (si la entrega). */
+  pictureUrl?: string | null;
+  /** Identidad de cada cuenta conectada tal como la entrega Metricool. */
+  accounts?: BrandAccounts;
 }
+
+/** Cuenta por red: usuario (@) y nombre visible, solo si la fuente los entrega. */
+export type BrandAccounts = Partial<
+  Record<Platform, { handle: string | null; name: string | null }>
+>;
 
 export interface SyncCursor {
   /** Fin de la última ventana de publicaciones sincronizada con éxito, por red. */
@@ -86,6 +95,8 @@ export interface SyncRun {
   redactions?: number;
   /** Comentarios cuyo texto no se guardó por contener información de salud. */
   healthWithheld?: number;
+  /** Referencias de medios renovadas (URL nueva entregada por la fuente). */
+  mediaRenewed?: number;
   /** Comentarios leídos de la fuente dentro de la ventana (antes de filtrar). */
   commentsFetched?: number;
   /** Leídos pero fuera de alcance (fuera de la ventana o de publicaciones no importadas). */
@@ -135,7 +146,13 @@ export interface SyncStore {
     orgId: string,
     posts: NormalizedPost[],
     at: string,
-  ): Promise<{ inserted: number; updated: number; snapshots: number }>;
+  ): Promise<{
+    inserted: number;
+    updated: number;
+    snapshots: number;
+    /** Referencias de medios cuya URL cambió respecto a la guardada. */
+    mediaRenewed?: number;
+  }>;
   /** Completa medios de publicaciones ya guardadas (carruseles vistos en los hilos). */
   enrichPostMedia(
     orgId: string,
@@ -153,9 +170,13 @@ export interface SyncStore {
   replaceCoverage(orgId: string, cells: CoverageCell[]): Promise<void>;
   recordRun(orgId: string, run: SyncRun): Promise<void>;
   runs(orgId: string, limit?: number): Promise<SyncRun[]>;
-  counts(
-    orgId: string,
-  ): Promise<{ posts: number; comments: number; snapshots: number }>;
+  counts(orgId: string): Promise<{
+    posts: number;
+    comments: number;
+    snapshots: number;
+    /** Publicaciones guardadas por red (total, no solo la última ejecución). */
+    postsByPlatform?: Partial<Record<Platform, number>>;
+  }>;
   coverage(orgId: string): Promise<CoverageCell[]>;
   posts(orgId: string): Promise<StoredPost[]>;
   /**

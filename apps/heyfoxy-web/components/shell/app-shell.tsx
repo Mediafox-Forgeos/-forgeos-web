@@ -314,13 +314,13 @@ export function AppShell({
                 </div>
               </form>
               <div className="ml-auto flex items-center gap-1.5">
-                <Link
+                <PeriodLink
                   href="/buscar"
                   className="hover:bg-muted rounded-xl p-2 lg:hidden"
                 >
                   <Search aria-hidden className="h-5 w-5" />
                   <span className="sr-only">Buscar</span>
-                </Link>
+                </PeriodLink>
                 <div className="hidden sm:block">
                   <Suspense>
                     <PeriodPicker ranges={ranges} />

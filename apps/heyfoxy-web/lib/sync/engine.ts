@@ -61,6 +61,17 @@ export interface SyncDeps {
   maxPostsPerNetwork?: number;
   /** Piloto: redes que pueden sincronizarse (las demás de la marca se ignoran sin llamadas). */
   networks?: readonly Platform[];
+  /**
+   * Piloto: cada ejecución vuelve a pedir la ventana completa (`initialDays`) en lugar de
+   * solo lo nuevo desde la última; así se renuevan métricas y URLs de medios (caducan) de
+   * todas las publicaciones recuperadas (HF-MC-03). Las llamadas son las mismas.
+   */
+  refreshFullWindow?: boolean;
+  /**
+   * Piloto: al empezar, vuelve a leer la marca autorizada (1 llamada) para guardar su nombre,
+   * imagen y cuentas por red (identidad de las publicaciones propias).
+   */
+  refreshBrandIdentity?: boolean;
   /** false: no se leen ni guardan comentarios (política de privacidad del piloto). */
   importComments?: boolean;
   /** Enmascara datos personales de comentarios de terceros antes de persistir (privacy.ts). */
@@ -186,6 +197,28 @@ export async function runSync(deps: SyncDeps): Promise<SyncRun> {
   const networksToSync = state.brand.networks.filter(
     (n) => !deps.networks || deps.networks.includes(n),
   );
+  if (deps.refreshBrandIdentity) {
+    try {
+      const b = (await mc.listBrands()).find(
+        (x) => x.blogId === state.brand!.blogId,
+      );
+      if (b) {
+        const brand = {
+          ...state.brand,
+          label: b.label,
+          pictureUrl: b.pictureUrl,
+          accounts: b.accounts,
+        };
+        await deps.store.save(deps.orgId, { brand });
+        state.brand = brand;
+      }
+    } catch (e) {
+      const err = asMcError(e);
+      if (err.kind === 'auth') authFailure = err;
+      // Otros errores: la identidad queda como estaba; no detiene la sincronización.
+    }
+  }
+
   // Permisos de comentarios por red (sin leer contenido).
   let auths: Awaited<ReturnType<MetricoolConnector['checkAuthorizations']>> =
     [];
@@ -209,9 +242,10 @@ export async function runSync(deps: SyncDeps): Promise<SyncRun> {
     // 1. Publicaciones y métricas
     if (POSTS_SUPPORTED.includes(platform)) {
       const prevTo = cursor.postsTo[platform];
-      const from = prevTo
-        ? new Date(Date.parse(prevTo) - 2 * DAY)
-        : initialFrom;
+      const from =
+        prevTo && !deps.refreshFullWindow
+          ? new Date(Date.parse(prevTo) - 2 * DAY)
+          : initialFrom;
       try {
         const page = await mc.fetchPosts(platform, {
           from,
@@ -219,10 +253,15 @@ export async function runSync(deps: SyncDeps): Promise<SyncRun> {
           timezone: deps.timezone ?? 'America/Bogota',
           limit: 500,
         });
+        // Una publicación puede llegar por dos rutas (posts y reels): una sola fila y una sola
+        // medición por ejecución.
+        const unique = [
+          ...new Map(page.items.map((p) => [p.externalId, p])).values(),
+        ];
         const items =
           cap == null
-            ? page.items
-            : [...page.items]
+            ? unique
+            : [...unique]
                 .sort(
                   (a, b) =>
                     (Date.parse(b.publishedAt ?? '') || 0) -
@@ -234,19 +273,21 @@ export async function runSync(deps: SyncDeps): Promise<SyncRun> {
         run.postsInserted += r.inserted;
         run.postsUpdated += r.updated;
         run.snapshots += r.snapshots;
+        if (r.mediaRenewed !== undefined)
+          run.mediaRenewed = (run.mediaRenewed ?? 0) + r.mediaRenewed;
         cursor.postsTo[platform] = at;
         const withMedia = items.filter(
           (p) => (p.media?.length ?? 0) > 0,
         ).length;
         const capped =
-          cap != null && page.items.length > items.length
-            ? ` (las ${items.length} más recientes de ${page.items.length}; tope del piloto)`
+          cap != null && unique.length > items.length
+            ? ` (las ${items.length} más recientes de ${unique.length}; tope del piloto)`
             : '';
         cells.push(
           cell(
             platform,
             'posts',
-            cap != null && page.items.length > items.length
+            cap != null && unique.length > items.length
               ? 'partial'
               : 'complete',
             `${items.length} importadas${capped}; ${withMedia} con foto o miniatura`,

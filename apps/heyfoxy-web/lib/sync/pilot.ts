@@ -13,7 +13,15 @@ export const PILOT_LIMITS = {
   // hay un tratamiento autorizado para texto clínico libre: los comentarios NO se importan.
   // Reactivarlo requiere un control adicional aprobado y un GO explícito.
   importComments: false,
+  // HF-MC-03: cada sincronización manual refresca los 30 días completos.
+  refreshFullWindow: true,
+  refreshBrandIdentity: true,
 } as const satisfies Pick<
   SyncDeps,
-  'maxPostsPerNetwork' | 'networks' | 'protectPersonalData' | 'importComments'
+  | 'maxPostsPerNetwork'
+  | 'networks'
+  | 'protectPersonalData'
+  | 'importComments'
+  | 'refreshFullWindow'
+  | 'refreshBrandIdentity'
 >;

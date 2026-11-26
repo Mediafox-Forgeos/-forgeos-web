@@ -14,7 +14,12 @@ import { cn } from '@/lib/cn';
 import { PLATFORM_LABEL, SENTIMENT_LABEL, fmtRelative } from '@/lib/format';
 import type { PostStats } from '@/lib/insights';
 import type { Post, PostMediaItem, PostMetrics, Sentiment } from '@/lib/types';
-import { MediaCarousel, SafeImage, VideoThumbnail } from './post-client';
+import {
+  MediaCarousel,
+  MediaZoom,
+  SafeImage,
+  VideoThumbnail,
+} from './post-client';
 import { NetworkIcon } from './network-icons';
 import { Avatar, StatusPill, SyntheticBadge, type Tone } from './primitives';
 
@@ -47,18 +52,25 @@ export function MediaItem({
   index = 0,
   count = 1,
   className,
+  zoom = false,
 }: {
   post: Post;
   item: PostMediaItem;
   index?: number;
   count?: number;
   className?: string;
+  zoom?: boolean;
 }) {
   const alt = mediaAlt(post, item, index, count);
   // Video del que la fuente solo entrega miniatura: miniatura + duración, sin reproductor.
   if (item.kind === 'video' && item.playable === false)
     return (
-      <VideoThumbnail src={item.previewUrl} alt={alt} className={className} />
+      <VideoThumbnail
+        src={item.previewUrl}
+        alt={alt}
+        className={className}
+        expired={item.expired}
+      />
     );
   if (item.kind === 'video')
     return (
@@ -73,12 +85,21 @@ export function MediaItem({
         <source src={item.url} />
       </video>
     );
-  return (
+  const img = (
     <SafeImage
       src={item.previewUrl ?? item.url}
       alt={alt}
       className={className}
+      expired={item.expired}
     />
+  );
+  // Detalle: imagen ampliable con la mejor resolución que entrega la fuente.
+  return zoom && !item.expired ? (
+    <MediaZoom fullUrl={item.url} alt={alt}>
+      {img}
+    </MediaZoom>
+  ) : (
+    img
   );
 }
 
@@ -111,6 +132,7 @@ export function PostMedia({
               item={m}
               index={i}
               count={media.length}
+              zoom={variant === 'detail'}
             />
           ))}
         </MediaCarousel>
@@ -119,7 +141,13 @@ export function PostMedia({
   if (media.length === 1)
     return (
       <div className={box}>
-        <MediaItem post={post} item={media[0]!} />
+        <MediaItem post={post} item={media[0]!} zoom={variant === 'detail'} />
+        {post.mediaCountReported != null &&
+          post.mediaCountReported > media.length && (
+            <span className="absolute right-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-bold text-white">
+              Portada · {post.mediaCountReported} elementos
+            </span>
+          )}
         {media[0]!.kind === 'video' && media[0]!.durationSec && (
           <span className="absolute bottom-2 right-2 rounded bg-black/75 px-1.5 py-0.5 text-xs font-bold text-white">
             {Math.floor(media[0]!.durationSec / 60)}:
@@ -157,6 +185,8 @@ export function AuthorChip({ post, size = 36 }: { post: Post; size?: number }) {
   const name =
     post.author?.displayName ?? post.accountHandle ?? 'Cuenta no disponible';
   const handle = post.author?.handle ?? post.accountHandle;
+  // La fuente no entregó el perfil: se muestra la marca conectada, identificada como tal.
+  const isBrand = post.author?.source === 'brand';
   return (
     <div className="flex min-w-0 items-center gap-2.5">
       <span className="relative flex h-fit shrink-0 self-start">
@@ -179,10 +209,20 @@ export function AuthorChip({ post, size = 36 }: { post: Post; size?: number }) {
         </span>
       </span>
       <span className="min-w-0">
-        <span className="block truncate text-sm font-extrabold">{name}</span>
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className="truncate text-sm font-extrabold">{name}</span>
+          {isBrand && (
+            <span
+              className="bg-muted text-muted-foreground shrink-0 rounded px-1 py-px text-[10px] font-bold"
+              title="La red no entregó el perfil de la publicación: se muestra el nombre de la marca conectada"
+            >
+              Marca
+            </span>
+          )}
+        </span>
         <span className="text-muted-foreground block truncate text-xs">
           {PLATFORM_LABEL[post.platform]}
-          {handle && handle !== name ? ` · ${handle}` : ''}
+          {handle && handle !== name ? ` · @${handle.replace(/^@/, '')}` : ''}
           {post.publishedAt && (
             <>
               {' · '}

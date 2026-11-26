@@ -323,6 +323,7 @@ describe('Metricool: controles de operación y aislamiento', () => {
       posts: 0,
       comments: 0,
       snapshots: 0,
+      postsByPlatform: {},
     });
     expect(await store.coverage(ORG_B)).toEqual([]);
   });

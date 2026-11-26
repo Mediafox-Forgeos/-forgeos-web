@@ -61,8 +61,8 @@ const COVERAGE: Record<CoverageStatus, { label: string; tone: Tone }> = {
   complete: { label: 'Disponible', tone: 'success' },
   partial: { label: 'Parcial', tone: 'info' },
   not_permitted: { label: 'Sin permiso', tone: 'warning' },
-  unavailable: { label: 'No disponible', tone: 'neutral' },
-  not_requested: { label: 'No solicitado', tone: 'neutral' },
+  unavailable: { label: 'No disponible en la fuente', tone: 'neutral' },
+  not_requested: { label: 'Desactivado', tone: 'neutral' },
 };
 const RUN: Record<SyncRun['status'], { label: string; tone: Tone }> = {
   succeeded: { label: 'Correcta', tone: 'success' },
@@ -626,11 +626,21 @@ export default async function SourcesPage({
                           {c ? (
                             <>
                               <StatusPill tone={COVERAGE[c.status].tone}>
-                                {COVERAGE[c.status].label}
-                                {c.items ? ` · ${c.items}` : ''}
+                                {c.status === 'not_requested' &&
+                                /privacidad/i.test(c.reason)
+                                  ? 'Desactivado por privacidad'
+                                  : COVERAGE[c.status].label}
+                                {k.kind === 'posts' &&
+                                panel.counts.postsByPlatform?.[p] != null
+                                  ? ` · ${panel.counts.postsByPlatform[p]} guardadas`
+                                  : c.items
+                                    ? ` · ${c.items}`
+                                    : ''}
                               </StatusPill>
                               <p className="text-muted-foreground mt-1 max-w-[14rem] text-xs leading-snug">
-                                {c.reason}
+                                {k.kind === 'posts'
+                                  ? `Última ejecución: ${c.reason}`
+                                  : c.reason}
                               </p>
                             </>
                           ) : (

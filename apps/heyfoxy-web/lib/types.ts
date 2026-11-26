@@ -163,6 +163,10 @@ export interface Post {
   media?: PostMediaItem[];
   /** Autor o cuenta de la publicación, si la fuente lo entrega. */
   author?: PostAuthor | null;
+  /** Tipo de contenido según la fuente (image, video, carousel, reel, text…), si se conoce. */
+  contentType?: string | null;
+  /** Número de medios que la red informa (p. ej. carrusel de 5) aunque solo llegue la portada. */
+  mediaCountReported?: number | null;
 }
 
 /** Un medio de una publicación (varios = carrusel). */
@@ -181,12 +185,21 @@ export interface PostMediaItem {
    * miniatura con su duración y el enlace al original, sin reproductor.
    */
   playable?: boolean;
+  /** Caducidad de la URL firmada (CDN de Meta), si se conoce. */
+  expiresAt?: string | null;
+  /** true si la URL ya caducó: se muestra «vista previa caducada» sin pedirla. */
+  expired?: boolean;
 }
 
 export interface PostAuthor {
   displayName: string | null;
   handle: string | null;
   avatarUrl: string | null;
+  /**
+   * 'post': identidad entregada con la publicación. 'brand': la fuente no la entregó y se
+   * usa la marca conectada (se indica como «nombre de la marca», no como perfil verificado).
+   */
+  source?: 'post' | 'brand';
 }
 
 export interface DailyReport {

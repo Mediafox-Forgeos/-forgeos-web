@@ -151,6 +151,24 @@ export class SupabaseSyncStore implements SyncStore {
         ? mediaRows(orgId, ids.get(p.externalId)!, p, this.retentionDays, at)
         : [],
     );
+    // Referencias renovadas: URL distinta a la guardada para la misma posición.
+    let mediaRenewed = 0;
+    if (media.length) {
+      const { data: prev } = await this.db
+        .from('post_media')
+        .select('post_id, position, source_url')
+        .in('post_id', [...new Set(media.map((m) => String(m.post_id)))]);
+      const before = new Map(
+        ((prev ?? []) as Row[]).map((r) => [
+          `${r.post_id}:${r.position}`,
+          String(r.source_url),
+        ]),
+      );
+      mediaRenewed = media.filter((m) => {
+        const old = before.get(`${m.post_id}:${m.position}`);
+        return old !== undefined && old !== m.source_url;
+      }).length;
+    }
     if (media.length)
       fail(
         (
@@ -164,6 +182,7 @@ export class SupabaseSyncStore implements SyncStore {
       inserted,
       updated: posts.length - inserted,
       snapshots: snaps.length,
+      mediaRenewed,
     };
   }
 
@@ -333,10 +352,20 @@ export class SupabaseSyncStore implements SyncStore {
           .select('id', { count: 'exact', head: true })
           .eq('data_source_id', sid)
       ).count ?? 0;
+    const { data: byPlatform } = await this.db
+      .from('social_posts')
+      .select('platform')
+      .eq('data_source_id', sid);
+    const postsByPlatform: Partial<Record<Platform, number>> = {};
+    for (const r of (byPlatform ?? []) as Row[]) {
+      const p = r.platform as Platform;
+      postsByPlatform[p] = (postsByPlatform[p] ?? 0) + 1;
+    }
     return {
       posts: await c('social_posts'),
       comments: await c('social_comments'),
       snapshots: 0,
+      postsByPlatform,
     };
   }
 

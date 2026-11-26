@@ -59,11 +59,16 @@ export class MemorySyncStore implements SyncStore {
     const d = this.org(orgId);
     let inserted = 0;
     let updated = 0;
+    let mediaRenewed = 0;
     for (const p of posts) {
       const k = key(p.platform, p.externalId);
       const prev = d.posts.get(k);
       if (prev) {
         updated++;
+        (p.media ?? []).forEach((m, i) => {
+          const old = prev.media?.[i]?.sourceUrl;
+          if (old !== undefined && old !== m.sourceUrl) mediaRenewed++;
+        });
         // Los medios ya completados desde los hilos no se pierden si la analítica trae menos.
         const media =
           (prev.media?.length ?? 0) > (p.media?.length ?? 0)
@@ -82,7 +87,7 @@ export class MemorySyncStore implements SyncStore {
       }
       d.snapshots.push({ postKey: k, at, metrics: { ...p.metrics } });
     }
-    return { inserted, updated, snapshots: posts.length };
+    return { inserted, updated, snapshots: posts.length, mediaRenewed };
   }
 
   async enrichPostMedia(
@@ -153,10 +158,14 @@ export class MemorySyncStore implements SyncStore {
 
   async counts(orgId: string) {
     const d = this.org(orgId);
+    const postsByPlatform: Partial<Record<Platform, number>> = {};
+    for (const p of d.posts.values())
+      postsByPlatform[p.platform] = (postsByPlatform[p.platform] ?? 0) + 1;
     return {
       posts: d.posts.size,
       comments: d.comments.size,
       snapshots: d.snapshots.length,
+      postsByPlatform,
     };
   }
 

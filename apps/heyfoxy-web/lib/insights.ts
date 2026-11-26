@@ -109,9 +109,15 @@ export function periodTrend(
   };
 }
 
+/**
+ * Interacciones según Hey Foxy: suma de los componentes que la red entrega por separado
+ * (me gusta, comentarios en la red, compartidos y guardados si existen). Coincide con el total
+ * de la red cuando esta los desglosa todos; si no, el detalle explica la diferencia
+ * (lib/intel/metrics.ts · interactionBreakdown).
+ */
 export function interactions(m: PostMetrics | undefined | null): number {
   if (!m) return 0;
-  return (m.likes ?? 0) + (m.comments ?? 0) + (m.shares ?? 0);
+  return (m.likes ?? 0) + (m.comments ?? 0) + (m.shares ?? 0) + (m.saves ?? 0);
 }
 
 export interface PostStats {

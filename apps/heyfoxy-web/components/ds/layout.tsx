@@ -6,6 +6,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import Link from 'next/link';
+import { PeriodLink } from '@/components/shell/period-link';
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { Sparkline } from './charts';
@@ -154,9 +155,16 @@ export function KpiCard({
 export function CoverageBannerV2({
   connected,
   missing,
+  disabled = [],
+  sources = [],
+  networks = [],
 }: {
   connected: string[];
   missing: string[];
+  /** Datos desactivados por política de privacidad (no se cuentan como «sin escuchar»). */
+  disabled?: string[];
+  sources?: string[];
+  networks?: string[];
 }) {
   const partial = missing.length > 0 || connected.length === 0;
   return (
@@ -185,10 +193,17 @@ export function CoverageBannerV2({
             {partial ? 'Cobertura parcial' : 'Cobertura completa'}
           </span>
           <span className="text-muted-foreground">
-            {connected.length} {connected.length === 1 ? 'fuente' : 'fuentes'}{' '}
-            conectadas
-            {missing.length > 0 ? ` · ${missing.length} sin escuchar` : ''} · no
-            representa la conversación total del mercado
+            {sources.length}{' '}
+            {sources.length === 1 ? 'fuente conectada' : 'fuentes conectadas'}
+            {networks.length > 0 ? ` (${networks.join(', ')})` : ''} ·{' '}
+            {connected.length}{' '}
+            {connected.length === 1 ? 'tipo de dato' : 'tipos de dato'}{' '}
+            escuchados
+            {missing.length > 0 ? ` · ${missing.length} no disponibles` : ''}
+            {disabled.length > 0
+              ? ` · ${disabled.length} desactivados por privacidad`
+              : ''}{' '}
+            · no representa la conversación total del mercado
           </span>
           <span className="text-primary-text font-bold underline underline-offset-2">
             <span className="group-open:hidden">Ver fuentes</span>
@@ -197,21 +212,27 @@ export function CoverageBannerV2({
         </summary>
         <div className="text-muted-foreground mt-1.5 space-y-0.5 text-xs">
           <p>
-            <b className="text-foreground">Conectadas:</b>{' '}
+            <b className="text-foreground">Escuchados:</b>{' '}
             {connected.length ? connected.join(', ') : 'ninguna fuente'}.
           </p>
           {missing.length > 0 && (
             <p>
-              <b className="text-foreground">Sin escuchar:</b>{' '}
+              <b className="text-foreground">No disponibles en la fuente:</b>{' '}
               {missing.join(', ')}.
             </p>
           )}
-          <Link
+          {disabled.length > 0 && (
+            <p>
+              <b className="text-foreground">Desactivados por privacidad:</b>{' '}
+              {disabled.join(', ')}.
+            </p>
+          )}
+          <PeriodLink
             href="/cobertura"
             className="text-primary-text inline-block font-bold underline underline-offset-2"
           >
             Ver cobertura
-          </Link>
+          </PeriodLink>
         </div>
       </details>
     </div>

@@ -1,7 +1,9 @@
+import { mediaUrlStatus } from '@/lib/media-expiry';
 import type { NormalizedComment, NormalizedPost } from '@/lib/connectors/types';
 import type { Platform } from '@/lib/types';
 import {
   initialState,
+  type BrandAccounts,
   type ConnectionStatus,
   type SourceSyncState,
   type SyncRun,
@@ -40,6 +42,10 @@ export function stateFromRow(r: Row): SourceSyncState {
           networks: (r.connected_networks as Platform[]) ?? [],
           tokenExpirations:
             (cur._tokenExpirations as Partial<Record<Platform, string>>) ?? {},
+          pictureUrl:
+            ((cur._brand as Row | undefined)?.pictureUrl as string) ?? null,
+          accounts:
+            ((cur._brand as Row | undefined)?.accounts as BrandAccounts) ?? {},
         }
       : null,
     cursor: {
@@ -87,6 +93,10 @@ export function stateToColumns(
       commentsSince: next.cursor.commentsSince ?? {},
       _items: { date: next.itemsDate, count: next.itemsToday },
       _tokenExpirations: next.brand?.tokenExpirations ?? {},
+      _brand: {
+        pictureUrl: next.brand?.pictureUrl ?? null,
+        accounts: next.brand?.accounts ?? {},
+      },
     };
   if ('apiCallsDate' in patch) out.api_calls_date = next.apiCallsDate;
   if ('apiCallsToday' in patch) out.api_calls_today = next.apiCallsToday;
@@ -175,7 +185,9 @@ export function mediaRows(
     preview_url: m.previewUrl ?? null,
     duration_sec: m.durationSec ?? null,
     copy_allowed: false,
-    url_status: 'unknown',
+    // Estado y fecha de la comprobación: renovada en cada sincronización (HF-MC-03).
+    url_status: mediaUrlStatus(m.previewUrl ?? m.sourceUrl, Date.parse(at)),
+    checked_at: at,
     retention_until: until,
   }));
 }
@@ -221,6 +233,7 @@ const RUN_COUNTERS = [
   'postsInserted',
   'postsUpdated',
   'snapshots',
+  'mediaRenewed',
   'commentsFetched',
   'commentsOutOfScope',
   'commentsInserted',
@@ -294,6 +307,7 @@ export function runFromJob(r: Row): SyncRun {
     errors: e.errors ?? [],
   };
   for (const k of [
+    'mediaRenewed',
     'commentsFetched',
     'commentsOutOfScope',
     'healthWithheld',

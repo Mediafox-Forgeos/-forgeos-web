@@ -183,6 +183,10 @@ export interface MetricoolBrand {
   networks: Platform[];
   /** Caducidad de tokens de red que Metricool informa (TikTok, LinkedIn). */
   tokenExpirations: Partial<Record<Platform, string>>;
+  /** Usuario y nombre por red, si Metricool los entrega (`instagram`, `facebook`…). */
+  accounts: Partial<
+    Record<Platform, { handle: string | null; name: string | null }>
+  >;
 }
 
 const defaultSleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -656,12 +660,20 @@ export function mapBrand(b: Record<string, unknown>): MetricoolBrand {
   if (tk) tokenExpirations.tiktok = tk;
   const li = str(b.linkedInTokenExpiration);
   if (li) tokenExpirations.linkedin = li;
+  // Metricool entrega el usuario de Instagram en `instagram` y el nombre de la página de
+  // Facebook en `facebook` (el id de la página no es un nombre visible).
+  const accounts: MetricoolBrand['accounts'] = {};
+  const ig = str(b.instagram);
+  if (ig) accounts.instagram = { handle: ig.replace(/^@/, ''), name: null };
+  const fb = str(b.facebook);
+  if (fb) accounts.facebook = { handle: null, name: fb };
   return {
     blogId: str(b.id) ?? '',
     label: str(b.label) ?? str(b.title) ?? 'Marca sin nombre',
     pictureUrl: https(b.picture),
     networks,
     tokenExpirations,
+    accounts,
   };
 }
 

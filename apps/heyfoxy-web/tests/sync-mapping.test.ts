@@ -81,6 +81,7 @@ describe('mapeo a las tablas de 0006', () => {
         commentsSince: {},
         _items: { date: '2026-11-24', count: 7 },
         _tokenExpirations: {},
+        _brand: { pictureUrl: null, accounts: {} },
       },
       last_sync_status: 'partial',
     });

@@ -1,7 +1,13 @@
 'use client';
 
-import { ChevronLeft, ChevronRight, Play } from 'lucide-react';
-import { Children, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { ChevronLeft, ChevronRight, Maximize2, Play, X } from 'lucide-react';
+import {
+  Children,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react';
 import { cn } from '@/lib/cn';
 
 /** Carrusel accesible: botones, flechas del teclado y contador «n de N». */
@@ -79,13 +85,16 @@ export function SafeImage({
   alt,
   className,
   onFail,
+  expired = false,
 }: {
   src: string;
   alt: string;
   className?: string;
   onFail?: () => void;
+  /** URL que ya se sabe caducada: se muestra el aviso sin pedirla a la red. */
+  expired?: boolean;
 }) {
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState(expired);
   if (failed)
     return (
       <span
@@ -126,17 +135,24 @@ export function VideoThumbnail({
   src,
   alt,
   className,
+  expired = false,
 }: {
   src: string | null | undefined;
   alt: string;
   className?: string;
+  expired?: boolean;
 }) {
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState(expired);
   const fallback = !src || failed;
   return (
     <span className={cn('relative block h-full w-full', className)}>
       {src ? (
-        <SafeImage src={src} alt={alt} onFail={() => setFailed(true)} />
+        <SafeImage
+          src={src}
+          alt={alt}
+          expired={expired}
+          onFail={() => setFailed(true)}
+        />
       ) : (
         <span
           role="img"
@@ -166,5 +182,66 @@ export function VideoThumbnail({
         </span>
       )}
     </span>
+  );
+}
+
+/**
+ * Visor ampliado de una imagen (diálogo nativo, accesible con teclado; Escape cierra).
+ * Muestra la mejor resolución que entrega la fuente autorizada (`fullUrl`); no descarga ni
+ * copia la imagen.
+ */
+export function MediaZoom({
+  fullUrl,
+  alt,
+  children,
+}: {
+  fullUrl: string;
+  alt: string;
+  children: ReactNode;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => ref.current?.showModal()}
+        className="group relative block h-full w-full cursor-zoom-in"
+        aria-label={`Ampliar: ${alt}`}
+      >
+        {children}
+        <span
+          aria-hidden
+          className="absolute bottom-2 left-2 flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-bold text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+        >
+          <Maximize2 className="h-3 w-3" /> Ampliar
+        </span>
+      </button>
+      <dialog
+        ref={ref}
+        aria-label={alt}
+        onClick={(e) => {
+          if (e.target === ref.current) ref.current?.close();
+        }}
+        className="m-auto max-h-[92vh] max-w-[92vw] rounded-2xl bg-transparent p-0 backdrop:bg-black/80"
+      >
+        <div className="relative">
+          {/* eslint-disable-next-line @next/next/no-img-element -- URL externa de la red; sin optimizador de imágenes. */}
+          <img
+            src={fullUrl}
+            alt={alt}
+            referrerPolicy="no-referrer"
+            className="max-h-[88vh] max-w-[90vw] rounded-2xl object-contain"
+          />
+          <button
+            type="button"
+            onClick={() => ref.current?.close()}
+            className="bg-card text-foreground shadow-card absolute right-3 top-3 rounded-full p-2"
+            aria-label="Cerrar"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      </dialog>
+    </>
   );
 }

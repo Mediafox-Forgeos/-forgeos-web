@@ -88,8 +88,11 @@ describe('Límites del piloto', () => {
 
   it('solo llama a Metricool para Instagram y Facebook, aunque la marca tenga más redes', async () => {
     const { f } = await run();
+    // La identidad de la marca (/admin/simpleProfiles) no lee datos de ninguna red.
     const providers = new Set(
-      f.calls.map((c) => c.query.provider ?? c.path.split('/').pop()),
+      f.calls
+        .filter((c) => c.path !== '/admin/simpleProfiles')
+        .map((c) => c.query.provider ?? c.path.split('/').pop()),
     );
     for (const p of providers) expect(p).toMatch(/instagram|facebook/);
     expect(f.calls.every((c) => c.method === 'GET')).toBe(true);
@@ -243,5 +246,47 @@ describe('Información de salud en texto libre (no se conserva)', () => {
     expect(saved.body).not.toMatch(/hipertensi/i);
     expect(saved.body).toMatch(/^\[Información de salud no conservada/);
     expect(r.healthWithheld).toBe(1);
+  });
+});
+
+describe('Estabilización Metricool (HF-MC-03, identidad, medios)', () => {
+  it('la segunda ejecución refresca todas las publicaciones sin duplicarlas', async () => {
+    const store = new MemorySyncStore();
+    const first = await run({}, 10, false, store);
+    const n = (await store.posts(ORG)).length;
+    expect(first.r.postsInserted).toBe(n);
+    const second = await run({}, 10, false, store);
+    expect(second.r.postsInserted).toBe(0);
+    expect(second.r.postsUpdated).toBe(n);
+    expect(second.r.snapshots).toBe(n);
+    expect((await store.posts(ORG)).length).toBe(n);
+  });
+
+  it('guarda nombre, imagen y cuentas por red de la marca autorizada', async () => {
+    const { store } = await run({}, 2, false);
+    const b = (await store.load(ORG))!.brand!;
+    expect(b.label).toBe('Marca sintética QA');
+    expect(b.accounts?.instagram?.handle).toBe('marca_sintetica');
+    expect(b.accounts?.facebook?.name).toBe('Marca Sintética');
+  });
+
+  it('cuenta las referencias de medios renovadas', async () => {
+    const store = new MemorySyncStore();
+    await run({}, 10, false, store);
+    // Simula URLs firmadas nuevas en la siguiente entrega de la fuente.
+    for (const p of await store.posts(ORG))
+      (p.media ?? []).forEach((m) => (m.sourceUrl = m.sourceUrl + '?v=old'));
+    const d = (
+      store as unknown as {
+        orgs: Map<
+          string,
+          { posts: Map<string, { media?: { sourceUrl: string }[] }> }
+        >;
+      }
+    ).orgs.get(ORG)!;
+    for (const p of d.posts.values())
+      (p.media ?? []).forEach((m) => (m.sourceUrl += '?v=old'));
+    const again = await run({}, 10, false, store);
+    expect(again.r.mediaRenewed).toBeGreaterThan(0);
   });
 });

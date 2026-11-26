@@ -4,6 +4,7 @@ import {
   type CallBudget,
 } from '@/lib/connectors/metricool';
 import { dataMode } from '@/lib/env';
+import type { Platform } from '@/lib/types';
 import { runSync } from './engine';
 import { PILOT_LIMITS } from './pilot';
 import {
@@ -49,7 +50,12 @@ export interface MetricoolPanel {
   credentialsConfigured: boolean;
   pending: string[];
   state: SourceSyncState;
-  counts: { posts: number; comments: number; snapshots: number };
+  counts: {
+    posts: number;
+    comments: number;
+    snapshots: number;
+    postsByPlatform?: Partial<Record<Platform, number>>;
+  };
   coverage: CoverageCell[];
   runs: SyncRun[];
   /** Últimas publicaciones importadas (vista previa del tratamiento de medios). */
@@ -241,7 +247,7 @@ export async function getPanel(orgId: string): Promise<MetricoolPanel> {
       ok: !scheduleEnabled(),
       detail: scheduleEnabled()
         ? 'La sincronización automática está activada sin autorización'
-        : `Solo manual · Instagram y Facebook · ${PILOT_LIMITS.maxPostsPerNetwork} publicaciones por red · 30 días · datos personales de comentarios enmascarados · medios por referencia (sin copia)`,
+        : `Solo manual · Instagram y Facebook · ${PILOT_LIMITS.maxPostsPerNetwork} publicaciones por red · cada sincronización refresca los últimos 30 días · comentarios desactivados por privacidad · medios por referencia (sin copia)`,
     });
   }
   const mode: PanelMode =
@@ -326,6 +332,8 @@ export async function connectBrand(orgId: string, blogId: string) {
       label: brand.label,
       networks: brand.networks,
       tokenExpirations: brand.tokenExpirations,
+      pictureUrl: brand.pictureUrl,
+      accounts: brand.accounts,
     },
     cursor: {},
     consecutiveFailures: 0,

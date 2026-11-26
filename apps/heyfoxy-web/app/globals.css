@@ -42,6 +42,16 @@
     --critical-soft: 0 84% 60% / 0.1;
     --critical-strong: 0 96% 89%;
     --critical-border-strong: 0 84% 60% / 0.4;
+    /* Métricas de rendimiento (DS V2 · addendum §4) e interacciones por tipo */
+    --metric-reach: 258 90% 72%;
+    --metric-engagement: 152 60% 52%;
+    --metric-impressions: 211 90% 68%;
+    --metric-interactions: 25 95% 62%;
+    --ix-likes: 345 80% 66%;
+    --ix-comments: 211 90% 68%;
+    --ix-shares: 168 60% 50%;
+    --ix-saves: 45 90% 58%;
+    --ix-reactions: 280 70% 70%;
     --chart-pos: 158 64% 52% / 0.8;
     --chart-neu: 215 16% 47% / 0.7;
     --chart-neg: 0 91% 71% / 0.8;
@@ -103,6 +113,17 @@
     --critical-soft: 349.1 100% 97.8%; /* #FFF4F6 */
     --critical-strong: 349.7 67.4% 42.2%; /* #B4233C */
     --critical-border-strong: 349.8 67.1% 72.5%; /* #E88A9A */
+    /* Métricas de rendimiento: alcance violeta, engagement verde, impresiones azul,
+       interacciones naranja (texto y barras ≥ 3:1 sobre blanco; el texto usa *-fg). */
+    --metric-reach: 256.3 100% 60.4%; /* #6C35FF */
+    --metric-engagement: 155.7 76.2% 33%; /* #149660 */
+    --metric-impressions: 211.5 70.6% 45%; /* #2271C4 */
+    --metric-interactions: 22 95% 46%; /* #E05F06 */
+    --ix-likes: 345 72% 52%; /* #DB2E5E */
+    --ix-comments: 211.5 70.6% 45%; /* #2271C4 */
+    --ix-shares: 168 76% 32%; /* #138F78 */
+    --ix-saves: 38 92% 42%; /* #CF8608 */
+    --ix-reactions: 280 60% 52%; /* #A03CCB */
   }
 
   [data-theme='v2-dark'] {
@@ -149,6 +170,15 @@
     --critical-soft: 340 47.4% 11.2%; /* #2A0F18 */
     --critical-strong: 351.1 100% 78.8%; /* #FF93A3 */
     --critical-border-strong: 346.7 48.4% 36.5%; /* #8A3044 */
+    --metric-reach: 255.2 100% 78%; /* #AC8CFF */
+    --metric-engagement: 150.9 67.7% 58%; /* #4FDC96 */
+    --metric-impressions: 210.8 100% 72%; /* #70B6FF */
+    --metric-interactions: 25.3 100% 66%; /* #FF9A52 */
+    --ix-likes: 345 100% 74%; /* #FF7B9F */
+    --ix-comments: 210.8 100% 72%; /* #70B6FF */
+    --ix-shares: 168 60% 55%; /* #45D1B5 */
+    --ix-saves: 42 90% 62%; /* #F5BE45 */
+    --ix-reactions: 280 85% 78%; /* #D38FF5 */
   }
 
   * {

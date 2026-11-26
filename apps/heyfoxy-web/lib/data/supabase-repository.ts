@@ -1,4 +1,5 @@
 import 'server-only';
+import { mediaExpiresAt } from '@/lib/media-expiry';
 import { applicableMetrics } from '@/lib/metrics-applicability';
 import { supabaseServer } from '@/lib/supabase/server';
 import type {
@@ -39,7 +40,8 @@ const POST_COLUMNS_0005 =
 const POST_COLUMNS_0006 =
   'id, organization_id, platform, body, permalink, published_at, is_synthetic, content_type, author_display, author_handle, author_avatar_url, social_accounts(handle), ' +
   'post_metric_snapshots(captured_at, likes, comments, shares, views, reach, impressions, impressions_unique, interactions, saves, video_views, engagement, reactions), ' +
-  'post_media(position, kind, source_url, preview_url, width, height, duration_sec, alt_text, url_status)';
+  'post_media(position, kind, source_url, preview_url, width, height, duration_sec, alt_text, url_status), ' +
+  'media_count_reported, data_sources(external_account_label, sync_cursor)';
 const postColumns = () =>
   process.env.HF_MIGRATION_0006_APPLIED === 'true'
     ? POST_COLUMNS_0006
@@ -53,34 +55,63 @@ function toMedia(r: Row): Post['media'] {
     .filter((m) => m.url_status !== 'removed')
     .sort((a, b) => a.position - b.position);
   if (!rows.length) return undefined;
-  return rows.map((m) => ({
-    kind: m.kind,
-    url: m.source_url,
-    previewUrl: m.preview_url ?? null,
-    alt: m.alt_text ?? null,
-    width: m.width ?? null,
-    height: m.height ?? null,
-    durationSec: numOrNull(m.duration_sec),
-    // Metricool solo entrega la miniatura de los videos: nunca se reproduce.
-    playable: m.kind === 'video' ? false : undefined,
-  }));
+  const now = Date.now();
+  return rows.map((m) => {
+    const exp = mediaExpiresAt(m.preview_url ?? m.source_url);
+    return {
+      kind: m.kind,
+      url: m.source_url,
+      previewUrl: m.preview_url ?? null,
+      alt: m.alt_text ?? null,
+      width: m.width ?? null,
+      height: m.height ?? null,
+      durationSec: numOrNull(m.duration_sec),
+      // Metricool solo entrega la miniatura de los videos: nunca se reproduce.
+      playable: m.kind === 'video' ? false : undefined,
+      expiresAt: exp?.toISOString() ?? null,
+      expired:
+        m.url_status === 'expired' || (exp ? exp.getTime() <= now : false),
+    };
+  });
+}
+
+/**
+ * Identidad de la cuenta: la de la publicación si la fuente la entregó; si no, la de la marca
+ * conectada (nombre y cuenta por red que entrega Metricool), marcada como tal. Nunca inventada.
+ */
+function toAuthor(r: Row): Post['author'] {
+  if (r.author_display || r.author_handle || r.author_avatar_url)
+    return {
+      displayName: r.author_display ?? null,
+      handle: r.author_handle ?? null,
+      avatarUrl: r.author_avatar_url ?? null,
+      source: 'post',
+    };
+  const ds = r.data_sources as Row | null | undefined;
+  const label = (ds?.external_account_label as string | null) ?? null;
+  if (!label) return undefined;
+  const brand = ((ds?.sync_cursor as Row | null)?._brand ?? {}) as Row;
+  const acc = ((brand.accounts ?? {}) as Row)[r.platform] as
+    { handle?: string | null; name?: string | null } | undefined;
+  return {
+    displayName: acc?.name ?? label,
+    handle: acc?.handle ?? null,
+    avatarUrl: (brand.pictureUrl as string | null) ?? null,
+    source: 'brand',
+  };
 }
 
 function toPost(r: Row): Post {
-  const hasAuthor = r.author_display || r.author_handle || r.author_avatar_url;
+  const author = toAuthor(r);
   return {
     id: r.id,
     organizationId: r.organization_id,
     platform: r.platform,
     accountHandle: r.social_accounts?.handle ?? r.author_handle ?? null,
     media: toMedia(r),
-    author: hasAuthor
-      ? {
-          displayName: r.author_display ?? null,
-          handle: r.author_handle ?? null,
-          avatarUrl: r.author_avatar_url ?? null,
-        }
-      : undefined,
+    author,
+    contentType: r.content_type ?? null,
+    mediaCountReported: r.media_count_reported ?? null,
     body: r.body,
     permalink: r.permalink,
     publishedAt: r.published_at,
