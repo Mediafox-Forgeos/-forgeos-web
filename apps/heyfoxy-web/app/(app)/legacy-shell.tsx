@@ -1,4 +1,5 @@
 import { logout, switchOrg } from '@/app/actions';
+import { OrgSelect } from '@/components/shell/org-select';
 import { DemoBanner } from '@/components/ui';
 import type { ShellContext } from '@/lib/shell';
 import { LogOut } from 'lucide-react';
@@ -20,11 +21,15 @@ export function LegacyShell({
           <p className="text-primary-text px-2 text-sm font-semibold uppercase tracking-widest">
             Hey Foxy
           </p>
-          <form action={switchOrg} className="mt-3 px-2">
+          <form
+            key={active.organization.id}
+            action={switchOrg}
+            className="mt-3 px-2"
+          >
             <label htmlFor="org" className="sr-only">
               Organización
             </label>
-            <select
+            <OrgSelect
               id="org"
               name="org"
               defaultValue={active.organization.id}
@@ -35,7 +40,7 @@ export function LegacyShell({
                   {m.organization.name}
                 </option>
               ))}
-            </select>
+            </OrgSelect>
             {memberships.length > 1 && (
               <button className="text-primary-text mt-1 text-xs hover:underline">
                 Cambiar organización

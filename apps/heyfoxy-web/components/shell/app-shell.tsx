@@ -12,6 +12,7 @@ import {
 import Link from 'next/link';
 import { Suspense, type ReactNode } from 'react';
 import { logout, switchOrg } from '@/app/actions';
+import { OrgSelect } from '@/components/shell/org-select';
 import { setUiTheme } from '@/app/(app)/theme-actions';
 import { FoxyMark } from '@/components/ds/foxy';
 import { Avatar } from '@/components/ds/primitives';
@@ -64,6 +65,9 @@ function OrgSwitcher({
   const name = active.organization.name;
   return (
     <form
+      // Remonta el formulario al cambiar de organización: React restablece los campos de un
+      // formulario tras su acción, y sin esto el <select> volvía a la organización anterior.
+      key={active.organization.id}
       action={switchOrg}
       className={cn(
         'flex gap-1.5',
@@ -108,7 +112,7 @@ function OrgSwitcher({
             <label htmlFor={id} className="sr-only">
               Organización
             </label>
-            <select
+            <OrgSelect
               id={id}
               name="org"
               defaultValue={active.organization.id}
@@ -119,7 +123,7 @@ function OrgSwitcher({
                   {m.organization.name}
                 </option>
               ))}
-            </select>
+            </OrgSelect>
           </>
         ) : (
           <span className="sr-only">Organización activa</span>
