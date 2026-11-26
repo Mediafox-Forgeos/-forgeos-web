@@ -1,4 +1,5 @@
 import type { Platform } from '@/lib/types';
+import { applicableMetrics } from '@/lib/metrics-applicability';
 import {
   ConnectorDisabledError,
   type AuthorizationCheck,
@@ -619,21 +620,25 @@ export function mapMetricoolPost(
         : null,
     media,
     mediaCountReported: null,
-    metrics: {
-      likes: num(p.likes) ?? num(p.reactions),
-      comments: num(p.comments),
-      shares: num(p.shares),
-      views: num(p.views) ?? num(p.videoViewsTotal) ?? num(p.videoViews),
-      // Alcance real solo si la red lo nombra así; impresiones únicas van aparte.
-      reach: num(p.reach),
-      impressions: num(p.impressionsTotal) ?? num(p.impressions),
-      impressionsUnique: num(p.impressionsUnique),
-      interactions: num(p.interactions),
-      saves: num(p.saved),
-      videoViews: num(p.videoViewsTotal) ?? num(p.videoViews),
-      engagement: num(p.engagement),
-      reactions: Object.keys(reactions).length ? reactions : undefined,
-    },
+    metrics: applicableMetrics(
+      {
+        likes: num(p.likes) ?? num(p.reactions),
+        comments: num(p.comments),
+        shares: num(p.shares),
+        views: num(p.views) ?? num(p.videoViewsTotal) ?? num(p.videoViews),
+        // Alcance real solo si la red lo nombra así; impresiones únicas van aparte.
+        reach: num(p.reach),
+        impressions: num(p.impressionsTotal) ?? num(p.impressions),
+        impressionsUnique: num(p.impressionsUnique),
+        interactions: num(p.interactions),
+        saves: num(p.saved),
+        videoViews: num(p.videoViewsTotal) ?? num(p.videoViews),
+        engagement: num(p.engagement),
+        reactions: Object.keys(reactions).length ? reactions : undefined,
+      },
+      platform,
+      contentType,
+    ),
   };
 }
 

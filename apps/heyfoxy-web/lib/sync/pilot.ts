@@ -9,7 +9,11 @@ export const PILOT_LIMITS = {
   maxPostsPerNetwork: 10,
   networks: ['instagram', 'facebook'],
   protectPersonalData: true,
+  // WO-HF-METRICOOL-FIX-001: el control de información de salud es solo por vocabulario y no
+  // hay un tratamiento autorizado para texto clínico libre: los comentarios NO se importan.
+  // Reactivarlo requiere un control adicional aprobado y un GO explícito.
+  importComments: false,
 } as const satisfies Pick<
   SyncDeps,
-  'maxPostsPerNetwork' | 'networks' | 'protectPersonalData'
+  'maxPostsPerNetwork' | 'networks' | 'protectPersonalData' | 'importComments'
 >;

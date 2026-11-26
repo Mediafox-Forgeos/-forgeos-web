@@ -86,7 +86,30 @@ export interface SyncRun {
   redactions?: number;
   /** Comentarios cuyo texto no se guardó por contener información de salud. */
   healthWithheld?: number;
+  /** Comentarios leídos de la fuente dentro de la ventana (antes de filtrar). */
+  commentsFetched?: number;
+  /** Leídos pero fuera de alcance (fuera de la ventana o de publicaciones no importadas). */
+  commentsOutOfScope?: number;
+  /** Aceptados pero NO guardados por un error interno de persistencia. */
+  commentsFailed?: number;
   errors: SyncError[];
+}
+
+/**
+ * Error interno de Hey Foxy al guardar (base de datos), distinto de una limitación de la
+ * fuente. El mensaje es genérico y nunca incluye filas ni contenido: solo tabla y código.
+ */
+export class SyncPersistenceError extends Error {
+  readonly kind = 'persistence' as const;
+  constructor(
+    readonly table: string,
+    readonly code: string | null,
+  ) {
+    super(
+      `Error interno de Hey Foxy al guardar en ${table}${code ? ` (código ${code})` : ''}; no es una limitación de Metricool`,
+    );
+    this.name = 'SyncPersistenceError';
+  }
 }
 
 export interface StoredPost extends NormalizedPost {

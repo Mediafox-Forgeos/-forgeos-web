@@ -8,6 +8,7 @@ import {
   jobRow,
   mediaRows,
   postRow,
+  runFromJob,
   snapshotRow,
   stateFromRow,
   stateToColumns,
@@ -15,6 +16,7 @@ import {
 import { serviceKeyKind, serviceKeyUsable } from './guards';
 import {
   initialState,
+  SyncPersistenceError,
   type CoverageCell,
   type SourceSyncState,
   type SyncRun,
@@ -42,8 +44,15 @@ export function metricoolPersistenceReady(): boolean {
 
 type Row = Record<string, unknown>;
 
-function fail(error: { message: string } | null) {
-  if (error) throw new Error(`Supabase: ${error.message}`);
+/**
+ * Error de la base → SyncPersistenceError con tabla y código, SIN el mensaje ni los detalles de
+ * PostgREST (pueden contener valores de la fila, p. ej. «Failing row contains …»).
+ */
+function fail(
+  error: { message: string; code?: string } | null,
+  table = 'la base de datos',
+) {
+  if (error) throw new SyncPersistenceError(table, error.code ?? null);
 }
 
 export class SupabaseSyncStore implements SyncStore {
@@ -121,7 +130,7 @@ export class SupabaseSyncStore implements SyncStore {
         { onConflict: 'organization_id,data_source_id,external_id' },
       )
       .select('id, external_id');
-    fail(error);
+    fail(error, 'social_posts');
     const ids = new Map(
       (data ?? []).map((r) => [
         String((r as Row).external_id),
@@ -133,7 +142,10 @@ export class SupabaseSyncStore implements SyncStore {
         ? [snapshotRow(orgId, ids.get(p.externalId)!, p, at)]
         : [],
     );
-    fail((await this.db.from('post_metric_snapshots').insert(snaps)).error);
+    fail(
+      (await this.db.from('post_metric_snapshots').insert(snaps)).error,
+      'post_metric_snapshots',
+    );
     const media = posts.flatMap((p) =>
       ids.get(p.externalId)
         ? mediaRows(orgId, ids.get(p.externalId)!, p, this.retentionDays, at)
@@ -261,7 +273,7 @@ export class SupabaseSyncStore implements SyncStore {
         },
       )
       .select('id');
-    fail(error);
+    fail(error, 'social_comments');
     return (data ?? []).length;
   }
 
@@ -309,26 +321,7 @@ export class SupabaseSyncStore implements SyncStore {
       .eq('data_source_id', sid)
       .order('created_at', { ascending: false })
       .limit(limit);
-    return ((data ?? []) as Row[]).map((r) => {
-      const e = r.error
-        ? (JSON.parse(String(r.error)) as Partial<SyncRun>)
-        : {};
-      return {
-        id: String(r.idempotency_key),
-        trigger: e.trigger ?? 'manual',
-        status: (e.status ?? r.status) as SyncRun['status'],
-        startedAt: String(r.started_at),
-        finishedAt: String(r.finished_at),
-        postsInserted: 0,
-        postsUpdated: 0,
-        snapshots: 0,
-        commentsInserted: Number(r.items_inserted ?? 0),
-        duplicates: Number(r.items_duplicated ?? 0),
-        overLimit: 0,
-        apiCalls: e.apiCalls ?? 0,
-        errors: e.errors ?? [],
-      };
-    });
+    return ((data ?? []) as Row[]).map(runFromJob);
   }
 
   async counts(orgId: string) {

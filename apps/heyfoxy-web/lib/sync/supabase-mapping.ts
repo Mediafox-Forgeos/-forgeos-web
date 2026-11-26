@@ -197,7 +197,7 @@ export function commentRow(
     author_hash: c.authorExternalId, // ya seudonimizado por authorKey()
     author_display: c.authorDisplay,
     published_at: c.publishedAt,
-    permalink: c.permalink,
+    // social_comments no tiene `permalink` (0001): el enlace original es el de la publicación.
     content_hash: c.contentHash,
     media_url: c.mediaUrl ?? null,
     is_synthetic: false,
@@ -216,7 +216,26 @@ const JOB_STATUS: Record<SyncRun['status'], string> = {
   stopped: 'failed',
 };
 
+/** Contadores completos de una ejecución (se guardan en `ingestion_jobs.cursor.run`). */
+const RUN_COUNTERS = [
+  'postsInserted',
+  'postsUpdated',
+  'snapshots',
+  'commentsFetched',
+  'commentsOutOfScope',
+  'commentsInserted',
+  'duplicates',
+  'overLimit',
+  'healthWithheld',
+  'redactions',
+  'commentsFailed',
+  'apiCalls',
+] as const;
+
 export function jobRow(orgId: string, sourceId: string, r: SyncRun): Row {
+  const counters = Object.fromEntries(
+    RUN_COUNTERS.filter((k) => r[k] !== undefined).map((k) => [k, r[k]]),
+  );
   return {
     organization_id: orgId,
     data_source_id: sourceId,
@@ -224,9 +243,15 @@ export function jobRow(orgId: string, sourceId: string, r: SyncRun): Row {
     idempotency_key: `metricool:${r.id}`,
     status: JOB_STATUS[r.status],
     items_fetched:
-      r.postsInserted + r.postsUpdated + r.commentsInserted + r.duplicates,
+      r.postsInserted +
+      r.postsUpdated +
+      (r.commentsFetched ?? r.commentsInserted + r.duplicates),
     items_inserted: r.postsInserted + r.commentsInserted,
     items_duplicated: r.duplicates,
+    // `ingestion_jobs.cursor` es text (0001): JSON serializado.
+    cursor: JSON.stringify({
+      run: { status: r.status, trigger: r.trigger, ...counters },
+    }),
     // Solo mensajes (sin tokens ni URLs completas: el conector ya los excluye).
     error: r.errors.length
       ? JSON.stringify({
@@ -239,4 +264,52 @@ export function jobRow(orgId: string, sourceId: string, r: SyncRun): Row {
     started_at: r.startedAt,
     finished_at: r.finishedAt,
   };
+}
+
+/**
+ * Ejecución desde `ingestion_jobs`. Con `cursor.run` (desde 2026-11-26) los contadores son
+ * exactos. Filas anteriores solo tienen totales: `items_inserted` suma publicaciones y
+ * comentarios, así que no se presentan como comentarios (se atribuyen a publicaciones y los
+ * comentarios quedan en 0, que es lo ocurrido en la única ejecución real anterior).
+ */
+export function runFromJob(r: Row): SyncRun {
+  const e = r.error ? (JSON.parse(String(r.error)) as Partial<SyncRun>) : {};
+  const c = (parseJson(r.cursor)?.run ?? null) as Partial<SyncRun> | null;
+  const n = (v: unknown) => (typeof v === 'number' ? v : undefined);
+  const base: SyncRun = {
+    id: String(r.idempotency_key),
+    trigger: c?.trigger ?? e.trigger ?? 'manual',
+    status: (c?.status ?? e.status ?? r.status) as SyncRun['status'],
+    startedAt: String(r.started_at),
+    finishedAt: String(r.finished_at),
+    postsInserted: c
+      ? (n(c.postsInserted) ?? 0)
+      : Number(r.items_inserted ?? 0),
+    postsUpdated: n(c?.postsUpdated) ?? 0,
+    snapshots: n(c?.snapshots) ?? 0,
+    commentsInserted: c ? (n(c.commentsInserted) ?? 0) : 0,
+    duplicates: Number(r.items_duplicated ?? 0),
+    overLimit: n(c?.overLimit) ?? 0,
+    apiCalls: n(c?.apiCalls) ?? e.apiCalls ?? 0,
+    errors: e.errors ?? [],
+  };
+  for (const k of [
+    'commentsFetched',
+    'commentsOutOfScope',
+    'healthWithheld',
+    'redactions',
+    'commentsFailed',
+  ] as const)
+    if (n(c?.[k]) !== undefined) base[k] = n(c?.[k]);
+  return base;
+}
+
+function parseJson(v: unknown): Row | null {
+  if (v && typeof v === 'object') return v as Row;
+  if (typeof v !== 'string' || !v.startsWith('{')) return null;
+  try {
+    return JSON.parse(v) as Row;
+  } catch {
+    return null;
+  }
 }

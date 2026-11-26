@@ -19,6 +19,7 @@ import type {
   SyncRunStatus,
   SyncStore,
 } from './types';
+import { SyncPersistenceError } from './types';
 
 /**
  * Motor de sincronización Metricool → Hey Foxy (solo lectura en la fuente).
@@ -60,6 +61,8 @@ export interface SyncDeps {
   maxPostsPerNetwork?: number;
   /** Piloto: redes que pueden sincronizarse (las demás de la marca se ignoran sin llamadas). */
   networks?: readonly Platform[];
+  /** false: no se leen ni guardan comentarios (política de privacidad del piloto). */
+  importComments?: boolean;
   /** Enmascara datos personales de comentarios de terceros antes de persistir (privacy.ts). */
   protectPersonalData?: boolean;
   newId?: () => string;
@@ -187,7 +190,8 @@ export async function runSync(deps: SyncDeps): Promise<SyncRun> {
   let auths: Awaited<ReturnType<MetricoolConnector['checkAuthorizations']>> =
     [];
   try {
-    auths = await mc.checkAuthorizations(networksToSync);
+    if (deps.importComments !== false)
+      auths = await mc.checkAuthorizations(networksToSync);
   } catch (e) {
     authFailure = asMcError(e);
   }
@@ -259,6 +263,26 @@ export async function runSync(deps: SyncDeps): Promise<SyncRun> {
           ),
         );
       } catch (e) {
+        if (e instanceof SyncPersistenceError) {
+          run.errors.push({
+            platform,
+            dataKind: 'posts',
+            kind: 'persistence',
+            message: e.message,
+            retryable: false,
+          });
+          cells.push(cell(platform, 'posts', 'unavailable', e.message, 0));
+          cells.push(
+            cell(
+              platform,
+              'post_metrics',
+              'unavailable',
+              'Sin publicaciones guardadas en esta ejecución',
+              0,
+            ),
+          );
+          continue;
+        }
         const err = asMcError(e);
         if (err.kind === 'auth') {
           authFailure = err;
@@ -266,7 +290,13 @@ export async function runSync(deps: SyncDeps): Promise<SyncRun> {
         }
         run.errors.push(toSyncError(err, platform, 'posts'));
         cells.push(
-          cell(platform, 'posts', 'unavailable', `Error: ${err.message}`, 0),
+          cell(
+            platform,
+            'posts',
+            'unavailable',
+            `Error de Metricool: ${err.message}`,
+            0,
+          ),
         );
         cells.push(
           cell(
@@ -288,7 +318,17 @@ export async function runSync(deps: SyncDeps): Promise<SyncRun> {
 
     // 2. Comentarios y respuestas
     const a = auths.find((x) => x.platform === platform);
-    if (cap != null && !keptPosts) {
+    if (deps.importComments === false) {
+      cells.push(
+        cell(
+          platform,
+          'comments',
+          'not_requested',
+          'Importación de comentarios desactivada por la política de privacidad del piloto (doc 20): no se leen ni se guardan',
+          0,
+        ),
+      );
+    } else if (cap != null && !keptPosts) {
       cells.push(
         cell(
           platform,
@@ -309,22 +349,45 @@ export async function runSync(deps: SyncDeps): Promise<SyncRun> {
         ),
       );
     } else {
+      const since = cursor.commentsSince[platform];
+      const from = since
+        ? new Date(Date.parse(since) - 3_600_000)
+        : initialFrom;
+      const c = {
+        fetched: 0,
+        outOfScope: 0,
+        inserted: 0,
+        duplicates: 0,
+        overLimit: 0,
+        health: 0,
+        redactions: 0,
+        failed: 0,
+      };
+      let newest = since ? Date.parse(since) : 0;
+      let pages = 0;
+      let next: string | null = null;
+      let pending = 0; // aceptados de la página en curso (aún no guardados)
+      const summary = () =>
+        `${c.fetched} leídos · ${c.inserted} guardados · ${c.duplicates} duplicados · ${c.outOfScope} fuera de alcance · ${c.health} con información de salud (texto no guardado)` +
+        (c.overLimit ? ` · ${c.overLimit} sobre el límite diario` : '') +
+        (c.failed ? ` · ${c.failed} NO guardados por error interno` : '');
+      const commit = () => {
+        run.commentsFetched = (run.commentsFetched ?? 0) + c.fetched;
+        run.commentsOutOfScope = (run.commentsOutOfScope ?? 0) + c.outOfScope;
+        run.commentsInserted += c.inserted;
+        run.duplicates += c.duplicates;
+        run.overLimit += c.overLimit;
+        redactions += c.redactions;
+        healthWithheld += c.health;
+        if (c.failed) run.commentsFailed = (run.commentsFailed ?? 0) + c.failed;
+      };
       try {
-        const since = cursor.commentsSince[platform];
-        const from = since
-          ? new Date(Date.parse(since) - 3_600_000)
-          : initialFrom;
-        let next: string | null = null;
-        let pages = 0;
-        let fetched = 0;
-        let inserted = 0;
-        let newest = since ? Date.parse(since) : 0;
         do {
           if (pages > 0) {
             stopped = await stopReason();
             if (stopped) {
-              // Lo ya importado en páginas anteriores se conserva; el cursor no avanza.
-              run.commentsInserted += inserted;
+              // Lo ya guardado en páginas anteriores se conserva; el cursor no avanza.
+              commit();
               break networks;
             }
           }
@@ -334,36 +397,40 @@ export async function runSync(deps: SyncDeps): Promise<SyncRun> {
             for (const k of [...threadMedia.keys()])
               if (!keptPosts.has(k)) threadMedia.delete(k);
           await deps.store.enrichPostMedia(deps.orgId, platform, threadMedia);
-          const flat = flattenThreads(platform, r.threads)
-            .filter((c) => {
-              const t = Date.parse(c.publishedAt);
-              return t >= from.getTime() && t <= now.getTime();
-            })
-            .filter(
-              (c) =>
-                !keptPosts ||
-                (c.postExternalId != null && keptPosts.has(c.postExternalId)),
-            )
-            .map((c) => {
-              if (!deps.protectPersonalData) return c;
-              const p = protectComment(c);
-              redactions += p.redactions;
-              if (p.healthWithheld) healthWithheld++;
+          const all = flattenThreads(platform, r.threads);
+          c.fetched += all.length;
+          const inScope = all.filter((x) => {
+            const t = Date.parse(x.publishedAt);
+            return (
+              t >= from.getTime() &&
+              t <= now.getTime() &&
+              (!keptPosts ||
+                (x.postExternalId != null && keptPosts.has(x.postExternalId)))
+            );
+          });
+          c.outOfScope += all.length - inScope.length;
+          let pageRedactions = 0;
+          const withheldIds = new Set<string>();
+          const flat = inScope
+            .map((x) => {
+              if (!deps.protectPersonalData) return x;
+              const p = protectComment(x);
+              pageRedactions += p.redactions;
+              if (p.healthWithheld) withheldIds.add(x.externalId);
               return p.comment;
             })
-            .map((c) =>
+            .map((x) =>
               deps.store.authorKey
                 ? {
-                    ...c,
+                    ...x,
                     authorExternalId: deps.store.authorKey(
                       deps.orgId,
                       platform,
-                      c.authorExternalId,
+                      x.authorExternalId,
                     ),
                   }
-                : c,
+                : x,
             );
-          fetched += flat.length;
           const known = await deps.store.knownComments(deps.orgId);
           const plan = planIngestion({
             incoming: flat,
@@ -372,45 +439,82 @@ export async function runSync(deps: SyncDeps): Promise<SyncRun> {
             itemsIngestedToday: itemsUsed,
             maxItemsPerDay: state.maxItemsPerDay,
           });
+          pending = plan.accepted.length;
           const n = await deps.store.insertComments(
             deps.orgId,
             plan.accepted,
             at,
           );
-          inserted += n;
+          pending = 0;
+          // Solo cuenta lo que la base confirmó como guardado.
+          c.inserted += n;
           itemsUsed += n;
-          run.duplicates += plan.duplicates;
-          run.overLimit += plan.overLimit;
-          for (const c of plan.accepted)
-            newest = Math.max(newest, Date.parse(c.publishedAt));
+          c.duplicates += plan.duplicates + (plan.accepted.length - n);
+          c.overLimit += plan.overLimit;
+          c.redactions += pageRedactions;
+          c.health += plan.accepted.filter((x) =>
+            withheldIds.has(x.externalId),
+          ).length;
+          for (const x of plan.accepted)
+            newest = Math.max(newest, Date.parse(x.publishedAt));
           next = r.next;
           pages++;
         } while (next && pages < (deps.maxCommentPages ?? 10));
-        run.commentsInserted += inserted;
+        commit();
         if (newest > 0)
           cursor.commentsSince[platform] = new Date(newest).toISOString();
         cells.push(
           cell(
             platform,
             'comments',
-            'partial',
-            `Comentarios y respuestas de publicaciones propias (${fetched} leídos, ${inserted} nuevos)` +
+            c.fetched === 0 ? 'complete' : 'partial',
+            (c.fetched === 0
+              ? 'Metricool no devolvió comentarios de publicaciones propias en la ventana'
+              : `Comentarios y respuestas de publicaciones propias: ${summary()}`) +
               (deps.protectPersonalData
-                ? '; datos personales enmascarados, información de salud no conservada, sin nombres ni imágenes de autores'
+                ? '; datos personales enmascarados, sin nombres ni imágenes de autores'
                 : ''),
-            inserted,
+            c.inserted,
           ),
         );
       } catch (e) {
-        const err = asMcError(e);
-        if (err.kind === 'auth') {
-          authFailure = err;
-          break;
+        if (e instanceof SyncPersistenceError) {
+          c.failed += pending;
+          commit();
+          run.errors.push({
+            platform,
+            dataKind: 'comments',
+            kind: 'persistence',
+            message: e.message,
+            retryable: false,
+          });
+          cells.push(
+            cell(
+              platform,
+              'comments',
+              'unavailable',
+              `Error interno de Hey Foxy al guardar (no es una limitación de Metricool): ${summary()}`,
+              c.inserted,
+            ),
+          );
+        } else {
+          const err = asMcError(e);
+          if (err.kind === 'auth') {
+            authFailure = err;
+            break;
+          }
+          commit();
+          run.errors.push(toSyncError(err, platform, 'comments'));
+          cells.push(
+            cell(
+              platform,
+              'comments',
+              'unavailable',
+              `Error de Metricool: ${err.message}`,
+              c.inserted,
+            ),
+          );
         }
-        run.errors.push(toSyncError(err, platform, 'comments'));
-        cells.push(
-          cell(platform, 'comments', 'unavailable', `Error: ${err.message}`, 0),
-        );
       }
     }
     cells.push(

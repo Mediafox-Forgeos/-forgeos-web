@@ -501,7 +501,7 @@ export default async function SourcesPage({
             value={panel.counts.comments.toLocaleString('es-CO')}
             sub={
               lastRun
-                ? `+${lastRun.commentsInserted} nuevos · ${lastRun.duplicates} duplicados`
+                ? `+${lastRun.commentsInserted} guardados · ${lastRun.duplicates} duplicados${lastRun.commentsFailed ? ` · ${lastRun.commentsFailed} no guardados por error` : ''}`
                 : undefined
             }
           />
@@ -515,7 +515,7 @@ export default async function SourcesPage({
           <Stat
             icon={Activity}
             tone="success"
-            label="Elementos importados hoy"
+            label="Comentarios importados hoy"
             value={`${st.itemsToday} / ${st.maxItemsPerDay}`}
             sub="Tope diario por organización"
           />
@@ -716,8 +716,7 @@ export default async function SourcesPage({
                   <span className="text-muted-foreground text-xs">
                     {r.trigger === 'manual' ? 'Manual' : 'Programada'} ·{' '}
                     {r.postsInserted} publicaciones nuevas · {r.postsUpdated}{' '}
-                    actualizadas · {r.commentsInserted} comentarios ·{' '}
-                    {r.duplicates} duplicados · {r.apiCalls} llamadas
+                    actualizadas · {runComments(r)} · {r.apiCalls} llamadas
                   </span>
                 </div>
                 {r.errors.length > 0 && (
@@ -733,6 +732,9 @@ export default async function SourcesPage({
                         />
                         <span>
                           {e.platform ? `${PLATFORM_LABEL[e.platform]} · ` : ''}
+                          {e.kind === 'persistence'
+                            ? 'Error interno de Hey Foxy · '
+                            : ''}
                           {e.message}
                           {e.retryable
                             ? ' · se reintentará en la próxima ejecución'
@@ -774,4 +776,23 @@ export default async function SourcesPage({
       </Panel>
     </ModuleSurface>
   );
+}
+
+/** Comentarios de una ejecución con su desglose (solo lo guardado cuenta como importado). */
+function runComments(r: SyncRun): string {
+  if (r.commentsFetched === undefined)
+    return `${r.commentsInserted} comentarios guardados · ${r.duplicates} duplicados`;
+  const parts = [
+    `${r.commentsFetched} comentarios leídos`,
+    `${r.commentsInserted} guardados`,
+    `${r.duplicates} duplicados`,
+  ];
+  if (r.commentsOutOfScope)
+    parts.push(`${r.commentsOutOfScope} fuera de alcance`);
+  if (r.healthWithheld)
+    parts.push(`${r.healthWithheld} con texto de salud no guardado`);
+  if (r.overLimit) parts.push(`${r.overLimit} sobre el límite diario`);
+  if (r.commentsFailed)
+    parts.push(`${r.commentsFailed} no guardados por error interno`);
+  return parts.join(' · ');
 }

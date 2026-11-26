@@ -1,4 +1,5 @@
 import 'server-only';
+import { applicableMetrics } from '@/lib/metrics-applicability';
 import { supabaseServer } from '@/lib/supabase/server';
 import type {
   Alert,
@@ -85,21 +86,27 @@ function toPost(r: Row): Post {
     publishedAt: r.published_at,
     isSynthetic: r.is_synthetic,
     metrics: ((r.post_metric_snapshots ?? []) as Row[])
-      .map((m) => ({
-        capturedAt: m.captured_at,
-        likes: m.likes,
-        comments: m.comments,
-        shares: m.shares,
-        views: m.views,
-        reach: m.reach,
-        impressions: m.impressions,
-        impressionsUnique: m.impressions_unique,
-        interactions: m.interactions,
-        saves: m.saves,
-        videoViews: m.video_views,
-        engagement: numOrNull(m.engagement),
-        reactions: m.reactions ?? null,
-      }))
+      .map((m) =>
+        applicableMetrics(
+          {
+            capturedAt: m.captured_at,
+            likes: m.likes,
+            comments: m.comments,
+            shares: m.shares,
+            views: m.views,
+            reach: m.reach,
+            impressions: m.impressions,
+            impressionsUnique: m.impressions_unique,
+            interactions: m.interactions,
+            saves: m.saves,
+            videoViews: m.video_views,
+            engagement: numOrNull(m.engagement),
+            reactions: m.reactions ?? null,
+          },
+          r.platform,
+          r.content_type,
+        ),
+      )
       .sort((a, b) => b.capturedAt.localeCompare(a.capturedAt)),
   };
 }

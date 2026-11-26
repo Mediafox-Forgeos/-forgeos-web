@@ -25,7 +25,12 @@ const T0 = new Date('2026-11-23T12:00:00Z');
 const EMAIL = ['paciente', 'ejemplo.invalid'].join('@');
 const PHONE = ['+57', '300', '123', '4567'].join(' ');
 
-async function run(extra = {}, maxPostsPerNetwork = 2) {
+async function run(
+  extra = {},
+  maxPostsPerNetwork = 2,
+  importComments = true,
+  store = new MemorySyncStore(),
+) {
   const f = fixtureFetch({
     extraComments: [
       {
@@ -38,7 +43,6 @@ async function run(extra = {}, maxPostsPerNetwork = 2) {
     ],
     ...extra,
   });
-  const store = new MemorySyncStore();
   await store.save(ORG, {
     ...initialState(),
     status: 'connected',
@@ -56,6 +60,7 @@ async function run(extra = {}, maxPostsPerNetwork = 2) {
     initialDays: 30,
     ...PILOT_LIMITS,
     maxPostsPerNetwork,
+    importComments,
     connector: (budget?: CallBudget) =>
       new MetricoolConnector({
         enabled: true,
@@ -74,7 +79,8 @@ async function run(extra = {}, maxPostsPerNetwork = 2) {
 }
 
 describe('Límites del piloto', () => {
-  it('son los autorizados: 10 por red, Instagram y Facebook, datos protegidos', () => {
+  it('son los autorizados: 10 por red, Instagram y Facebook, datos protegidos, sin comentarios', () => {
+    expect(PILOT_LIMITS.importComments).toBe(false);
     expect(PILOT_LIMITS.maxPostsPerNetwork).toBe(10);
     expect([...PILOT_LIMITS.networks]).toEqual(['instagram', 'facebook']);
     expect(PILOT_LIMITS.protectPersonalData).toBe(true);

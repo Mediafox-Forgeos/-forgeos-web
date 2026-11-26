@@ -450,3 +450,9 @@ Ejecutado, sin contratar, migrar ni desplegar:
 - **Información de salud en texto libre**: los comentarios con información clínica se guardan solo como marcador (doc 20 §3).
 - **Preview GO 3 desplegado**: `dpl_EX5aeCPbq9w8VPiR8vKRTVqWhjYj` (`heyfoxy-4qrtzyga1-mediafox.vercel.app`), SHA `d7808c7` (el SHA del mensaje de GO tenía dos caracteres transpuestos; único commit con ese prefijo). Sin alias, protección `all`, 0 bypass, alias V1 y Previews anteriores intactos, Production en `dpl_9YVh…`.
 - **HF-UX-08 (bloqueo del selector de organización)**: `qa-owner` tenía las dos membresías (owner) y la RLS respondía bien; el defecto era de interfaz (V2 y clásico). Corregido localmente con prueba e2e; pendiente de GO para desplegar. Mientras tanto: elegir la organización y pulsar «Cambiar organización».
+
+## 2026-11-26 — Primera sincronización MedPlus y WO-HF-METRICOOL-FIX-001
+
+- Primera sincronización real (Álvaro, Preview `d7808c7`): 14 publicaciones con medios y métricas; comentarios fallaron por `social_comments.permalink` inexistente. Detalle, causa y correcciones en [20 §8](./20_MEDPLUS_PILOT_AUTHORIZATION.md).
+- Corrección local sin migración; comentarios desactivados por política de privacidad del piloto; contadores y errores de persistencia separados; métricas no aplicables ocultas.
+- Sin escrituras remotas, sin nueva sincronización, sin despliegue.

@@ -63,3 +63,23 @@ Se aplica en el servidor **antes de guardar** (`lib/sync/privacy.ts`); el texto 
 3. Conectar la marca (solo aparece el Blog ID de MedPlus) y pulsar _Sincronizar ahora_ una vez.
 4. Revisar _Publicaciones_: como máximo 10 por red, fotos y miniaturas, métricas, comentarios enmascarados y enlace al original.
 5. Ante cualquier anomalía: `update public.hf_runtime_flags set enabled = true, reason = '…', updated_at = now() where flag = 'sync_kill_switch';`
+
+## 8. Primera sincronización real y WO-HF-METRICOOL-FIX-001 (2026-11-26)
+
+Álvaro ejecutó la primera sincronización manual en el Preview `d7808c7`: marca MedPlus (Blog ID 7974715), 7 llamadas, resultado parcial.
+
+**Estado verificado en `heyfoxy-qa` (solo lectura):** 14 publicaciones (Instagram 10, Facebook 4), sin duplicados, todas con enlace original; 14 medios por referencia (0 copiados a Storage); 14 mediciones; **0 comentarios**; ningún dato real fuera de MedPlus.
+
+**Causa raíz del error** `Could not find the 'permalink' column of 'social_comments'`: el código escribía `permalink` en `social_comments`, columna que el esquema nunca tuvo (0001). No es caché de PostgREST: el esquema de `heyfoxy-qa` es idéntico a las migraciones (hash de columnas `315883c4…` en local y remoto). Las pruebas usaban el almacén en memoria y no lo detectaban. **No hace falta migración.**
+
+**Correcciones (locales):**
+
+- `commentRow` sin `permalink` (el enlace original es el de la publicación).
+- Contrato de esquema (`tests/schema/columns-0006.json`, generado con `scripts/schema-columns.sh`) y prueba de persistencia real contra Postgres con 0001–0006 (`scripts/test-sync-persistence.sh`); detectó además que `ingestion_jobs.cursor` es texto.
+- Error interno de persistencia ≠ limitación de Metricool: tipo `persistence`, no reintentable, mensaje genérico con tabla y código, **sin filas ni contenido** (PostgREST puede incluir valores en los detalles).
+- Contadores: leídos, guardados, duplicados, fuera de alcance, con información de salud, sobre el límite y no guardados por error; solo lo confirmado por la base cuenta como importado. El historial guarda el desglose en `ingestion_jobs.cursor`; antes presentaba las 14 publicaciones como «14 comentarios». «Elementos importados hoy» pasa a «Comentarios importados hoy» (es lo que mide).
+- Métricas no aplicables: Facebook entrega 0 vistas y 0 reproducciones para fotos; ahora se muestran como no disponibles (también las ya guardadas, al leer). Instagram conserva sus vistas reales.
+
+**Privacidad (fase D):** el control de información de salud es por vocabulario y no existe un tratamiento autorizado para texto clínico libre. Por eso **la importación de comentarios queda desactivada** (`PILOT_LIMITS.importComments = false`): no se leen comentarios ni sus permisos y la cobertura lo indica («política de privacidad del piloto»). No hay registros de contenido en logs (`console.*` inexistente en `app/` y `lib/`). Reactivarla requiere un control adicional aprobado (p. ej. revisión humana previa o un clasificador autorizado por MedPlus) y un GO explícito.
+
+**Reintento seguro (requiere GO de despliegue y GO de sincronización):** desplegar el SHA con el script seguro; en _Fuentes y cobertura_ de MedPlus comprobar las verificaciones; pulsar _Sincronizar ahora_ una vez. Resultado esperado: las 14 publicaciones se actualizan (no se duplican; nuevas mediciones), comentarios «desactivados por política», 0 comentarios guardados. Interruptor inmediato disponible.
