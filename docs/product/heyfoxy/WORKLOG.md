@@ -456,3 +456,10 @@ Ejecutado, sin contratar, migrar ni desplegar:
 - Primera sincronización real (Álvaro, Preview `d7808c7`): 14 publicaciones con medios y métricas; comentarios fallaron por `social_comments.permalink` inexistente. Detalle, causa y correcciones en [20 §8](./20_MEDPLUS_PILOT_AUTHORIZATION.md).
 - Corrección local sin migración; comentarios desactivados por política de privacidad del piloto; contadores y errores de persistencia separados; métricas no aplicables ocultas.
 - Sin escrituras remotas, sin nueva sincronización, sin despliegue.
+
+## 2026-11-26 — Preview 689689e y segunda sincronización MedPlus (GO 4)
+
+- **Preview** `dpl_EpK2KMo4Zm2LBwjCeLQr31xV2F67` (`heyfoxy-337wm89pg-mediafox.vercel.app`), SHA `689689e` verificado contra origin y en `/api/health`. Sin alias, protección `all`, 0 bypass, alias V1 y Previews anteriores intactos, Production en `dpl_9YVh…`.
+- **Validación previa**: selector cambia a MedPlus solo con el desplegable (HF-UX-08 resuelto en Preview); sin aviso demo; verificaciones del servidor en verde; historial corregido; imagen caducada con «Vista previa caducada · Ábrela en la red original»; Facebook sin 0 inventados.
+- **Una sincronización manual** (07:02 UTC): correcta, 3 llamadas (10/500 hoy), 0 errores. 14 publicaciones (0 nuevas, 2 actualizadas, 0 duplicados, mismos ids), 16 mediciones (+2), 14 medios por referencia (URLs sin cambios: Metricool devolvió las mismas), 0 copias a Storage, 0 comentarios (no solicitados por política), sin datos reales fuera de MedPlus.
+- **Hallazgos**: solo se refrescan las publicaciones de las últimas 48 h (HF-MC-03); UX HF-UX-09 a HF-UX-14. Capturas en `/Volumes/MediaFOX_DEV/QA/HeyFoxy/V2/2026-11-26/` (fuera de Git).
