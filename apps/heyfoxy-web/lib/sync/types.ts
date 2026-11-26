@@ -84,6 +84,8 @@ export interface SyncRun {
   apiCalls: number;
   /** Datos personales enmascarados en comentarios (solo con protección activa). */
   redactions?: number;
+  /** Comentarios cuyo texto no se guardó por contener información de salud. */
+  healthWithheld?: number;
   errors: SyncError[];
 }
 

@@ -169,3 +169,73 @@ describe('redactPersonalData', () => {
     expect(comment.authorExternalId).toBe('a');
   });
 });
+
+describe('Información de salud en texto libre (no se conserva)', () => {
+  const c = (body: string, externalId = 'ext-123456') => ({
+    externalId,
+    parentExternalId: null,
+    postExternalId: 'p',
+    platform: 'instagram' as const,
+    body,
+    authorExternalId: 'a',
+    authorDisplay: 'Nombre',
+    publishedAt: T0.toISOString(),
+    permalink: null,
+  });
+
+  it.each([
+    'Me diagnosticaron diabetes el año pasado',
+    'Mi mamá tiene cáncer, ¿atienden oncología?',
+    'Estoy embarazada y quiero una cita',
+    'Tomo 50 mg de sertralina',
+    '¿Cuándo entregan los resultados de la biopsia?',
+    'Sufro de ansiedad desde hace años',
+    'Después de la cirugía quedé muy bien',
+    'Necesito copia de mi historia clínica',
+  ])('retiene: %s', (body) => {
+    const p = protectComment(c(body));
+    expect(p.healthWithheld).toBe(true);
+    expect(p.comment.body).toBe(
+      '[Información de salud no conservada · #123456]',
+    );
+    expect(p.comment.authorDisplay).toBeNull();
+  });
+
+  it.each([
+    'Excelente atención, muy amables',
+    '¿Cuál es el horario de la sede norte?',
+    'Pésimo servicio, esperé dos horas para la cita',
+    'Gracias por la información, visitaré la sede',
+    'Los operadores del call center no contestan',
+  ])('conserva (sin datos de salud): %s', (body) => {
+    const p = protectComment(c(body));
+    expect(p.healthWithheld).toBe(false);
+    expect(p.comment.body).toBe(body);
+  });
+
+  it('dos comentarios retenidos del mismo autor no se confunden como duplicados', () => {
+    const a = protectComment(c('tengo diabetes', 'x-000001')).comment.body;
+    const b = protectComment(c('tengo diabetes', 'x-000002')).comment.body;
+    expect(a).not.toBe(b);
+  });
+
+  it('en la sincronización, el texto clínico no llega al almacén', async () => {
+    const { store, r } = await run({
+      extraComments: [
+        {
+          provider: 'instagram',
+          postId: 'ig-reel-4',
+          id: 'c-salud-1',
+          text: 'Me diagnosticaron hipertensión, ¿qué especialista me recomiendan?',
+          at: '2026-11-22T19:30:00Z',
+        },
+      ],
+    });
+    const saved = store
+      .comments(ORG)
+      .find((x) => x.externalId === 'c-salud-1')!;
+    expect(saved.body).not.toMatch(/hipertensi/i);
+    expect(saved.body).toMatch(/^\[Información de salud no conservada/);
+    expect(r.healthWithheld).toBe(1);
+  });
+});

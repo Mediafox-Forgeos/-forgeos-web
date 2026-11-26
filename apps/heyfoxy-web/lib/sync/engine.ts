@@ -194,6 +194,7 @@ export async function runSync(deps: SyncDeps): Promise<SyncRun> {
 
   const cap = deps.maxPostsPerNetwork;
   let redactions = 0;
+  let healthWithheld = 0;
 
   networks: for (const platform of authFailure ? [] : networksToSync) {
     const label = PLATFORM_LABEL[platform];
@@ -347,6 +348,7 @@ export async function runSync(deps: SyncDeps): Promise<SyncRun> {
               if (!deps.protectPersonalData) return c;
               const p = protectComment(c);
               redactions += p.redactions;
+              if (p.healthWithheld) healthWithheld++;
               return p.comment;
             })
             .map((c) =>
@@ -394,7 +396,7 @@ export async function runSync(deps: SyncDeps): Promise<SyncRun> {
             'partial',
             `Comentarios y respuestas de publicaciones propias (${fetched} leídos, ${inserted} nuevos)` +
               (deps.protectPersonalData
-                ? '; datos personales enmascarados, sin nombres ni imágenes de autores'
+                ? '; datos personales enmascarados, información de salud no conservada, sin nombres ni imágenes de autores'
                 : ''),
             inserted,
           ),
@@ -423,7 +425,10 @@ export async function runSync(deps: SyncDeps): Promise<SyncRun> {
   }
 
   run.apiCalls = budget.used;
-  if (deps.protectPersonalData) run.redactions = redactions;
+  if (deps.protectPersonalData) {
+    run.redactions = redactions;
+    run.healthWithheld = healthWithheld;
+  }
   const usage = {
     apiCallsDate: today,
     apiCallsToday: callsToday + budget.used,

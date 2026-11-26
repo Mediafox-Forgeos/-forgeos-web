@@ -37,7 +37,7 @@ Se aplica en el servidor **antes de guardar** (`lib/sync/privacy.ts`); el texto 
 
 - Correos, teléfonos, números de documento (CC, TI, CE, NIT, DNI, pasaporte, cédula), tarjetas y números de historia clínica se sustituyen por `[correo]`, `[teléfono]`, `[documento]`, `[tarjeta]`, `[historia clínica]`. Preferimos enmascarar de más (p. ej. una cifra larga) a guardar un dato personal.
 - No se guarda el nombre visible del autor ni las imágenes adjuntas a comentarios de terceros; el autor queda como seudónimo HMAC por organización (`HF_AUTHOR_HASH_SALT`), suficiente para deduplicar. La interfaz muestra «Autor no disponible».
-- Límite conocido: un comentario puede contener una mención de salud en texto libre («tengo diabetes»); no se infiere ni se clasifica, queda visible solo para miembros y se borra con la retención.
+- **Información de salud en texto libre (GO 3, 2026-11-26)**: no hay tratamiento autorizado para conservarla. Si un comentario menciona un diagnóstico, una enfermedad o condición (incluida salud mental y embarazo), un tratamiento o procedimiento, resultados de exámenes, medicamentos o la historia clínica, **su texto no se guarda**: queda `[Información de salud no conservada · #<ref>]` con los metadatos (red, publicación, fecha, seudónimo) para contar el volumen. Se detecta por vocabulario, sin tildes ni mayúsculas; preferimos retener de más (p. ej. «después de la cirugía quedé muy bien»). El resultado de cada sincronización cuenta los comentarios retenidos.
 
 ## 4. Límites del piloto en el código
 
