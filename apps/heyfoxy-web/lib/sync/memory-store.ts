@@ -168,6 +168,11 @@ export class MemorySyncStore implements SyncStore {
     return structuredClone([...this.org(orgId).posts.values()]);
   }
 
+  /** Solo pruebas: comentarios guardados tal como quedarían en la base. */
+  comments(orgId: string) {
+    return structuredClone([...this.org(orgId).comments.values()]);
+  }
+
   /** Solo pruebas/simulación: borra todo lo importado de la organización. */
   forget(orgId: string) {
     this.orgs.delete(orgId);

@@ -82,6 +82,8 @@ export interface SyncRun {
   duplicates: number;
   overLimit: number;
   apiCalls: number;
+  /** Datos personales enmascarados en comentarios (solo con protección activa). */
+  redactions?: number;
   errors: SyncError[];
 }
 

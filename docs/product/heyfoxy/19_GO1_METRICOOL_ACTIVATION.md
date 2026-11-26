@@ -67,3 +67,5 @@ Interruptor inmediato: `update public.hf_runtime_flags set enabled = true, reaso
 2. **GO 3** con el SHA final para un Preview nuevo sin alias.
 3. Primera conexión (GO 4): entrar con `qa-owner`, cambiar a «MediaFOX · Marca autorizada (QA)» en el selector de organización, _Fuentes y cobertura_ → conectar la marca → sincronizar ahora (manual, 30 días, Instagram y Facebook) → _Publicaciones_.
 4. MedPlus solo con autorización escrita; GO 5 (sincronización automática) sin autorizar.
+
+> 2026-11-26: la organización se renombró a «MedPlus · Piloto QA» (mismo UUID). Ver [20](./20_MEDPLUS_PILOT_AUTHORIZATION.md).

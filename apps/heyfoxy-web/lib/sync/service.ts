@@ -5,6 +5,7 @@ import {
 } from '@/lib/connectors/metricool';
 import { dataMode } from '@/lib/env';
 import { runSync } from './engine';
+import { PILOT_LIMITS } from './pilot';
 import {
   FIXTURE_BLOG,
   FIXTURE_TOKEN,
@@ -235,6 +236,13 @@ export async function getPanel(orgId: string): Promise<MetricoolPanel> {
           ? 'ACTIVO: ninguna sincronización sale a la red'
           : 'Inactivo; se comprueba antes de cada llamada a Metricool',
     });
+    checks.push({
+      label: 'Límites del piloto',
+      ok: !scheduleEnabled(),
+      detail: scheduleEnabled()
+        ? 'La sincronización automática está activada sin autorización'
+        : `Solo manual · Instagram y Facebook · ${PILOT_LIMITS.maxPostsPerNetwork} publicaciones por red · 30 días · datos personales de comentarios enmascarados · medios por referencia (sin copia)`,
+    });
   }
   const mode: PanelMode =
     globalMode === 'live' && pending.length ? 'not_ready' : globalMode;
@@ -344,6 +352,9 @@ export async function syncNow(
       connectorFor(st?.brand?.blogId ?? null, budget, allowed),
     // Simulación: ventana amplia para que el servidor sintético siga dentro del periodo.
     initialDays: panelMode() === 'simulation' ? 120 : 30,
+    // Piloto real (doc 20): 30 días, Instagram y Facebook, 10 publicaciones por red y datos
+    // personales de comentarios enmascarados. La simulación conserva su comportamiento.
+    ...(panelMode() === 'simulation' ? {} : PILOT_LIMITS),
   });
 }
 

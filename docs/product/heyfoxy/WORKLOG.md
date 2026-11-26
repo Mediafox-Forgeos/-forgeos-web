@@ -433,3 +433,12 @@ Ejecutado, sin contratar, migrar ni desplegar:
 - **Organización independiente** «MediaFOX · Marca autorizada (QA)» (`9c000000-…c1`) creada en `heyfoxy-qa` con `hf_org_marca_autorizada.sql` (probado antes sobre el seed de Gate B con 0006): no demo, único owner `qa-owner`, fuente Metricool no conectada y pausada.
 - **Pruebas**: unitarias 131/131, SQL locales OK (0006 46/46), smoke 59/59, QA 170/170. Batería 0006 remota pendiente de confirmación en el diálogo del MCP (expiró sin respuesta; sin residuos).
 - **Sin cambios** en Production, Vercel (sin despliegues), Metricool (no activado), MedPlus, WhatsApp, MediaFOX OS ni MOVOS. Detalle en [19](./19_GO1_METRICOOL_ACTIVATION.md).
+
+## 2026-11-26 — Piloto MedPlus (preparación, sin importar)
+
+- **Autorización de MedPlus** confirmada por Álvaro y registrada antes de importar: doc [20](./20_MEDPLUS_PILOT_AUTHORIZATION.md) y `audit_logs` (`hf_medplus_autorizacion_registrada`).
+- **Organización** renombrada a «MedPlus · Piloto QA» en `heyfoxy-qa` con el mismo UUID (`hf_org_medplus_piloto.sql`, probado antes en local); sin datos, fuente no conectada y pausada; Aurora y Horizonte intactas.
+- **Código**: límites del piloto (`lib/sync/pilot.ts`: Instagram y Facebook, 10 publicaciones por red, comentarios solo de esas publicaciones) y enmascarado de datos personales en comentarios (`lib/sync/privacy.ts`); el permiso de comentarios ya no se consulta para redes fuera del piloto.
+- **Vercel**: 7 variables del servidor verificadas por nombre (solo Preview, Secret); sin variables de sincronización automática ni de Production.
+- **Pruebas**: unitarias 145/145; `test-qa-seed` OK. Batería 0006 remota otra vez pendiente (confirmación del MCP caducada; sin residuos).
+- **Sin cambios** en Production, despliegues, Metricool (sin conectar ni importar), WhatsApp, Storage, MediaFOX OS ni MOVOS.

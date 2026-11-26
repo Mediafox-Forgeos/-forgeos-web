@@ -100,6 +100,13 @@ C=9c000000-0000-4000-a000-0000000000c1
 [[ "$(q "select count(*) from public.memberships m join public.memberships n on n.user_id = m.user_id and n.organization_id <> m.organization_id where m.organization_id = '$C'")" == 1 ]] || fail "qa-owner conserva su membresía en Clínica Aurora"
 [[ "$AU" == "$(q "select md5(string_agg(x, ',' order by x)) from (select 'p'||id x from public.social_posts union all select 'c'||id from public.social_comments union all select 'm'||organization_id||user_id||role from public.memberships where organization_id <> '$C') t")" ]] || fail "la organización nueva alteró datos o miembros de Aurora/Horizonte"
 ok "organización de la marca autorizada: no demo, 1 owner, fuente pausada, idempotente; Aurora y Horizonte intactas"
+# Piloto MedPlus: renombrado con el mismo UUID y registro de autorización (doc 20).
+"${P[@]}" -f "$S/hf_org_medplus_piloto.sql"
+"${P[@]}" -f "$S/hf_org_medplus_piloto.sql"
+[[ "$(q "select name || '|' || slug from public.organizations where id = '$C'")" == "MedPlus · Piloto QA|medplus-piloto-qa" ]] || fail "renombrado MedPlus"
+[[ "$(q "select count(*) from public.audit_logs where action = 'hf_medplus_autorizacion_registrada'")" == 1 ]] || fail "registro de autorización único"
+[[ "$AU" == "$(q "select md5(string_agg(x, ',' order by x)) from (select 'p'||id x from public.social_posts union all select 'c'||id from public.social_comments union all select 'm'||organization_id||user_id||role from public.memberships where organization_id <> '$C') t")" ]] || fail "el renombrado alteró Aurora/Horizonte"
+ok "piloto MedPlus: mismo UUID, renombrada, autorización registrada una vez, idempotente; Aurora y Horizonte intactas"
 # La fuente de Aurora no puede conectarse ni recibir datos reales; la marca no se comparte entre organizaciones.
 if q "update public.data_sources set status = 'connected' where id = '9a000000-0000-4000-c000-000000000002'" 2>/dev/null; then fail "Aurora (demo) aceptó una fuente real conectada"; fi
 q "update public.data_sources set external_account_ref = '700001', status = 'connected' where id = '9c000000-0000-4000-c000-000000000001'"

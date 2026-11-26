@@ -10,6 +10,7 @@ import {
 import { planIngestion } from '@/lib/ingestion/pipeline';
 import { PLATFORM_LABEL } from '@/lib/format';
 import type { Platform } from '@/lib/types';
+import { protectComment } from './privacy';
 import type {
   CoverageCell,
   SourceSyncState,
@@ -52,6 +53,15 @@ export interface SyncDeps {
   timezone?: string;
   initialDays?: number;
   maxCommentPages?: number;
+  /**
+   * Piloto: máximo de publicaciones por red y ejecución (las más recientes de la ventana).
+   * Los comentarios solo se importan de esas publicaciones.
+   */
+  maxPostsPerNetwork?: number;
+  /** Piloto: redes que pueden sincronizarse (las demás de la marca se ignoran sin llamadas). */
+  networks?: readonly Platform[];
+  /** Enmascara datos personales de comentarios de terceros antes de persistir (privacy.ts). */
+  protectPersonalData?: boolean;
   newId?: () => string;
 }
 
@@ -170,19 +180,27 @@ export async function runSync(deps: SyncDeps): Promise<SyncRun> {
   let stopped: string | null = null;
   const initialFrom = new Date(now.getTime() - (deps.initialDays ?? 30) * DAY);
 
+  const networksToSync = state.brand.networks.filter(
+    (n) => !deps.networks || deps.networks.includes(n),
+  );
   // Permisos de comentarios por red (sin leer contenido).
   let auths: Awaited<ReturnType<MetricoolConnector['checkAuthorizations']>> =
     [];
   try {
-    auths = await mc.checkAuthorizations(state.brand.networks);
+    auths = await mc.checkAuthorizations(networksToSync);
   } catch (e) {
     authFailure = asMcError(e);
   }
 
-  networks: for (const platform of authFailure ? [] : state.brand.networks) {
+  const cap = deps.maxPostsPerNetwork;
+  let redactions = 0;
+
+  networks: for (const platform of authFailure ? [] : networksToSync) {
     const label = PLATFORM_LABEL[platform];
     stopped = await stopReason();
     if (stopped) break;
+    // Publicaciones importadas en esta ejecución (con tope, los comentarios se limitan a ellas).
+    let keptPosts: Set<string> | null = null;
     // 1. Publicaciones y métricas
     if (POSTS_SUPPORTED.includes(platform)) {
       const prevTo = cursor.postsTo[platform];
@@ -196,21 +214,38 @@ export async function runSync(deps: SyncDeps): Promise<SyncRun> {
           timezone: deps.timezone ?? 'America/Bogota',
           limit: 500,
         });
-        const r = await deps.store.upsertPosts(deps.orgId, page.items, at);
+        const items =
+          cap == null
+            ? page.items
+            : [...page.items]
+                .sort(
+                  (a, b) =>
+                    (Date.parse(b.publishedAt ?? '') || 0) -
+                    (Date.parse(a.publishedAt ?? '') || 0),
+                )
+                .slice(0, cap);
+        if (cap != null) keptPosts = new Set(items.map((p) => p.externalId));
+        const r = await deps.store.upsertPosts(deps.orgId, items, at);
         run.postsInserted += r.inserted;
         run.postsUpdated += r.updated;
         run.snapshots += r.snapshots;
         cursor.postsTo[platform] = at;
-        const withMedia = page.items.filter(
+        const withMedia = items.filter(
           (p) => (p.media?.length ?? 0) > 0,
         ).length;
+        const capped =
+          cap != null && page.items.length > items.length
+            ? ` (las ${items.length} más recientes de ${page.items.length}; tope del piloto)`
+            : '';
         cells.push(
           cell(
             platform,
             'posts',
-            'complete',
-            `${page.items.length} en la ventana; ${withMedia} con foto o miniatura`,
-            page.items.length,
+            cap != null && page.items.length > items.length
+              ? 'partial'
+              : 'complete',
+            `${items.length} importadas${capped}; ${withMedia} con foto o miniatura`,
+            items.length,
           ),
         );
         cells.push(
@@ -252,7 +287,17 @@ export async function runSync(deps: SyncDeps): Promise<SyncRun> {
 
     // 2. Comentarios y respuestas
     const a = auths.find((x) => x.platform === platform);
-    if (!a?.granted) {
+    if (cap != null && !keptPosts) {
+      cells.push(
+        cell(
+          platform,
+          'comments',
+          'unavailable',
+          'Sin publicaciones importadas en esta ejecución: no se leen comentarios',
+          0,
+        ),
+      );
+    } else if (!a?.granted) {
       cells.push(
         cell(
           platform,
@@ -283,15 +328,26 @@ export async function runSync(deps: SyncDeps): Promise<SyncRun> {
             }
           }
           const r = await mc.fetchThreads(platform, next);
-          await deps.store.enrichPostMedia(
-            deps.orgId,
-            platform,
-            threadPostMedia(r.threads),
-          );
+          const threadMedia = threadPostMedia(r.threads);
+          if (keptPosts)
+            for (const k of [...threadMedia.keys()])
+              if (!keptPosts.has(k)) threadMedia.delete(k);
+          await deps.store.enrichPostMedia(deps.orgId, platform, threadMedia);
           const flat = flattenThreads(platform, r.threads)
             .filter((c) => {
               const t = Date.parse(c.publishedAt);
               return t >= from.getTime() && t <= now.getTime();
+            })
+            .filter(
+              (c) =>
+                !keptPosts ||
+                (c.postExternalId != null && keptPosts.has(c.postExternalId)),
+            )
+            .map((c) => {
+              if (!deps.protectPersonalData) return c;
+              const p = protectComment(c);
+              redactions += p.redactions;
+              return p.comment;
             })
             .map((c) =>
               deps.store.authorKey
@@ -336,7 +392,10 @@ export async function runSync(deps: SyncDeps): Promise<SyncRun> {
             platform,
             'comments',
             'partial',
-            `Comentarios y respuestas de publicaciones propias (${fetched} leídos, ${inserted} nuevos)`,
+            `Comentarios y respuestas de publicaciones propias (${fetched} leídos, ${inserted} nuevos)` +
+              (deps.protectPersonalData
+                ? '; datos personales enmascarados, sin nombres ni imágenes de autores'
+                : ''),
             inserted,
           ),
         );
@@ -364,6 +423,7 @@ export async function runSync(deps: SyncDeps): Promise<SyncRun> {
   }
 
   run.apiCalls = budget.used;
+  if (deps.protectPersonalData) run.redactions = redactions;
   const usage = {
     apiCallsDate: today,
     apiCallsToday: callsToday + budget.used,
