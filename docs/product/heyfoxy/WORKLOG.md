@@ -442,3 +442,9 @@ Ejecutado, sin contratar, migrar ni desplegar:
 - **Vercel**: 7 variables del servidor verificadas por nombre (solo Preview, Secret); sin variables de sincronización automática ni de Production.
 - **Pruebas**: unitarias 145/145; `test-qa-seed` OK. Batería 0006 remota otra vez pendiente (confirmación del MCP caducada; sin residuos).
 - **Sin cambios** en Production, despliegues, Metricool (sin conectar ni importar), WhatsApp, Storage, MediaFOX OS ni MOVOS.
+
+## 2026-11-26 — GO 3 (Preview MedPlus)
+
+- **Batería 0006 remota: 46/46** (`HF_TESTS_PASSED 46`, transacción revertida) y sin residuos.
+- **Anomalía detectada antes de desplegar**: Production apuntaba a `dpl_9YVhLzuo63ByVQJM4sqFMDKq6oLb`, un «Redeploy» del mismo `fd896ad` (2026-11-26 05:07 UTC, cuenta de Álvaro). Álvaro confirmó que fue él; `deploy-preview.sh` lo registra como nuevo Production congelado. Production sin variables propias: no recibió credenciales.
+- **Información de salud en texto libre**: los comentarios con información clínica se guardan solo como marcador (doc 20 §3).

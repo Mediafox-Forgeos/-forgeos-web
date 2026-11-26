@@ -21,8 +21,9 @@ readonly PROJECT_NAME="heyfoxy-web"
 readonly ROOT_DIRECTORY="apps/heyfoxy-web"
 readonly APP_PACKAGE="@mediafox/heyfoxy-web"
 readonly MIN_CLI_MAJOR=65
-# Despliegue de Production congelado (opción B, 2026-11-13). Debe seguir siendo el actual.
-readonly FROZEN_PRODUCTION_DEPLOYMENT="dpl_CBLq2U37Axe66pHJakrqjCjyf8me"
+# Despliegue de Production congelado (opción B, 2026-11-13; «Redeploy» del mismo fd896ad hecho por
+# Álvaro el 2026-11-26 05:07 UTC y aceptado por él). Debe seguir siendo el actual.
+readonly FROZEN_PRODUCTION_DEPLOYMENT="dpl_9YVhLzuo63ByVQJM4sqFMDKq6oLb"
 readonly PRODUCTION_ALIASES="heyfoxy-web.vercel.app heyfoxy-web-mediafox.vercel.app"
 # Proyectos Supabase de MediaFOX OS: Hey Foxy nunca puede apuntar a ellos.
 readonly FORBIDDEN_SUPABASE_REFS="srsllmqeljhodttqefih wzamylhiqvosbrlhzssp"
