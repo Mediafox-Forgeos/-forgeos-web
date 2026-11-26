@@ -31,6 +31,7 @@ Plataforma SaaS multiempresa de escucha social con IA, monitoreo reputacional, a
 | 16  | [WO Metricool Advanced: campos por red, modelo de datos y conexión segura (preparada)](./16_WO_HF_METRICOOL_INTEGRATION.md) | Metricool                             |
 | 17  | [V2: refinamiento de Home y Social Explorer (WO-HF-V2-REFINEMENT-001)](./17_V2_REFINEMENT_001.md)                           | V2                                    |
 | 18  | [Metricool: integración local, cobertura, 0006 y procedimiento de conexión](./18_METRICOOL_INTEGRATION_001.md)              | Metricool                             |
+| 19  | [GO 1 Metricool: 0006 en QA, guardas de marca y emergencia, Explorer con medios](./19_GO1_METRICOOL_ACTIVATION.md)          | Metricool                             |
 | DS  | [Design System V2 v0.2](./design-system/HEY_FOXY_V2_DESIGN_SYSTEM.md) · [concepto](./design-system/HEY_FOXY_V2_CONCEPT.png) | V2                                    |
 | —   | [WORKLOG](./WORKLOG.md) · [TECH_BACKLOG](./TECH_BACKLOG.md)                                                                 | Seguimiento                           |
 

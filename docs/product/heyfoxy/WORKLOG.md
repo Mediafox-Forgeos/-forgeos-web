@@ -425,3 +425,11 @@ Ejecutado, sin contratar, migrar ni desplegar:
 - **Datos QA (preparado, sin escrituras remotas)**: `qa_fix_002_date_spread`, `qa_refresh_dates`, exportación de rollback y rollback de `qa_fix_001`; probado sobre el seed de Gate B envejecido (`scripts/test-qa-seed.sh`).
 - **Metricool local**: conector de solo lectura ampliado, motor de sincronización, simulación con servidor sintético, adaptador Supabase (inactivo), pantalla V2 _Fuentes y cobertura_, migración 0006 en `migrations-pending/` probada con rollback. Detalle en [18](./18_METRICOOL_INTEGRATION_001.md).
 - **Sin cambios** en migraciones aplicadas, RLS remota, Auth/middleware, Supabase remoto, Production, WhatsApp, MediaFOX OS ni MOVOS. Sin cuentas reales ni datos de MedPlus.
+
+## 2026-11-24/25 — GO 1 Metricool
+
+- **Migración 0006 aplicada en `heyfoxy-qa`** (md5 `551f2305…`, idéntica al archivo versionado; contrato 0005 36/36 antes y 0006 43/43 después). Antes de aplicarla se le añadieron: guarda de datos reales en organizaciones demo, una marca por organización, interruptor global en la base y estados `stopped`/`skipped_not_authorized`.
+- **Código**: marca autorizada por organización (`HF_METRICOOL_ALLOWED_BRANDS`) en servicio, motor y conector; el interruptor y la pausa detienen una ejecución en curso; verificación de la clave secreta de Supabase; Explorer y detalle con medios y métricas por red; HF-UX-07; organización por defecto estable (membresía más antigua).
+- **Preparado**: organización independiente para la marca real (`hf_org_marca_autorizada.sql`), probada sobre el seed de Gate B con 0006.
+- **Pruebas**: unitarias 131/131, SQL locales OK (0006 46/46), smoke 59/59, QA 170/170. Batería 0006 remota pendiente de confirmación en el diálogo del MCP (expiró sin respuesta; sin residuos).
+- **Sin cambios** en Production, Vercel (sin despliegues), Metricool (no activado), MedPlus, WhatsApp, MediaFOX OS ni MOVOS. Detalle en [19](./19_GO1_METRICOOL_ACTIVATION.md).
