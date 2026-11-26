@@ -34,16 +34,17 @@ La pantalla _Fuentes y cobertura_ añade **Verificaciones del servidor**: clave 
 
 ## 3. Pruebas
 
-| Prueba                                                               | Resultado                                                                                                               |
-| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Unitarias (incluye `sync-guards`: marca, interruptor, clave)         | 131/131                                                                                                                 |
-| `test-migration-0006.sh` (contrato 0005 → 0006 → rollback → 0005)    | OK; batería 0006 46/46                                                                                                  |
-| `test-db.sh` (contrato 0006 + aislamiento, también con ACL antiguas) | OK                                                                                                                      |
-| `test-qa-seed.sh` (scripts del seed + organización nueva sobre 0006) | OK; Aurora rechaza datos reales; una marca, una organización                                                            |
-| Build demo, `check-trace`, smoke HTTP                                | OK; 59/59                                                                                                               |
-| QA Playwright (8 proyectos, axe, desbordamiento, capturas)           | 170 superadas, 46 omitidas por diseño (doc 18 §6)                                                                       |
-| Remoto: contrato 0005 antes / 0006 después                           | 36/36 / 43/43                                                                                                           |
-| Remoto: batería 0006 en transacción revertida (46)                   | **Pendiente de tu confirmación en el diálogo del MCP** (expiró sin respuesta; nada se ejecutó, verificado sin residuos) |
+| Prueba                                                               | Resultado                                                                                                                                    |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unitarias (incluye `sync-guards`: marca, interruptor, clave)         | 131/131                                                                                                                                      |
+| `test-migration-0006.sh` (contrato 0005 → 0006 → rollback → 0005)    | OK; batería 0006 46/46                                                                                                                       |
+| `test-db.sh` (contrato 0006 + aislamiento, también con ACL antiguas) | OK                                                                                                                                           |
+| `test-qa-seed.sh` (scripts del seed + organización nueva sobre 0006) | OK; Aurora rechaza datos reales; una marca, una organización                                                                                 |
+| Build demo, `check-trace`, smoke HTTP                                | OK; 59/59                                                                                                                                    |
+| QA Playwright (8 proyectos, axe, desbordamiento, capturas)           | 170 superadas, 46 omitidas por diseño (doc 18 §6)                                                                                            |
+| Remoto: contrato 0005 antes / 0006 después                           | 36/36 / 43/43                                                                                                                                |
+| Remoto: organización de la marca autorizada                          | Creada y verificada: no demo, 1 owner (`qa-owner`), fuente Metricool no conectada y pausada, 0 publicaciones; Aurora y Horizonte siguen demo |
+| Remoto: batería 0006 en transacción revertida (46)                   | **Pendiente**: requiere tu confirmación en el diálogo del MCP; expiró dos veces sin respuesta. Nada se ejecutó (verificado sin residuos)     |
 
 ## 4. Variables del servidor (Vercel, solo Preview, Sensitive)
 
@@ -62,7 +63,7 @@ Interruptor inmediato: `update public.hf_runtime_flags set enabled = true, reaso
 
 ## 5. Pendiente
 
-1. Tu confirmación en el diálogo del MCP para la batería remota 0006 (solo lectura en efecto: se revierte) y para crear la organización de la marca autorizada.
+1. (Opcional) Tu confirmación en el diálogo del MCP para la batería remota 0006: se ejecuta en una transacción que se revierte. El contrato 0006 remoto (43/43) y la batería local (46/46) ya están en verde.
 2. **GO 3** con el SHA final para un Preview nuevo sin alias.
 3. Primera conexión (GO 4): entrar con `qa-owner`, cambiar a «MediaFOX · Marca autorizada (QA)» en el selector de organización, _Fuentes y cobertura_ → conectar la marca → sincronizar ahora (manual, 30 días, Instagram y Facebook) → _Publicaciones_.
 4. MedPlus solo con autorización escrita; GO 5 (sincronización automática) sin autorizar.
