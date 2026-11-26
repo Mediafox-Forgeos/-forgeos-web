@@ -1,37 +1,33 @@
 import {
   ArrowLeft,
+  CalendarClock,
   ChartColumn,
-  Eye,
-  Heart,
-  Lightbulb,
+  ChevronLeft,
+  ChevronRight,
   MessagesSquare,
-  Radio,
-  Smile,
-  Tags,
-  TrendingUp,
-  TriangleAlert,
-  Users,
+  ShieldAlert,
 } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { BarList, ChartCard } from '@/components/ds/charts';
-import { AreaTrend, Donut } from '@/components/ds/charts-client';
+import { ChartCard } from '@/components/ds/charts';
 import { ConversationRow } from '@/components/ds/conversation';
 import {
-  FoxyInsightPanel,
-  KpiCard,
-  ModuleSurface,
-  type FoxyFindingView,
-} from '@/components/ds/layout';
+  BrandContextCard,
+  FoxyContentIntelligence,
+} from '@/components/ds/intel';
 import {
-  AuthorChip,
-  NetworkMetrics,
-  OriginalLink,
-  PostMedia,
-  PostMetricsRow,
-  SentimentPill,
-  fmtNum,
-} from '@/components/ds/post';
+  AskFoxyContextual,
+  ExpandableCopy,
+  PerformanceTimeline,
+  type TimelineSeries,
+} from '@/components/ds/intel-client';
+import { ModuleSurface } from '@/components/ds/layout';
+import {
+  InteractionBreakdown,
+  MetricAvailabilityState,
+  PerformanceMetricCard,
+} from '@/components/ds/performance';
+import { AuthorChip, OriginalLink, PostMedia } from '@/components/ds/post';
 import {
   Panel,
   PanelHeader,
@@ -40,17 +36,26 @@ import {
 } from '@/components/ds/primitives';
 import { EmptyStateV2 } from '@/components/ds/states';
 import { requireContext } from '@/lib/auth/session';
+import { brainAvailability, getBrandContext } from '@/lib/brain/store';
 import { explorerQuery, parseExplorerFilters } from '@/lib/explorer-filters';
-import { SENTIMENT_LABEL, fmtDateTime } from '@/lib/format';
-import { pctOf } from '@/lib/home-insights';
+import { PLATFORM_LABEL, fmtDateTime } from '@/lib/format';
+import { inWindow } from '@/lib/home-insights';
+import { commentsDisabledFor, getPostIntel } from '@/lib/intel/engine';
+import { formatOf, SUGGESTED_QUESTIONS } from '@/lib/intel/local';
 import {
-  dominantSentiment,
-  interactions,
-  postStats,
-  sentimentBreakdown,
-  topTopics,
-} from '@/lib/insights';
-import { PERIOD_PARAM, parsePeriod, withPeriod } from '@/lib/period';
+  interactionBreakdown,
+  metricSeries,
+  reactionsByType,
+  readMetric,
+  type MetricKey,
+} from '@/lib/intel/metrics';
+import {
+  PERIOD_PARAM,
+  parsePeriod,
+  periodDays,
+  periodLabel,
+  withPeriod,
+} from '@/lib/period';
 import { getUiTheme } from '@/lib/shell';
 import { isV2 } from '@/lib/ui-theme';
 import { LegacyPostDetail } from './legacy-post-detail';
@@ -65,7 +70,11 @@ const capLabel = new Intl.DateTimeFormat('es-CO', {
   timeZone: 'America/Bogota',
 });
 
-/** Detalle de publicación de Social Explorer (WO-HF-V2-06) con análisis contextual de Foxy. */
+/**
+ * Centro de inteligencia de contenido de una publicación (WO-HF-V2-INTELLIGENCE-001 + addendum).
+ * Publicación original · rendimiento · Foxy Content Intelligence · Ask Foxy · navegación.
+ * Todo acotado a la organización activa (y RLS en Supabase). Nunca se inventan datos.
+ */
 export default async function PostDetailPage({
   params,
   searchParams,
@@ -77,311 +86,322 @@ export default async function PostDetailPage({
   if (!isV2(await getUiTheme())) return <LegacyPostDetail id={id} />;
   const sp = await searchParams;
   const period = parsePeriod(sp[PERIOD_PARAM]);
-  // «Volver» conserva los filtros con los que se llegó desde la galería.
-  const fq = explorerQuery(parseExplorerFilters(sp));
+  const filters = parseExplorerFilters(sp);
+  const fq = explorerQuery(filters);
   const { active, repo } = await requireContext();
   const orgId = active.organization.id;
-  // La publicación se busca SIEMPRE dentro de la organización activa (y RLS en Supabase).
   const post = await repo.post(orgId, decodeURIComponent(id));
   if (!post) notFound();
-  const comments = await repo.items(orgId, { postId: post.id });
-  const s = postStats(post);
-  const b = sentimentBreakdown(comments);
-  const dominant = dominantSentiment(comments);
-  const topics = topTopics(comments, 5);
-  const history = [...post.metrics].reverse();
-  const negatives = comments.filter(
-    (c) => c.analysis?.sentiment === 'negative',
-  );
-  const negTopic = topTopics(negatives, 1)[0];
+  const [allPosts, filtered, stored] = await Promise.all([
+    repo.posts(orgId),
+    repo.posts(orgId, { q: filters.q, platform: filters.platform }),
+    getBrandContext(orgId),
+  ]);
+  const days = periodDays(period);
+  const peers = inWindow(allPosts, days);
+  const comments = commentsDisabledFor(post)
+    ? []
+    : await repo.items(orgId, { postId: post.id });
 
-  const findings: FoxyFindingView[] = [];
-  if (dominant)
-    findings.push({
-      id: 'dominant',
-      tone:
-        dominant === 'negative'
-          ? 'critical'
-          : dominant === 'positive'
-            ? 'success'
-            : 'neutral',
-      icon: Smile,
-      text: `Sentimiento dominante en los comentarios: ${SENTIMENT_LABEL[dominant].toLowerCase()}.`,
-      basis: `${b.positive} positivos · ${b.negative} negativos · ${b.neutral + b.mixed} neutrales o mixtos, de ${b.total} clasificados.`,
-      evidence: [{ label: 'Ver comentarios', href: '#comentarios' }],
-    });
-  if (negTopic && negTopic[1] >= 1)
-    findings.push({
-      id: 'neg-topic',
-      tone: 'high',
-      icon: Tags,
-      text: `Los comentarios negativos hablan sobre todo de «${negTopic[0]}».`,
-      basis: `${negTopic[1]} de ${negatives.length} comentarios negativos.`,
-      evidence: [{ label: 'Ver comentarios', href: '#comentarios' }],
-    });
-  if (s.unusual && s.growth !== null)
-    findings.push({
-      id: 'unusual',
-      tone: 'info',
-      icon: TrendingUp,
-      text: 'Actividad inusual: las interacciones al menos se duplicaron entre las dos últimas mediciones.',
-      basis: `+${fmtNum(s.growth)} interacciones.`,
-      evidence: [{ label: 'Ver historial', href: '#historial' }],
-    });
-  if (b.total > 0 && b.negativePct >= 50)
-    findings.push({
-      id: 'respond',
-      tone: 'critical',
-      icon: TriangleAlert,
-      text: 'Conviene revisar y responder: la mayoría de los comentarios son negativos.',
-      basis: `${b.negativePct} % negativos.`,
-      evidence: [
-        { label: 'Ver alertas', href: withPeriod('/alertas', period) },
+  // Navegación entre publicaciones con los mismos filtros y periodo que la galería.
+  const nav = inWindow(filtered, days);
+  const idx = nav.findIndex((p) => p.id === post.id);
+  const linkTo = (pid: string) =>
+    withPeriod(
+      `/publicaciones/${encodeURIComponent(pid)}${fq ? `?${fq}` : ''}`,
+      period,
+    );
+  const prev = idx > 0 ? nav[idx - 1] : null;
+  const next = idx >= 0 && idx < nav.length - 1 ? nav[idx + 1] : null;
+
+  const { intel, meta, reason, status } = getPostIntel({
+    orgId,
+    post,
+    peers,
+    brand: stored?.context ?? null,
+    periodLabel: periodLabel(period),
+  });
+  const availability = brainAvailability();
+  const canSave =
+    ['owner', 'admin', 'analyst'].includes(active.role) &&
+    availability === 'ready';
+  const net = PLATFORM_LABEL[post.platform];
+
+  const reach = readMetric(post, 'reach');
+  const engagement = readMetric(post, 'engagement');
+  const impressions = readMetric(post, 'impressions');
+  const ixNet = readMetric(post, 'interactions');
+  const views = readMetric(post, 'views');
+  const breakdown = interactionBreakdown(post);
+  const engFinding = intel?.performance.findings.find((f) =>
+    /equivalentes/.test(f.title),
+  );
+  const engComparison =
+    engFinding?.evidence.find((e) => e.type === 'comparison')?.value != null
+      ? `Mediana de equivalentes: ${engFinding.evidence.find((e) => e.type === 'comparison')!.value}`
+      : null;
+
+  const series: TimelineSeries[] = (
+    [
+      ['components', 'Interacciones', 'interacciones'],
+      [
+        'reach',
+        reach.label,
+        post.platform === 'facebook' ? 'impresiones únicas' : 'cuentas',
       ],
-    });
+      ['impressions', 'Impresiones', 'impresiones'],
+      ['engagement', 'Engagement', '%'],
+      [
+        'likes',
+        post.platform === 'facebook' ? 'Reacciones' : 'Me gusta',
+        'me gusta',
+      ],
+      ['saves', 'Guardados', 'guardados'],
+      ['shares', 'Compartidos', 'compartidos'],
+    ] as Array<[MetricKey | 'components', string, string]>
+  ).map(([key, label, unit]) => ({
+    key,
+    label,
+    unit,
+    points: metricSeries(post, key).map((p) => ({
+      at: p.at,
+      value: p.value,
+      label: capLabel.format(Date.parse(p.at)).replace('.', ''),
+    })),
+  }));
 
   return (
     <ModuleSurface module="explorer">
-      <Link
-        href={withPeriod(`/publicaciones${fq ? `?${fq}` : ''}`, period)}
-        className="text-primary-text mb-4 inline-flex items-center gap-1.5 text-sm font-extrabold"
-      >
-        <ArrowLeft aria-hidden className="h-4 w-4" /> Social Explorer
-      </Link>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <Link
+          href={withPeriod(`/publicaciones${fq ? `?${fq}` : ''}`, period)}
+          className="text-primary-text inline-flex items-center gap-1.5 text-sm font-extrabold"
+        >
+          <ArrowLeft aria-hidden className="h-4 w-4" /> Social Explorer
+        </Link>
+        <nav
+          aria-label="Navegar entre publicaciones"
+          className="flex items-center gap-1.5 text-sm"
+        >
+          {prev ? (
+            <Link
+              href={linkTo(prev.id)}
+              className="border-border hover:bg-card inline-flex items-center gap-1 rounded-full border px-3 py-1.5 font-extrabold"
+              rel="prev"
+            >
+              <ChevronLeft aria-hidden className="h-4 w-4" /> Anterior
+            </Link>
+          ) : (
+            <span className="text-muted-foreground border-border inline-flex items-center gap-1 rounded-full border px-3 py-1.5 font-bold opacity-50">
+              <ChevronLeft aria-hidden className="h-4 w-4" /> Anterior
+            </span>
+          )}
+          {idx >= 0 && (
+            <span className="text-muted-foreground px-1 text-xs font-bold tabular-nums">
+              {idx + 1} de {nav.length}
+            </span>
+          )}
+          {next ? (
+            <Link
+              href={linkTo(next.id)}
+              className="border-border hover:bg-card inline-flex items-center gap-1 rounded-full border px-3 py-1.5 font-extrabold"
+              rel="next"
+            >
+              Siguiente <ChevronRight aria-hidden className="h-4 w-4" />
+            </Link>
+          ) : (
+            <span className="text-muted-foreground border-border inline-flex items-center gap-1 rounded-full border px-3 py-1.5 font-bold opacity-50">
+              Siguiente <ChevronRight aria-hidden className="h-4 w-4" />
+            </span>
+          )}
+        </nav>
+      </div>
 
       <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-4 lg:grid-cols-12">
-        {/* Publicación original */}
-        <Panel
-          as="article"
-          className="self-start lg:sticky lg:top-24 lg:col-span-4"
-          aria-labelledby="post-title"
-        >
-          <div className="mb-4 flex items-start justify-between gap-2">
-            <AuthorChip post={post} size={40} />
-            {post.isSynthetic && <SyntheticBadge />}
-          </div>
-          <PostMedia post={post} variant="detail" />
-          <h1
-            id="post-title"
-            className="mt-4 text-lg font-extrabold leading-snug"
-          >
-            {post.body ?? 'Publicación sin texto'}
-          </h1>
-          <p className="text-muted-foreground mt-1 text-xs">
-            Publicada {fmtDateTime(post.publishedAt)}
-          </p>
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            {dominant && (
-              <SentimentPill
-                s={dominant}
-                label={`Comentarios: ${SENTIMENT_LABEL[dominant].toLowerCase()}`}
-              />
-            )}
-            {s.unusual && (
-              <StatusPill tone="high" icon={TrendingUp}>
-                Actividad inusual
-              </StatusPill>
-            )}
-          </div>
-          <PostMetricsRow
-            stats={s}
-            size="md"
-            className="border-border mt-4 border-t pt-4"
+        {/* A. Publicación original */}
+        <div className="space-y-4 lg:sticky lg:top-24 lg:col-span-4">
+          <Panel as="article" aria-labelledby="post-title">
+            <div className="mb-3 flex items-start justify-between gap-2">
+              <AuthorChip post={post} size={42} />
+              {post.isSynthetic && <SyntheticBadge />}
+            </div>
+            <div className="mb-3 flex flex-wrap items-center gap-1.5">
+              <StatusPill tone="info">{formatOf(post)}</StatusPill>
+              {post.publishedAt && (
+                <span className="text-muted-foreground inline-flex items-center gap-1 text-xs font-semibold">
+                  <CalendarClock aria-hidden className="h-3.5 w-3.5" />
+                  {fmtDateTime(post.publishedAt)}
+                </span>
+              )}
+            </div>
+            <PostMedia post={post} variant="detail" />
+            <h1 id="post-title" className="sr-only">
+              Publicación de {net}
+              {post.publishedAt ? ` del ${fmtDateTime(post.publishedAt)}` : ''}
+            </h1>
+            <div className="mt-4">
+              <ExpandableCopy text={post.body} />
+            </div>
+            <OriginalLink post={post} className="mt-3" />
+          </Panel>
+          <BrandContextCard
+            stored={stored}
+            href={withPeriod('/brand-brain', period)}
+            availability={availability}
           />
-          <OriginalLink post={post} className="mt-3" />
-        </Panel>
+        </div>
 
-        {/* Métricas, Foxy (ancho), historial, sentimiento y comentarios */}
         <div className="min-w-0 space-y-4 lg:col-span-8">
-          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-            <KpiCard
-              icon={Heart}
-              tone="high"
-              label="Interacciones"
-              value={fmtNum(s.interactions)}
-              period={
-                s.growth === null
-                  ? 'Una sola medición'
-                  : `${s.growth >= 0 ? '+' : ''}${fmtNum(s.growth)} desde la anterior`
-              }
+          {/* B. Rendimiento: KPI principales */}
+          <h2 className="sr-only">Rendimiento</h2>
+          <div className="grid grid-cols-2 gap-3 2xl:grid-cols-4">
+            <PerformanceMetricCard reading={reach} tone="reach" />
+            <PerformanceMetricCard
+              reading={engagement}
+              tone="engagement"
+              comparison={engComparison}
             />
-            <KpiCard
-              icon={Users}
-              tone="ai"
-              label="Alcance"
-              value={fmtNum(s.latest?.reach)}
-              period="Última medición"
-            />
-            <KpiCard
-              icon={Eye}
-              tone="info"
-              label="Vistas"
-              value={fmtNum(s.latest?.views)}
-              period="Última medición"
-            />
-            <KpiCard
-              icon={MessagesSquare}
-              tone="critical"
-              label="Comentarios clasificados"
-              value={fmtNum(b.total)}
-              period={
-                b.total ? `${b.negativePct} % negativos` : 'Sin comentarios'
-              }
-            />
+            <PerformanceMetricCard reading={impressions} tone="impressions" />
+            <PerformanceMetricCard reading={ixNet} tone="interactions" />
           </div>
+          {(views.state === 'value' || views.state === 'zero') &&
+            views.value !== impressions.value && (
+              <p className="text-muted-foreground text-xs">
+                <b className="text-foreground">{views.label}:</b>{' '}
+                {views.display} · {views.definition}
+              </p>
+            )}
+          {views.state === 'not_applicable' && (
+            <p className="text-muted-foreground flex items-center gap-1.5 text-xs">
+              <b className="text-foreground">Vistas:</b>{' '}
+              <MetricAvailabilityState state="not_applicable" /> {net} no
+              entrega vistas para este formato.
+            </p>
+          )}
 
-          <NetworkMetrics metrics={s.latest} platform={post.platform} />
-
-          <FoxyInsightPanel
-            wide
-            title="Análisis de Foxy IA"
-            subtitle="Sobre esta publicación y sus comentarios"
-            findings={findings}
-            limitation="Basado solo en los comentarios clasificados de esta publicación. Responder requiere permisos de la red y confirmación humana."
+          {/* C. Inteligencia */}
+          <FoxyContentIntelligence
+            intel={status === 'ok' ? intel : null}
+            meta={meta}
+            postId={post.id}
+            postHref={linkTo}
+            canSave={canSave}
+            saveDisabledReason={
+              availability !== 'ready'
+                ? 'Memoria estratégica pendiente de la migración 0007'
+                : !canSave
+                  ? 'Tu rol no puede proponer aprendizajes'
+                  : undefined
+            }
+            brandHref={withPeriod('/brand-brain', period)}
+            disabledReason={reason}
           />
-          <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-4 xl:grid-cols-2">
+
+          <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-4 2xl:grid-cols-2">
+            <InteractionBreakdown
+              data={breakdown}
+              networkLabel={net}
+              reactions={reactionsByType(post)}
+            />
             <div id="historial" className="scroll-mt-24">
               <ChartCard
                 icon={ChartColumn}
                 tone="info"
-                title="Historial de métricas"
-                description="Interacciones por medición."
+                title="Evolución del rendimiento"
+                description={`${post.metrics.length} ${post.metrics.length === 1 ? 'medición' : 'mediciones'} de Metricool. Elige la métrica.`}
                 table={{
-                  caption: 'Historial de métricas de la publicación',
+                  caption: 'Historial de mediciones de la publicación',
                   columns: [
                     'Medición',
                     'Me gusta',
-                    'Comentarios',
+                    'Comentarios en la red',
                     'Compartidos',
-                    'Interacciones',
-                    'Alcance',
+                    'Guardados',
+                    reach.label,
+                    'Impresiones',
+                    'Engagement',
                   ],
                   rows: post.metrics.map((m) => [
                     fmtDateTime(m.capturedAt),
-                    fmtNum(m.likes),
-                    fmtNum(m.comments),
-                    fmtNum(m.shares),
-                    fmtNum(interactions(m)),
-                    fmtNum(m.reach),
+                    m.likes ?? '—',
+                    m.comments ?? '—',
+                    m.shares ?? '—',
+                    m.saves ?? '—',
+                    (post.platform === 'facebook' && m.reach == null
+                      ? m.impressionsUnique
+                      : m.reach) ?? '—',
+                    m.impressions ?? '—',
+                    m.engagement != null
+                      ? `${m.engagement.toLocaleString('es-CO', { maximumFractionDigits: 2 })} %`
+                      : '—',
                   ]),
                 }}
               >
-                {history.length < 2 ? (
-                  <EmptyStateV2
-                    compact
-                    title={
-                      history.length
-                        ? 'Una sola medición'
-                        : 'Sin mediciones todavía'
-                    }
-                  >
-                    La evolución aparece a partir de dos mediciones.
-                  </EmptyStateV2>
-                ) : (
-                  <AreaTrend
-                    height={170}
-                    unit="interacciones"
-                    points={history.map((m) => ({
-                      label: capLabel
-                        .format(Date.parse(m.capturedAt))
-                        .replace('.', ''),
-                      value: interactions(m),
-                      detail: `alcance ${fmtNum(m.reach)}`,
-                    }))}
-                  />
-                )}
+                <PerformanceTimeline series={series} />
               </ChartCard>
             </div>
-
-            <div className="space-y-4">
-              {b.total > 0 && (
-                <ChartCard
-                  icon={Radio}
-                  tone="ai"
-                  title="Sentimiento de los comentarios"
-                  table={{
-                    caption: 'Sentimiento de los comentarios',
-                    columns: ['Sentimiento', 'Comentarios', '%'],
-                    rows: [
-                      ['Positivo', b.positive, pctOf(b.positive, b.total)],
-                      [
-                        'Neutral o mixto',
-                        b.neutral + b.mixed,
-                        pctOf(b.neutral + b.mixed, b.total),
-                      ],
-                      ['Negativo', b.negative, pctOf(b.negative, b.total)],
-                    ],
-                  }}
-                >
-                  <Donut
-                    stacked
-                    centerValue={fmtNum(b.total)}
-                    centerLabel="comentarios"
-                    segments={[
-                      {
-                        key: 'pos',
-                        label: 'Positivo',
-                        value: b.positive,
-                        color: 'chart-pos',
-                      },
-                      {
-                        key: 'neu',
-                        label: 'Neutral o mixto',
-                        value: b.neutral + b.mixed,
-                        color: 'chart-neu',
-                      },
-                      {
-                        key: 'neg',
-                        label: 'Negativo',
-                        value: b.negative,
-                        color: 'chart-neg',
-                      },
-                    ]}
-                  />
-                </ChartCard>
-              )}
-              {topics.length > 0 && (
-                <ChartCard
-                  icon={Lightbulb}
-                  tone="high"
-                  title="Temas detectados"
-                  table={{
-                    caption: 'Temas de los comentarios',
-                    columns: ['Tema', 'Comentarios'],
-                    rows: topics,
-                  }}
-                >
-                  <BarList
-                    rows={topics.map(([label, value]) => ({ label, value }))}
-                    total={b.total}
-                    unit="comentarios"
-                  />
-                </ChartCard>
-              )}
-            </div>
           </div>
+
+          {/* D. Experiencia conversacional */}
+          <AskFoxyContextual
+            postId={post.id}
+            period={period}
+            platform={post.platform}
+            suggestions={SUGGESTED_QUESTIONS}
+            scopeLabel={`${active.organization.name} · ${net} · ${formatOf(post)} · ${periodLabel(period).toLowerCase()}`}
+            postHrefPattern={withPeriod(
+              `/publicaciones/{id}${fq ? `?${fq}` : ''}`,
+              period,
+            )}
+          />
+
+          {/* Conversación: reputación solo con comentarios autorizados */}
           <Panel
             aria-labelledby="comentarios-titulo"
             id="comentarios"
             className="scroll-mt-24"
           >
-            <PanelHeader
-              icon={MessagesSquare}
-              title={`Comentarios asociados (${comments.length})`}
-              titleId="comentarios-titulo"
-              description={`${b.positive} positivos · ${b.negative} negativos`}
-            />
-            {comments.length === 0 ? (
-              <EmptyStateV2
-                compact
-                title="Sin comentarios clasificados para esta publicación"
-              />
+            {commentsDisabledFor(post) ? (
+              <>
+                <PanelHeader
+                  icon={ShieldAlert}
+                  tone="neutral"
+                  title="Comentarios"
+                  titleId="comentarios-titulo"
+                  description="Importación de comentarios desactivada por la política de privacidad del piloto."
+                />
+                <p className="text-muted-foreground text-sm">
+                  {net} reporta{' '}
+                  <b className="text-foreground">
+                    {post.metrics[0]?.comments != null
+                      ? post.metrics[0].comments.toLocaleString('es-CO')
+                      : 'un número no disponible de'}
+                  </b>{' '}
+                  comentarios en la red. Hey Foxy no los importa ni los
+                  clasifica: que no se muestren aquí no significa que no haya
+                  conversación.
+                </p>
+              </>
             ) : (
-              <div className="divide-border divide-y">
-                {comments.map((i) => (
-                  <ConversationRow key={i.id} i={i} />
-                ))}
-              </div>
+              <>
+                <PanelHeader
+                  icon={MessagesSquare}
+                  title={`Comentarios clasificados por Hey Foxy (${comments.length})`}
+                  titleId="comentarios-titulo"
+                />
+                {comments.length === 0 ? (
+                  <EmptyStateV2
+                    compact
+                    title="Sin comentarios clasificados para esta publicación"
+                  />
+                ) : (
+                  <div className="divide-border divide-y">
+                    {comments.map((i) => (
+                      <ConversationRow key={i.id} i={i} />
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </Panel>
         </div>

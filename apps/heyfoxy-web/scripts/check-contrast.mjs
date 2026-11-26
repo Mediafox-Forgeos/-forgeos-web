@@ -75,6 +75,16 @@ const PAIRS = [
   ['chart-pos', 'card', UI],
   ['chart-neu', 'card', UI],
   ['chart-neg', 'card', UI],
+  // Métricas e interacciones (WO-HF-V2-INTELLIGENCE-001): iconos, barras y anillo.
+  ['metric-reach', 'card', UI],
+  ['metric-engagement', 'card', UI],
+  ['metric-impressions', 'card', UI],
+  ['metric-interactions', 'card', UI],
+  ['ix-likes', 'card', UI],
+  ['ix-comments', 'card', UI],
+  ['ix-shares', 'card', UI],
+  ['ix-saves', 'card', UI],
+  ['ix-reactions', 'card', UI],
 ];
 
 let fails = 0;

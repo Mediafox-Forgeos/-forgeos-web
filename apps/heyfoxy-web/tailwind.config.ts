@@ -49,6 +49,20 @@ const config: Config = {
           neg: a('chart-neg'),
         },
         mod: { home: c('mod-home'), explorer: c('mod-explorer') },
+        // Métricas de rendimiento e interacciones (addendum §4–§5)
+        metric: {
+          reach: c('metric-reach'),
+          engagement: c('metric-engagement'),
+          impressions: c('metric-impressions'),
+          interactions: c('metric-interactions'),
+        },
+        ix: {
+          likes: c('ix-likes'),
+          comments: c('ix-comments'),
+          shares: c('ix-shares'),
+          saves: c('ix-saves'),
+          reactions: c('ix-reactions'),
+        },
         foxy: {
           fur: c('foxy-fur'),
           'fur-dark': c('foxy-fur-dark'),

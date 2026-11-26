@@ -60,7 +60,8 @@ test('riel de tablet: tooltip visible y sin scroll horizontal', async ({
 test('la cabecera conserva el periodo', async ({ page }) => {
   await page.goto('/publicaciones?periodo=30d');
   await expect(
-    page.locator('header a[href^="/?periodo=30d#foxy"]'),
+    // «Foxy IA» abre Ask Foxy (WO-HF-V2-INTELLIGENCE-001), con el periodo.
+    page.locator('header a[href="/foxy?periodo=30d"]'),
   ).toHaveCount(1);
   await expect(
     page.locator('header a[href="/alertas?periodo=30d"]'),

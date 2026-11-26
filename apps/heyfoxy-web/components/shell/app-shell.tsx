@@ -345,7 +345,7 @@ export function AppShell({
                   </span>
                 </PeriodLink>
                 <PeriodLink
-                  href="/#foxy"
+                  href="/foxy"
                   className="bg-primary-pale text-primary-text hover:bg-primary-pale/70 flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-sm font-extrabold"
                 >
                   <Sparkles aria-hidden className="h-5 w-5" strokeWidth={1.9} />

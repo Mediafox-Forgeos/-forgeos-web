@@ -61,7 +61,12 @@ BR="$(body /reportes "$BANK")"
 check "reportes del banco sin datos de la clínica" '[[ "$BR" != *"Clínica Aurora"* ]]'
 check "owner ve el detalle de una publicación de la clínica" '[[ "$(get /publicaciones/demo-clinica-aurora-post-instagram "$OWNER")" == "200" ]]'
 check "banco NO abre la publicación de la clínica por URL directa" '[[ "$(get /publicaciones/demo-clinica-aurora-post-instagram "$BANK")" == "404" ]]'
-check "detalle muestra comentarios asociados" '[[ "$(body /publicaciones/demo-clinica-aurora-post-instagram "$OWNER")" == *"Comentarios asociados"* ]]'
+check "detalle muestra comentarios clasificados" '[[ "$(body /publicaciones/demo-clinica-aurora-post-instagram "$OWNER")" == *"Comentarios clasificados por Hey Foxy"* ]]'
+# Foxy Intelligence (WO-HF-V2-INTELLIGENCE-001)
+check "detalle con Foxy Content Intelligence" '[[ "$(body /publicaciones/demo-clinica-aurora-post-instagram "$OWNER")" == *"¿Qué podemos aprender de esta publicación?"* ]]'
+check "Ask Foxy responde 200" '[[ "$(get /foxy "$OWNER")" == "200" ]]'
+check "Foxy Brand Brain responde 200" '[[ "$(get /brand-brain "$OWNER")" == "200" ]]'
+check "Brand Brain del banco no muestra el contexto de la clínica" '[[ "$(body /brand-brain "$BANK")" != *"Clínica Aurora (ficticia)"* ]]'
 check "reportes muestran resúmenes ejecutivos" '[[ "$(body /reportes "$OWNER")" == *"Resúmenes ejecutivos"* ]]'
 
 # Interfaz V2 (por defecto) y tema clásico como alternativa (D-1)

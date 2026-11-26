@@ -1,3 +1,12 @@
+import { BrandContextCard, FutureActions } from '@/components/ds/intel';
+import { FindingCard } from '@/components/ds/intel-findings';
+import {
+  InteractionBreakdown,
+  MetricAvailabilityState,
+  PerformanceMetricCard,
+} from '@/components/ds/performance';
+import { interactionBreakdown, readMetric } from '@/lib/intel/metrics';
+import { FINDING_KIND_LABEL } from '@/lib/intel/schema';
 import {
   BellRing,
   Heart,
@@ -365,6 +374,93 @@ export default async function DesignSystemCatalog() {
             {items.slice(0, 2).map((i) => (
               <ConversationRow key={i.id} i={i} />
             ))}
+          </div>
+        </Panel>
+      )}
+      {post && (
+        <Panel className="mt-4" aria-labelledby="ds-intel">
+          <PanelHeader
+            icon={Sparkles}
+            title="Inteligencia de contenido (WO-HF-V2-INTELLIGENCE-001)"
+            titleId="ds-intel"
+            description="PerformanceMetricCard · MetricAvailabilityState · InteractionBreakdown · PerformanceTimeline · FindingCard (Strategic/Creative) · EvidenceReference · BrandContextCard · AccountIdentity · MediaViewer · RecommendationAction. Muestra técnica con datos sintéticos."
+          />
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <PerformanceMetricCard
+              reading={readMetric(post, 'reach')}
+              tone="reach"
+            />
+            <PerformanceMetricCard
+              reading={readMetric(post, 'engagement')}
+              tone="engagement"
+            />
+            <PerformanceMetricCard
+              reading={readMetric(post, 'impressions')}
+              tone="impressions"
+            />
+            <PerformanceMetricCard
+              reading={readMetric(post, 'interactions')}
+              tone="interactions"
+            />
+          </div>
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {(
+              [
+                'value',
+                'zero',
+                'unavailable',
+                'not_applicable',
+                'pending',
+                'privacy',
+              ] as const
+            ).map((st) => (
+              <MetricAvailabilityState key={st} state={st} />
+            ))}
+          </div>
+          <div className="mt-4 grid gap-4 xl:grid-cols-2">
+            <InteractionBreakdown
+              data={interactionBreakdown(post)}
+              networkLabel="la red"
+            />
+            <div className="space-y-2">
+              {(
+                [
+                  'fact',
+                  'interpretation',
+                  'hypothesis',
+                  'recommendation',
+                ] as const
+              ).map((k) => (
+                <FindingCard
+                  key={k}
+                  compact
+                  f={{
+                    kind: k,
+                    title: `Ejemplo de ${FINDING_KIND_LABEL[k].toLowerCase()}`,
+                    detail: 'Texto de muestra del componente (sintético).',
+                    evidence: [
+                      {
+                        type: 'metric',
+                        label: 'Engagement',
+                        postId: null,
+                        value: '5 %',
+                      },
+                    ],
+                    confidence: k === 'fact' ? null : 'media',
+                    limitation:
+                      k === 'hypothesis' ? 'Requiere validación.' : null,
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+          <div className="mt-4 grid gap-4 xl:grid-cols-2">
+            <BrandContextCard
+              stored={null}
+              href="/brand-brain"
+              availability="ready"
+            />
+            <FutureActions />
           </div>
         </Panel>
       )}

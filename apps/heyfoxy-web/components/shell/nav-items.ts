@@ -10,6 +10,8 @@ import {
   Radar,
   Settings,
   ShieldAlert,
+  Sparkles,
+  Brain,
   Tags,
   type LucideIcon,
 } from 'lucide-react';
@@ -29,6 +31,13 @@ export interface NavGroup {
 /** Navegación V2 (decisión 2, opción A): «Inicio» integra el antiguo «Resumen». */
 export const NAV: NavGroup[] = [
   { label: null, items: [{ href: '/', label: 'Inicio', icon: House }] },
+  {
+    label: 'Foxy',
+    items: [
+      { href: '/foxy', label: 'Ask Foxy', icon: Sparkles },
+      { href: '/brand-brain', label: 'Foxy Brand Brain', icon: Brain },
+    ],
+  },
   {
     label: 'Inteligencia reputacional',
     items: [

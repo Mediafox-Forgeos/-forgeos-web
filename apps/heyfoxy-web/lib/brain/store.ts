@@ -29,8 +29,17 @@ export function brainAvailability(): BrainAvailability {
 
 // --- Demo ------------------------------------------------------------------------------------
 const DEMO_ORG = '00000000-0000-4000-a000-0000000000a1';
-const demoContexts = new Map<string, StoredBrandContext>();
-const demoMemory = new Map<string, MemoryEntry[]>();
+// En el proceso de Next, las acciones y las páginas pueden cargar instancias distintas de este
+// módulo: el estado de la demo se comparte en globalThis (solo modo demo, nunca datos reales).
+const g = globalThis as unknown as {
+  __hfBrainDemo?: {
+    contexts: Map<string, StoredBrandContext>;
+    memory: Map<string, MemoryEntry[]>;
+  };
+};
+g.__hfBrainDemo ??= { contexts: new Map(), memory: new Map() };
+const demoContexts = g.__hfBrainDemo.contexts;
+const demoMemory = g.__hfBrainDemo.memory;
 
 function demoSeed(orgId: string): StoredBrandContext | null {
   if (orgId !== DEMO_ORG) return null;

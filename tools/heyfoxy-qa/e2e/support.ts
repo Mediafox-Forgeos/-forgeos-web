@@ -49,6 +49,14 @@ export const ROUTES: QaRoute[] = [
   { name: 'configuracion', path: '/configuracion', auth: true },
   { name: 'catalogo-ds', path: '/ds', auth: true, v2: true, v2Only: true },
   { name: 'buscar', path: '/buscar?q=citas', auth: true, v2Only: true },
+  { name: 'ask-foxy', path: '/foxy', auth: true, v2: true, v2Only: true },
+  {
+    name: 'brand-brain',
+    path: '/brand-brain',
+    auth: true,
+    v2: true,
+    v2Only: true,
+  },
 ];
 
 export type QaTheme = 'legacy' | 'v2-light' | 'v2-dark';
