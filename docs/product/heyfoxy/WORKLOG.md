@@ -474,3 +474,11 @@ Ejecutado, sin contratar, migrar ni desplegar:
 - Incidencia: instalar `@anthropic-ai/sdk` modificaba la entrada de `next` de MediaFOX OS y MOVOS en el lockfile; **revertido** sin cambios versionados (HF-AI-10).
 - **Pruebas**: unitarias 191/191, persistencia 4/4, 0007 23 aserciones, smoke 63/63, QA 190 superadas sin deuda nueva. Capturas antes/después fuera de Git. Detalle en [21](./21_WO_HF_V2_INTELLIGENCE_001.md).
 - **Sin cambios** en remoto, Production, Vercel, Metricool, comentarios, WhatsApp, Storage, MediaFOX OS ni MOVOS.
+
+## 2026-11-26 — GO Intelligence Engine & Brand Brain QA
+
+- **Migración 0007 aplicada en `heyfoxy-qa`** (versión `20261126160323`, md5 `3978752b…` idéntico al archivo de `b499fe1`). Antes: contrato 0006 43/43, nombres libres, huella de datos. Después: **23/23 aserciones remotas** (transacción revertida; aislamiento, roles, versionado, validación humana, RLS), sin residuos; usuarios, organizaciones, membresías, las 14 publicaciones y 16 mediciones de MedPlus con los mismos hashes. La primera confirmación del MCP caducó sin aplicar nada.
+- **Variable** `HF_MIGRATION_0007_APPLIED=true` creada solo en Preview (autorizada).
+- **Preview** `dpl_FJDsPmU3HK2XKCQJ7Qbq6q9Lytex` (`heyfoxy-g0joqypdg-mediafox.vercel.app`), SHA `b499fe1f315d455384508df317e4ecaa8e8e0015`, sin alias, protección `all`, 0 bypass; alias V1 y Previews anteriores intactos; Production en `dpl_9YVh…`.
+- **Proveedor de IA**: recomendación por tarea verificada con la documentación oficial ([22](./22_AI_PROVIDER_RECOMMENDATION.md)); sin llamadas ni contratación. **Guía de Brand Brain para MedPlus** ([23](./23_BRAND_BRAIN_MEDPLUS_GUIDE.md)).
+- Validación funcional y visual con Álvaro: pendiente de su inicio de sesión.
