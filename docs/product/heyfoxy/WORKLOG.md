@@ -463,3 +463,14 @@ Ejecutado, sin contratar, migrar ni desplegar:
 - **Validación previa**: selector cambia a MedPlus solo con el desplegable (HF-UX-08 resuelto en Preview); sin aviso demo; verificaciones del servidor en verde; historial corregido; imagen caducada con «Vista previa caducada · Ábrela en la red original»; Facebook sin 0 inventados.
 - **Una sincronización manual** (07:02 UTC): correcta, 3 llamadas (10/500 hoy), 0 errores. 14 publicaciones (0 nuevas, 2 actualizadas, 0 duplicados, mismos ids), 16 mediciones (+2), 14 medios por referencia (URLs sin cambios: Metricool devolvió las mismas), 0 copias a Storage, 0 comentarios (no solicitados por política), sin datos reales fuera de MedPlus.
 - **Hallazgos**: solo se refrescan las publicaciones de las últimas 48 h (HF-MC-03); UX HF-UX-09 a HF-UX-14. Capturas en `/Volumes/MediaFOX_DEV/QA/HeyFoxy/V2/2026-11-26/` (fuera de Git).
+
+## 2026-11-26 — WO-HF-V2-INTELLIGENCE-001 (+ addendum)
+
+- **Visión de producto** documentada ([00](./00_PRODUCT_VISION.md)): copiloto de inteligencia estratégica; ciclo conocer → escuchar → interpretar → recomendar → accionar → aprender.
+- **Estabilización Metricool** (local): refresco de 30 días por sincronización (HF-MC-03), identidad de marca, renovación y caducidad de medios, cobertura con fuentes/redes/tipos/privacidad separados, totales por red, periodo conservado, interacciones coherentes (HF-UX-09 a 14).
+- **Foxy Intelligence Engine V1** (motor local por reglas, sin IA generativa ni red): contenido, rendimiento, estrategia, creatividad, reputación; hallazgos por naturaleza con evidencia; Ask Foxy contextual y de marca; guardas de proveedor, prompt injection y evidencia.
+- **Foxy Brand Brain**: esquema, página `/brand-brain`, memoria estratégica con validación humana; **0007 preparada, no aplicada**.
+- **Design System V2 v0.3**: tokens de métricas e interacciones (contraste verificado) y 13 componentes; detalle de publicación rediseñado; `/foxy`, `/brand-brain` y grupo «Foxy» en la navegación.
+- Incidencia: instalar `@anthropic-ai/sdk` modificaba la entrada de `next` de MediaFOX OS y MOVOS en el lockfile; **revertido** sin cambios versionados (HF-AI-10).
+- **Pruebas**: unitarias 191/191, persistencia 4/4, 0007 23 aserciones, smoke 63/63, QA 190 superadas sin deuda nueva. Capturas antes/después fuera de Git. Detalle en [21](./21_WO_HF_V2_INTELLIGENCE_001.md).
+- **Sin cambios** en remoto, Production, Vercel, Metricool, comentarios, WhatsApp, Storage, MediaFOX OS ni MOVOS.
