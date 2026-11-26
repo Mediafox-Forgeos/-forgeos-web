@@ -16,6 +16,14 @@ begin
   end if;
 end
 $s$;
+drop table if exists public.hf_runtime_flags;
+drop trigger if exists data_sources_real_data_org on public.data_sources;
+drop trigger if exists social_posts_real_data_org on public.social_posts;
+drop trigger if exists social_comments_real_data_org on public.social_comments;
+drop trigger if exists social_mentions_real_data_org on public.social_mentions;
+drop trigger if exists post_metric_snapshots_real_data_org on public.post_metric_snapshots;
+drop function if exists public.hf_guard_real_data_org();
+drop index if exists public.data_sources_external_account_uniq;
 drop function if exists public.hf_purge_expired_media(timestamptz);
 drop table if exists public.post_media;
 drop function if exists public.hf_guard_same_org_post();

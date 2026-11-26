@@ -1,7 +1,9 @@
 -- Hey Foxy — 0006 Metricool: medios de publicaciones, métricas por red y estado de sincronización
 --
--- PREPARADA, NO APLICADA. Vive en supabase/migrations-pending/ hasta su GO (archivo + md5).
--- Probada localmente con scripts/test-migration-0006.sh (Postgres efímero + stub de Storage).
+-- GO 1 (2026-11-24): aplicar SOLO en heyfoxy-qa (admbpgqtgmaaofcgajzh). Probada localmente con
+-- scripts/test-migration-0006.sh (Postgres efímero + stub de Storage) y tests/sql/40 (46 aserciones).
+-- Incluye las guardas del GO 1: datos reales nunca en organizaciones demo, una marca por
+-- organización y el interruptor de emergencia global en la base (hf_runtime_flags).
 -- Aditiva: no cambia ni borra columnas, políticas ni grants existentes. Sigue el modelo de 0004:
 -- primero se revoca todo en los objetos nuevos y después se concede exactamente lo necesario.
 --
@@ -94,13 +96,70 @@ alter table public.data_sources
   add column if not exists last_sync_started_at timestamptz,
   add column if not exists last_sync_finished_at timestamptz,
   add column if not exists last_sync_status text
-    check (last_sync_status in ('succeeded', 'partial', 'failed', 'skipped_paused', 'skipped_kill_switch', 'skipped_budget')),
+    check (last_sync_status in ('succeeded', 'partial', 'failed', 'stopped', 'skipped_paused', 'skipped_kill_switch',
+                                'skipped_budget', 'skipped_not_connected', 'skipped_not_authorized')),
   add column if not exists last_sync_error text,
   add column if not exists consecutive_failures integer not null default 0 check (consecutive_failures >= 0),
   add column if not exists sync_cursor jsonb not null default '{}'::jsonb,
   add column if not exists api_calls_date date,
   add column if not exists api_calls_today integer not null default 0 check (api_calls_today >= 0),
   add column if not exists max_api_calls_per_day integer not null default 500 check (max_api_calls_per_day between 0 and 100000);
+
+-- Una marca de la fuente (blogId) solo puede estar vinculada a UNA organización.
+create unique index if not exists data_sources_external_account_uniq
+  on public.data_sources (provider, external_account_ref) where external_account_ref is not null;
+
+-- 5b. Datos reales nunca en organizaciones demo (Clínica Aurora, Banco Horizonte…) -------------
+-- Una fuente real no puede quedar conectada en una organización demo, y ningún contenido no
+-- sintético puede escribirse en ella. Complementa hf_guard_synthetic (0002).
+create or replace function public.hf_guard_real_data_org()
+returns trigger language plpgsql security definer set search_path = '' as $$
+declare
+  v_demo boolean;
+begin
+  select o.is_demo into v_demo from public.organizations o where o.id = new.organization_id;
+  if not coalesce(v_demo, false) then
+    return new;
+  end if;
+  if tg_table_name = 'data_sources' then
+    if new.provider <> 'demo' and (new.status = 'connected' or new.external_account_ref is not null) then
+      raise exception 'real source cannot be connected in a demo organization' using errcode = '23514';
+    end if;
+  elsif not new.is_synthetic then
+    raise exception 'real (non-synthetic) content cannot be written in a demo organization' using errcode = '23514';
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists data_sources_real_data_org on public.data_sources;
+create trigger data_sources_real_data_org before insert or update on public.data_sources
+  for each row execute function public.hf_guard_real_data_org();
+drop trigger if exists social_posts_real_data_org on public.social_posts;
+create trigger social_posts_real_data_org before insert or update on public.social_posts
+  for each row execute function public.hf_guard_real_data_org();
+drop trigger if exists social_comments_real_data_org on public.social_comments;
+create trigger social_comments_real_data_org before insert or update on public.social_comments
+  for each row execute function public.hf_guard_real_data_org();
+drop trigger if exists social_mentions_real_data_org on public.social_mentions;
+create trigger social_mentions_real_data_org before insert or update on public.social_mentions
+  for each row execute function public.hf_guard_real_data_org();
+drop trigger if exists post_metric_snapshots_real_data_org on public.post_metric_snapshots;
+create trigger post_metric_snapshots_real_data_org before insert or update on public.post_metric_snapshots
+  for each row execute function public.hf_guard_real_data_org();
+
+-- 5c. Interruptor de emergencia global en la base (efecto inmediato, sin redesplegar) ---------
+-- El servidor lo consulta antes de cada llamada a la fuente. Solo service_role lo lee/escribe;
+-- un operador lo activa con: update public.hf_runtime_flags set enabled = true,
+--   reason = '…', updated_at = now() where flag = 'sync_kill_switch';
+create table if not exists public.hf_runtime_flags (
+  flag text primary key check (flag in ('sync_kill_switch')),
+  enabled boolean not null default false,
+  reason text,
+  updated_at timestamptz not null default now()
+);
+alter table public.hf_runtime_flags enable row level security;
+insert into public.hf_runtime_flags (flag, enabled) values ('sync_kill_switch', false)
+  on conflict (flag) do nothing;
 
 -- 6. Retención de medios ----------------------------------------------------------------------
 create or replace function public.hf_purge_expired_media(p_now timestamptz default now())
@@ -119,6 +178,9 @@ revoke all on table public.post_media from public, anon, authenticated, service_
 grant select, insert, update, delete on table public.post_media to service_role;
 grant select on table public.post_media to authenticated;
 revoke all on function public.hf_guard_same_org_post() from public, anon, authenticated, service_role;
+revoke all on function public.hf_guard_real_data_org() from public, anon, authenticated, service_role;
+revoke all on table public.hf_runtime_flags from public, anon, authenticated, service_role;
+grant select, update on table public.hf_runtime_flags to service_role;
 revoke all on function public.hf_purge_expired_media(timestamptz) from public, anon, authenticated, service_role;
 grant execute on function public.hf_purge_expired_media(timestamptz) to service_role;
 -- data_sources: las columnas nuevas se leen con el SELECT ya concedido; authenticated sigue sin

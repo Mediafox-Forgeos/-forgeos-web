@@ -13,10 +13,12 @@ export type SyncRunStatus =
   | 'succeeded'
   | 'partial'
   | 'failed'
+  | 'stopped'
   | 'skipped_paused'
   | 'skipped_kill_switch'
   | 'skipped_budget'
-  | 'skipped_not_connected';
+  | 'skipped_not_connected'
+  | 'skipped_not_authorized';
 
 export interface SyncBrand {
   blogId: string;
@@ -138,6 +140,10 @@ export interface SyncStore {
     platform: Platform,
     authorExternalId: string | null,
   ): string | null;
+  /** Interruptor de emergencia global guardado en la base (efecto inmediato, sin redesplegar). */
+  globalKillSwitch?(): Promise<boolean>;
+  /** true si la organización es de demostración (nunca admite datos reales). */
+  isDemoOrg?(orgId: string): Promise<boolean>;
 }
 
 export function initialState(

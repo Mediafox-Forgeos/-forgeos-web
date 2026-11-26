@@ -4,7 +4,13 @@ import { ChartCard } from '@/components/ds/charts';
 import { AreaTrend, Donut } from '@/components/ds/charts-client';
 import { FoxyMark } from '@/components/ds/foxy';
 import { FoxyInsightPanel } from '@/components/ds/layout';
-import { PostMedia, PostMetricsRow, mediaAlt } from '@/components/ds/post';
+import {
+  NetworkMetrics,
+  PostMedia,
+  PostMetricsRow,
+  mediaAlt,
+} from '@/components/ds/post';
+import { VideoThumbnail } from '@/components/ds/post-client';
 import { Delta } from '@/components/ds/primitives';
 import { ComingSoonState, NotAvailableState } from '@/components/ds/states';
 import { postStats } from '@/lib/insights';
@@ -201,5 +207,43 @@ describe('Medios de Metricool (fase D)', () => {
     expect(h).toContain('src="https://cdn.example/t.jpg"');
     expect(h).not.toContain('<video');
     expect(h).toContain('0:42');
+  });
+});
+
+describe('Métricas por red y video sin miniatura (GO 1)', () => {
+  it('sin métricas extendidas (datos sintéticos) no renderiza nada', () => {
+    expect(
+      html(<NetworkMetrics metrics={base.metrics[0]} platform="instagram" />),
+    ).toBe('');
+  });
+  it('Facebook: impresiones únicas con su nombre real, nunca como alcance', () => {
+    const out = html(
+      <NetworkMetrics
+        platform="facebook"
+        metrics={{
+          ...base.metrics[0]!,
+          reach: null,
+          impressionsUnique: 820,
+          engagement: 3.1,
+          reactions: { like: 8, love: 2, sad: 0 },
+        }}
+      />,
+    );
+    expect(out).toContain('Impresiones únicas');
+    expect(out).toContain('Facebook no entrega «alcance»');
+    expect(out).not.toContain('>Alcance<');
+    expect(out).toContain('3,1 %');
+    expect(out).toContain('Me encanta');
+    expect(out).not.toContain('Me entristece');
+  });
+  it('HF-UX-07: video sin miniatura muestra el texto sin el botón central encima', () => {
+    const out = html(<VideoThumbnail src={null} alt="Video 1" />);
+    expect(out).toContain('Video sin miniatura');
+    expect(out).toContain('left-2 top-2');
+    expect(out).not.toContain('inset-0 flex items-center justify-center');
+    const ok = html(
+      <VideoThumbnail src="https://x.invalid/t.jpg" alt="Video 1" />,
+    );
+    expect(ok).toContain('inset-0 flex items-center justify-center');
   });
 });

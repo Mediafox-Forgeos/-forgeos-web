@@ -25,6 +25,7 @@ import {
 } from '@/components/ds/layout';
 import {
   AuthorChip,
+  NetworkMetrics,
   OriginalLink,
   PostMedia,
   PostMetricsRow,
@@ -228,6 +229,8 @@ export default async function PostDetailPage({
               }
             />
           </div>
+
+          <NetworkMetrics metrics={s.latest} platform={post.platform} />
 
           <FoxyInsightPanel
             wide

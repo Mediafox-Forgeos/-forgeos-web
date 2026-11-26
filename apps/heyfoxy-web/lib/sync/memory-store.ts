@@ -172,4 +172,16 @@ export class MemorySyncStore implements SyncStore {
   forget(orgId: string) {
     this.orgs.delete(orgId);
   }
+
+  /** Interruptor global simulado (en Supabase vive en hf_runtime_flags). */
+  killSwitch = false;
+  readonly demoOrgs = new Set<string>();
+
+  async globalKillSwitch() {
+    return this.killSwitch;
+  }
+
+  async isDemoOrg(orgId: string) {
+    return this.demoOrgs.has(orgId);
+  }
 }

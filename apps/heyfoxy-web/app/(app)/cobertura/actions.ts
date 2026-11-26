@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { requireContext } from '@/lib/auth/session';
 import {
+  blockedCode,
   connectBrand,
   disconnect,
   resetSimulation,
@@ -33,8 +34,8 @@ export async function syncAction() {
   try {
     const r = await syncNow(org);
     msg = `sync-${r.status}`;
-  } catch {
-    msg = 'sync-error';
+  } catch (e) {
+    msg = blockedCode(e) ?? 'sync-error';
   }
   done(msg);
 }
@@ -60,8 +61,8 @@ export async function connectAction(formData: FormData) {
   if (!/^\d+$/.test(blogId)) done('marca-invalida');
   try {
     await connectBrand(org, blogId);
-  } catch {
-    done('conexion-error');
+  } catch (e) {
+    done(blockedCode(e) ?? 'conexion-error');
   }
   done('conectada');
 }

@@ -12,6 +12,7 @@ import {
   stateFromRow,
   stateToColumns,
 } from './supabase-mapping';
+import { serviceKeyKind, serviceKeyUsable } from './guards';
 import {
   initialState,
   type CoverageCell,
@@ -31,8 +32,10 @@ export function metricoolPersistenceReady(): boolean {
     process.env.HF_MIGRATION_0006_APPLIED === 'true' &&
     Boolean(
       process.env.NEXT_PUBLIC_SUPABASE_URL &&
-      process.env.HF_SUPABASE_SERVICE_ROLE_KEY &&
-      process.env.HF_AUTHOR_HASH_SALT,
+      serviceKeyUsable(
+        serviceKeyKind(process.env.HF_SUPABASE_SERVICE_ROLE_KEY),
+      ) &&
+      (process.env.HF_AUTHOR_HASH_SALT ?? '').length >= 32,
     )
   );
 }
@@ -361,6 +364,53 @@ export class SupabaseSyncStore implements SyncStore {
 
   async posts() {
     return [];
+  }
+
+  /**
+   * Interruptor global en `hf_runtime_flags` (0006). Solo una clave de servicio puede leerlo:
+   * si la lectura falla, se trata como ACTIVADO (falla cerrado) y el error se propaga al panel.
+   */
+  async globalKillSwitch(): Promise<boolean> {
+    const { data, error } = await this.db
+      .from('hf_runtime_flags')
+      .select('enabled')
+      .eq('flag', 'sync_kill_switch')
+      .maybeSingle();
+    if (error || !data) return true;
+    return Boolean((data as Row).enabled);
+  }
+
+  /** Verificación de la clave de servicio sin exponerla: lee el interruptor global. */
+  async verifyServiceAccess(): Promise<{ ok: boolean; detail: string }> {
+    const { data, error } = await this.db
+      .from('hf_runtime_flags')
+      .select('flag')
+      .eq('flag', 'sync_kill_switch')
+      .maybeSingle();
+    if (error)
+      return {
+        ok: false,
+        detail: `La clave del servidor no tiene acceso de servicio (${error.code ?? 'error'})`,
+      };
+    if (!data)
+      return {
+        ok: false,
+        detail: 'Falta el interruptor global (¿0006 aplicada?)',
+      };
+    return {
+      ok: true,
+      detail: 'Clave de servicio verificada contra heyfoxy-qa',
+    };
+  }
+
+  async isDemoOrg(orgId: string): Promise<boolean> {
+    const { data, error } = await this.db
+      .from('organizations')
+      .select('is_demo')
+      .eq('id', orgId)
+      .maybeSingle();
+    if (error || !data) return true; // falla cerrado
+    return Boolean((data as Row).is_demo);
   }
 }
 

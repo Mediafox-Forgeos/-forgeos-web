@@ -128,6 +128,20 @@ export interface PostMetrics {
   shares: number | null;
   views: number | null;
   reach: number | null;
+  /*
+   * Métricas por red con su nombre real (migración 0006, Metricool). Opcionales: ausentes en
+   * los datos sintéticos y en redes que no las entregan. Nunca se equiparan alcance e
+   * impresiones únicas (Facebook).
+   */
+  impressions?: number | null;
+  impressionsUnique?: number | null;
+  interactions?: number | null;
+  saves?: number | null;
+  videoViews?: number | null;
+  /** Tasa de engagement en porcentaje, tal como la calcula la fuente (Metricool). */
+  engagement?: number | null;
+  /** Reacciones por tipo (Facebook): like, love, haha… */
+  reactions?: Record<string, number> | null;
 }
 
 export interface Post {

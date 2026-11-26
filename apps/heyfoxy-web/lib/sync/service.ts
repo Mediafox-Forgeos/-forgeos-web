@@ -11,6 +11,11 @@ import {
   FIXTURE_USER,
   fixtureFetch,
 } from './fixtures';
+import {
+  parseAllowedBrands,
+  serviceKeyKind,
+  serviceKeyProblem,
+} from './guards';
 import { MemorySyncStore } from './memory-store';
 import { SupabaseSyncStore, metricoolPersistenceReady } from './supabase-store';
 import {
@@ -28,8 +33,11 @@ import {
  *  - Modo demo: SIMULACIÓN con el servidor Metricool sintético (lib/sync/fixtures.ts) y un
  *    almacén en memoria. Nada sale a la red. Etiquetado como simulación en la interfaz.
  *  - Modo Supabase: conexión real solo si están TODAS las condiciones (GO de 0006, conector
- *    habilitado, token cargado en el servidor). Si falta alguna, la interfaz lo explica y no
- *    se toca la red. El token se lee solo aquí y nunca se devuelve al navegador.
+ *    habilitado, token cargado en el servidor, marca autorizada para la organización y
+ *    organización NO demo). Si falta alguna, la interfaz lo explica y no se toca la red.
+ *    El token se lee solo aquí y nunca se devuelve al navegador.
+ *  - Marca autorizada: HF_METRICOOL_ALLOWED_BRANDS = "<orgId>:<blogId>". Otras marcas de la
+ *    cuenta ni se listan ni se conectan ni se sincronizan (motor y conector lo comprueban).
  */
 export type PanelMode = 'simulation' | 'live' | 'not_ready';
 
@@ -45,8 +53,11 @@ export interface MetricoolPanel {
   runs: SyncRun[];
   /** Últimas publicaciones importadas (vista previa del tratamiento de medios). */
   recentPosts: StoredPost[];
+  /** Verificaciones del servidor (modo real), sin valores secretos. */
+  checks: Array<{ label: string; ok: boolean; detail: string }>;
 }
 
+/** Interruptor por variable de entorno (requiere redesplegar). El de la base es inmediato. */
 export const killSwitchOn = () => process.env.HF_SYNC_KILL_SWITCH === 'on';
 export const scheduleEnabled = () =>
   process.env.HF_SYNC_SCHEDULE_ENABLED === 'true';
@@ -63,13 +74,41 @@ function liveCredentials() {
   };
 }
 
+function allowedBrands() {
+  return parseAllowedBrands(process.env.HF_METRICOOL_ALLOWED_BRANDS);
+}
+
+/** Marcas autorizadas para una organización (simulación sin variable: sin restricción). */
+export function allowedBlogIdsFor(orgId: string): string[] | undefined {
+  const { byOrg } = allowedBrands();
+  if (panelMode() === 'simulation' && byOrg.size === 0) return undefined;
+  return [...(byOrg.get(orgId.toLowerCase()) ?? [])];
+}
+
 /** Condiciones pendientes para la conexión real (vacío = lista). */
 export function livePending(): string[] {
   if (dataMode() === 'demo') return [];
   const p: string[] = [];
-  if (!metricoolPersistenceReady())
+  if (process.env.HF_MIGRATION_0006_APPLIED !== 'true')
     p.push(
-      'GO 1: aplicar la migración 0006 en heyfoxy-qa y configurar la clave de servicio y el salt en el servidor',
+      'Migración 0006 aplicada en heyfoxy-qa (HF_MIGRATION_0006_APPLIED=true)',
+    );
+  const keyProblem = serviceKeyProblem(
+    serviceKeyKind(process.env.HF_SUPABASE_SERVICE_ROLE_KEY),
+  );
+  if (keyProblem) p.push(keyProblem);
+  if ((process.env.HF_AUTHOR_HASH_SALT ?? '').length < 32)
+    p.push('HF_AUTHOR_HASH_SALT con al menos 32 caracteres aleatorios');
+  if (!metricoolPersistenceReady() && !p.length)
+    p.push('Persistencia de la sincronización no disponible');
+  const allowed = allowedBrands();
+  if (allowed.byOrg.size === 0)
+    p.push(
+      'HF_METRICOOL_ALLOWED_BRANDS con la organización y la marca autorizadas ("<orgId>:<blogId>")',
+    );
+  if (allowed.invalid > 0)
+    p.push(
+      `HF_METRICOOL_ALLOWED_BRANDS tiene ${allowed.invalid} entrada(s) mal formada(s)`,
     );
   if (process.env.HF_CONNECTOR_METRICOOL_ENABLED !== 'true')
     p.push('Habilitar el conector (HF_CONNECTOR_METRICOOL_ENABLED) con GO');
@@ -93,7 +132,11 @@ function store(): SyncStore | null {
   return null;
 }
 
-function connectorFor(blogId: string | null, budget?: CallBudget) {
+function connectorFor(
+  blogId: string | null,
+  budget?: CallBudget,
+  allowedBlogIds?: readonly string[],
+) {
   if (panelMode() === 'simulation') {
     return new MetricoolConnector({
       enabled: true,
@@ -104,6 +147,7 @@ function connectorFor(blogId: string | null, budget?: CallBudget) {
       minIntervalMs: 0,
       retryBaseMs: 10,
       budget,
+      allowedBlogIds,
     });
   }
   const c = liveCredentials();
@@ -112,44 +156,137 @@ function connectorFor(blogId: string | null, budget?: CallBudget) {
     ...c,
     blogId,
     budget,
+    allowedBlogIds,
   });
 }
 
+/**
+ * Motivo por el que esta organización no puede usar la conexión real (null = puede).
+ * Falla cerrado: organización demo o sin marca autorizada => bloqueada.
+ */
+async function orgBlock(orgId: string, s: SyncStore): Promise<string | null> {
+  if (panelMode() === 'simulation') return null;
+  if (!s.isDemoOrg || (await s.isDemoOrg(orgId)))
+    return 'Esta organización es de demostración: no admite datos reales de Metricool';
+  if (!(allowedBlogIdsFor(orgId)?.length ?? 0))
+    return 'Esta organización no tiene una marca de Metricool autorizada (HF_METRICOOL_ALLOWED_BRANDS)';
+  return null;
+}
+
+class SyncBlockedError extends Error {
+  constructor(readonly code: 'organizacion-demo' | 'marca-no-autorizada') {
+    super(code);
+  }
+}
+
+async function assertOrgAllowed(orgId: string, s: SyncStore) {
+  const why = await orgBlock(orgId, s);
+  if (!why) return;
+  throw new SyncBlockedError(
+    why.includes('demostración') ? 'organizacion-demo' : 'marca-no-autorizada',
+  );
+}
+
+export function blockedCode(e: unknown): string | null {
+  return e instanceof SyncBlockedError ? e.code : null;
+}
+
+/** Motivo de parada en caliente: interruptor (variable o base) o pausa de la organización. */
+function stopCheck(orgId: string, s: SyncStore) {
+  return async (): Promise<string | null> => {
+    if (killSwitchOn()) return 'interruptor de emergencia (servidor)';
+    if (s.globalKillSwitch && (await s.globalKillSwitch()))
+      return 'interruptor de emergencia global (base de datos)';
+    const st = await s.load(orgId);
+    if (st?.paused) return 'pausada por la organización';
+    if (st && st.status !== 'connected')
+      return 'la fuente ya no está conectada';
+    return null;
+  };
+}
+
 export async function getPanel(orgId: string): Promise<MetricoolPanel> {
-  const mode = panelMode();
+  const globalMode = panelMode();
   const s = store();
-  const state = (s && (await s.load(orgId))) ?? initialState();
+  const pending = livePending();
+  const checks: MetricoolPanel['checks'] = [];
+  let dbKill = false;
+  if (s && globalMode === 'live') {
+    if (s instanceof SupabaseSyncStore) {
+      const v = await s.verifyServiceAccess();
+      checks.push({ label: 'Clave de servicio de Supabase', ...v });
+      if (!v.ok) pending.push(v.detail);
+    }
+    dbKill = s.globalKillSwitch ? await s.globalKillSwitch() : false;
+    const block = await orgBlock(orgId, s);
+    checks.push({
+      label: 'Organización y marca autorizadas',
+      ok: !block,
+      detail:
+        block ??
+        `Solo la marca ${allowedBlogIdsFor(orgId)!.join(', ')} puede importarse aquí`,
+    });
+    if (block) pending.push(block);
+    checks.push({
+      label: 'Interruptor de emergencia',
+      ok: !dbKill && !killSwitchOn(),
+      detail:
+        dbKill || killSwitchOn()
+          ? 'ACTIVO: ninguna sincronización sale a la red'
+          : 'Inactivo; se comprueba antes de cada llamada a Metricool',
+    });
+  }
+  const mode: PanelMode =
+    globalMode === 'live' && pending.length ? 'not_ready' : globalMode;
+  const loaded = s ? await s.load(orgId) : null;
+  const state = loaded ?? initialState();
+  const usable = Boolean(s && loaded);
   return {
     mode,
-    killSwitch: killSwitchOn(),
+    checks,
+    killSwitch: killSwitchOn() || dbKill,
     scheduleEnabled: scheduleEnabled(),
     credentialsConfigured:
       mode === 'simulation'
         ? true
         : Boolean(liveCredentials().token && liveCredentials().userId),
-    pending: livePending(),
+    pending,
     state,
-    counts: s ? await s.counts(orgId) : { posts: 0, comments: 0, snapshots: 0 },
-    coverage: s ? await s.coverage(orgId) : [],
-    runs: s ? await s.runs(orgId, 8) : [],
-    recentPosts: s
-      ? (await s.posts(orgId))
-          .sort(
-            (a, b) =>
-              Date.parse(b.publishedAt ?? '') - Date.parse(a.publishedAt ?? ''),
-          )
-          .slice(0, 6)
-      : [],
+    counts:
+      usable && s
+        ? await s.counts(orgId)
+        : { posts: 0, comments: 0, snapshots: 0 },
+    coverage: usable && s ? await s.coverage(orgId) : [],
+    runs: usable && s ? await s.runs(orgId, 8) : [],
+    recentPosts:
+      usable && s
+        ? (await s.posts(orgId))
+            .sort(
+              (a, b) =>
+                Date.parse(b.publishedAt ?? '') -
+                Date.parse(a.publishedAt ?? ''),
+            )
+            .slice(0, 6)
+        : [],
   };
 }
 
-/** Valida credenciales y devuelve las marcas accesibles (sin leer contenido). */
-export async function listBrands(): Promise<
-  Array<{ blogId: string; label: string; networks: string[] }>
-> {
+/**
+ * Valida credenciales y devuelve SOLO las marcas autorizadas para la organización (sin leer
+ * contenido). Las demás marcas de la cuenta no se muestran.
+ */
+export async function listBrands(
+  orgId: string,
+): Promise<Array<{ blogId: string; label: string; networks: string[] }>> {
   if (panelMode() === 'not_ready')
     throw new Error('Conexión real pendiente de autorizaciones');
-  const brands = await connectorFor(null).listBrands();
+  const s = store();
+  if (!s) throw new Error('Conexión real pendiente de autorizaciones');
+  await assertOrgAllowed(orgId, s);
+  const allowed = allowedBlogIdsFor(orgId);
+  const brands = (await connectorFor(null).listBrands()).filter(
+    (b) => !allowed || allowed.includes(b.blogId),
+  );
   return brands.map((b) => ({
     blogId: b.blogId,
     label: b.label,
@@ -161,6 +298,10 @@ export async function listBrands(): Promise<
 export async function connectBrand(orgId: string, blogId: string) {
   const s = store();
   if (!s) throw new Error('Conexión real pendiente de autorizaciones');
+  await assertOrgAllowed(orgId, s);
+  const allowed = allowedBlogIdsFor(orgId);
+  if (allowed && !allowed.includes(blogId))
+    throw new SyncBlockedError('marca-no-autorizada');
   const brand = (await connectorFor(null).listBrands()).find(
     (b) => b.blogId === blogId,
   );
@@ -189,13 +330,18 @@ export async function syncNow(
 ) {
   const s = store();
   if (!s) throw new Error('Conexión real pendiente de autorizaciones');
+  await assertOrgAllowed(orgId, s);
   const st = await s.load(orgId);
+  const allowed = allowedBlogIdsFor(orgId);
   return runSync({
     orgId,
     store: s,
     trigger,
     killSwitch: killSwitchOn(),
-    connector: (budget) => connectorFor(st?.brand?.blogId ?? null, budget),
+    stop: stopCheck(orgId, s),
+    allowedBlogIds: allowed,
+    connector: (budget) =>
+      connectorFor(st?.brand?.blogId ?? null, budget, allowed),
     // Simulación: ventana amplia para que el servidor sintético siga dentro del periodo.
     initialDays: panelMode() === 'simulation' ? 120 : 30,
   });

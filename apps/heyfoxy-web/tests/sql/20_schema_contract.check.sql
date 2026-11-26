@@ -1,4 +1,5 @@
--- Hey Foxy — contrato de esquema tras 0001–0005. SOLO LECTURA (un único SELECT).
+-- Hey Foxy — contrato de esquema tras 0001–0006. SOLO LECTURA (un único SELECT).
+-- El de 0001–0005 se conserva en 19_schema_contract_0005.check.sql.
 -- Uso local: lo ejecuta el arnés tras migrar. Uso remoto: execute_sql en heyfoxy-qa.
 -- Aceptación: todas las filas con ok = true. Fuente de los valores: docs/product/heyfoxy/11_SCHEMA_INVENTORY.md
 with
@@ -30,26 +31,26 @@ col_upd as (
 ),
 checks(check_name, expected, actual) as (
   values
-  ('tables_public',                '26', (select count(*)::text from hf_tables)),
-  ('tables_with_rls',              '26', (select count(*)::text from hf_tables where relrowsecurity)),
-  ('policies_public',              '37', (select count(*)::text from pg_policies where schemaname = 'public')),
-  ('tables_without_policies',      'integration_credentials,platform_staff',
+  ('tables_public',                '28', (select count(*)::text from hf_tables)),
+  ('tables_with_rls',              '28', (select count(*)::text from hf_tables where relrowsecurity)),
+  ('policies_public',              '38', (select count(*)::text from pg_policies where schemaname = 'public')),
+  ('tables_without_policies',      'hf_runtime_flags,integration_credentials,platform_staff',
      (select string_agg(relname, ',' order by relname) from hf_tables t
       where not exists (select 1 from pg_policy p where p.polrelid = t.oid))),
   ('enums_public',                 '10', (select count(*)::text from pg_type t join pg_namespace n on n.oid = t.typnamespace
                                           where n.nspname = 'public' and t.typtype = 'e')),
-  ('hf_functions',                 '10',  (select count(*)::text from hf_funcs)),
-  ('hf_security_definer',          'hf_guard_incident_event_org,hf_guard_incident_refs,hf_guard_same_org_source,hf_guard_synthetic,hf_has_role,hf_incident_guard,hf_is_member',
+  ('hf_functions',                 '13',  (select count(*)::text from hf_funcs)),
+  ('hf_security_definer',          'hf_guard_incident_event_org,hf_guard_incident_refs,hf_guard_real_data_org,hf_guard_same_org_post,hf_guard_same_org_source,hf_guard_synthetic,hf_has_role,hf_incident_guard,hf_is_member,hf_purge_expired_media',
      (select string_agg(proname, ',' order by proname) from hf_funcs where prosecdef)),
   ('hf_functions_without_empty_search_path', '0',
      (select count(*)::text from hf_funcs where proconfig is null or not ('search_path=""' = any (proconfig)))),
-  ('triggers_public',              '19', (select count(*)::text from pg_trigger tg join hf_tables t on t.oid = tg.tgrelid where not tg.tgisinternal)),
-  ('indexes_public_total',         '60', (select count(*)::text from pg_indexes where schemaname = 'public')),
-  ('indexes_non_unique',           '18', (select count(*)::text from pg_index i join hf_tables t on t.oid = i.indrelid where not i.indisunique)),
+  ('triggers_public',              '25', (select count(*)::text from pg_trigger tg join hf_tables t on t.oid = tg.tgrelid where not tg.tgisinternal)),
+  ('indexes_public_total',         '66', (select count(*)::text from pg_indexes where schemaname = 'public')),
+  ('indexes_non_unique',           '20', (select count(*)::text from pg_index i join hf_tables t on t.oid = i.indrelid where not i.indisunique)),
   ('anon_table_grants',            '0',  (select count(*)::text from tgrants where grantee in ('anon', 'PUBLIC'))),
   ('authenticated_truncate_refs_trigger', '0',
      (select count(*)::text from tgrants where grantee = 'authenticated' and privilege_type in ('TRUNCATE', 'REFERENCES', 'TRIGGER', 'MAINTAIN'))),
-  ('authenticated_tables_with_any_grant', '24', (select count(*)::text from auth_grants)),
+  ('authenticated_tables_with_any_grant', '25', (select count(*)::text from auth_grants)),
   ('authenticated_on_integration_credentials', '', coalesce((select privs from auth_grants where table_name = 'integration_credentials'), '')),
   ('authenticated_on_platform_staff', '', coalesce((select privs from auth_grants where table_name = 'platform_staff'), '')),
   ('authenticated_on_audit_logs',  'INSERT,SELECT', (select privs from auth_grants where table_name = 'audit_logs')),
@@ -72,7 +73,7 @@ checks(check_name, expected, actual) as (
   ('authenticated_col_update_sentiment_analyses', 'review_status,reviewed_at,reviewed_by', (select cols from col_upd where table_name = 'sentiment_analyses')),
   ('authenticated_col_update_alerts', 'review_status,reviewed_at,reviewed_by', (select cols from col_upd where table_name = 'alerts')),
   ('authenticated_col_update_incidents', 'owner_user_id,resolution_summary,status,title', (select cols from col_upd where table_name = 'incidents')),
-  ('service_role_tables_with_crud', '26',
+  ('service_role_tables_with_crud', '28',
      (select count(*)::text from (select table_name from tgrants where grantee = 'service_role'
         and privilege_type in ('SELECT', 'INSERT', 'UPDATE', 'DELETE') group by table_name
         having count(distinct privilege_type) >= 2) s)),
@@ -81,6 +82,17 @@ checks(check_name, expected, actual) as (
      (select count(*)::text from tgrants where grantee = 'service_role' and table_name in ('audit_logs', 'incident_events')
         and privilege_type in ('UPDATE', 'DELETE'))),
   ('anon_execute_hf_functions',    '0', (select count(*)::text from hf_funcs where has_function_privilege('anon', oid, 'EXECUTE'))),
+  ('authenticated_on_post_media',  'SELECT', (select privs from auth_grants where table_name = 'post_media')),
+  ('authenticated_on_hf_runtime_flags', '', coalesce((select privs from auth_grants where table_name = 'hf_runtime_flags'), '')),
+  ('service_role_on_hf_runtime_flags', 'SELECT,UPDATE',
+     (select string_agg(privilege_type, ',' order by privilege_type) from tgrants where grantee = 'service_role' and table_name = 'hf_runtime_flags')),
+  ('sync_kill_switch_row',         'false', (select enabled::text from public.hf_runtime_flags where flag = 'sync_kill_switch')),
+  ('real_data_org_triggers',       'data_sources,post_metric_snapshots,social_comments,social_mentions,social_posts',
+     (select string_agg(c.relname, ',' order by c.relname) from pg_trigger tg join pg_class c on c.oid = tg.tgrelid
+      where tg.tgname like '%\_real\_data\_org' and tg.tgenabled = 'O')),
+  ('external_account_unique_index', 'data_sources_external_account_uniq',
+     (select indexname from pg_indexes where schemaname = 'public' and indexname = 'data_sources_external_account_uniq')),
+  ('service_role_execute_purge',   'true', has_function_privilege('service_role', 'public.hf_purge_expired_media(timestamptz)', 'EXECUTE')::text),
   ('authenticated_execute_hf_functions', 'hf_has_role,hf_is_member',
      (select string_agg(proname, ',' order by proname) from hf_funcs where has_function_privilege('authenticated', oid, 'EXECUTE')))
 )

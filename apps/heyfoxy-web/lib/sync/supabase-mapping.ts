@@ -99,11 +99,7 @@ export function stateToColumns(
     out.last_sync_started_at = next.lastSyncStartedAt;
   if ('lastSyncFinishedAt' in patch)
     out.last_sync_finished_at = next.lastSyncFinishedAt;
-  if ('lastSyncStatus' in patch)
-    out.last_sync_status =
-      next.lastSyncStatus === 'skipped_not_connected'
-        ? 'failed'
-        : next.lastSyncStatus;
+  if ('lastSyncStatus' in patch) out.last_sync_status = next.lastSyncStatus;
   if ('lastSyncError' in patch)
     out.last_sync_error = next.lastSyncError?.slice(0, 500) ?? null;
   return out;
@@ -216,6 +212,8 @@ const JOB_STATUS: Record<SyncRun['status'], string> = {
   skipped_paused: 'skipped_paused',
   skipped_kill_switch: 'skipped_paused',
   skipped_not_connected: 'skipped_paused',
+  skipped_not_authorized: 'skipped_paused',
+  stopped: 'failed',
 };
 
 export function jobRow(orgId: string, sourceId: string, r: SyncRun): Row {

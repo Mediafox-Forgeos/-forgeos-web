@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Play } from 'lucide-react';
 import { Children, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 
@@ -78,10 +78,12 @@ export function SafeImage({
   src,
   alt,
   className,
+  onFail,
 }: {
   src: string;
   alt: string;
   className?: string;
+  onFail?: () => void;
 }) {
   const [failed, setFailed] = useState(false);
   if (failed)
@@ -106,8 +108,63 @@ export function SafeImage({
       loading="lazy"
       decoding="async"
       referrerPolicy="no-referrer"
-      onError={() => setFailed(true)}
+      onError={() => {
+        setFailed(true);
+        onFail?.();
+      }}
       className={cn('h-full w-full object-cover', className)}
     />
+  );
+}
+
+/**
+ * Video del que la fuente solo entrega la miniatura (Metricool): miniatura con el botón de
+ * reproducción centrado. Si no hay miniatura o caducó, el texto de caída ocupa el centro y el
+ * indicador de video pasa a una esquina para no taparlo (HF-UX-07).
+ */
+export function VideoThumbnail({
+  src,
+  alt,
+  className,
+}: {
+  src: string | null | undefined;
+  alt: string;
+  className?: string;
+}) {
+  const [failed, setFailed] = useState(false);
+  const fallback = !src || failed;
+  return (
+    <span className={cn('relative block h-full w-full', className)}>
+      {src ? (
+        <SafeImage src={src} alt={alt} onFail={() => setFailed(true)} />
+      ) : (
+        <span
+          role="img"
+          aria-label={`${alt} (sin miniatura)`}
+          className="bg-muted text-muted-foreground flex h-full w-full flex-col items-center justify-center gap-1 p-3 text-center text-xs font-bold"
+        >
+          Video sin miniatura
+          <span className="font-semibold">Ábrelo en la red original</span>
+        </span>
+      )}
+      {fallback ? (
+        <span
+          aria-hidden
+          className="absolute left-2 top-2 flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-bold text-white"
+        >
+          <Play className="h-3 w-3" />
+          Video
+        </span>
+      ) : (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 flex items-center justify-center"
+        >
+          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-white">
+            <Play className="h-6 w-6" />
+          </span>
+        </span>
+      )}
+    </span>
   );
 }

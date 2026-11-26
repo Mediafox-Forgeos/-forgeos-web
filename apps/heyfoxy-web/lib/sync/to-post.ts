@@ -29,6 +29,13 @@ export function storedToPost(
         shares: m.shares ?? null,
         views: m.views ?? null,
         reach: m.reach ?? null,
+        impressions: m.impressions ?? null,
+        impressionsUnique: m.impressionsUnique ?? null,
+        interactions: m.interactions ?? null,
+        saves: m.saves ?? null,
+        videoViews: m.videoViews ?? null,
+        engagement: m.engagement ?? null,
+        reactions: m.reactions ?? null,
       },
     ],
     media: (p.media ?? []).map((x) => ({

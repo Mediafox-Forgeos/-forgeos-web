@@ -72,6 +72,11 @@ const RUN: Record<SyncRun['status'], { label: string; tone: Tone }> = {
   skipped_kill_switch: { label: 'Omitida: emergencia', tone: 'critical' },
   skipped_budget: { label: 'Omitida: límite de API', tone: 'warning' },
   skipped_not_connected: { label: 'Omitida: sin conexión', tone: 'neutral' },
+  skipped_not_authorized: {
+    label: 'Omitida: marca no autorizada',
+    tone: 'critical',
+  },
+  stopped: { label: 'Detenida', tone: 'critical' },
 };
 const NOTICE: Record<string, { tone: Tone; text: string }> = {
   'sync-succeeded': { tone: 'success', text: 'Sincronización completada.' },
@@ -98,6 +103,22 @@ const NOTICE: Record<string, { tone: Tone; text: string }> = {
   'sync-skipped_not_connected': {
     tone: 'neutral',
     text: 'Conecta primero una marca de Metricool.',
+  },
+  'sync-skipped_not_authorized': {
+    tone: 'critical',
+    text: 'La marca conectada no está autorizada para esta organización: no se importó nada.',
+  },
+  'sync-stopped': {
+    tone: 'critical',
+    text: 'Sincronización detenida durante la ejecución (interruptor o pausa). Lo ya importado se conserva.',
+  },
+  'marca-no-autorizada': {
+    tone: 'critical',
+    text: 'Esa marca no está autorizada para esta organización.',
+  },
+  'organizacion-demo': {
+    tone: 'warning',
+    text: 'Las organizaciones de demostración no admiten datos reales.',
   },
   'sync-error': { tone: 'critical', text: 'No se pudo sincronizar.' },
   pausada: {
@@ -177,7 +198,7 @@ export default async function SourcesPage({
   let brandError: string | null = null;
   if (!connected && panel.mode !== 'not_ready' && canManage) {
     try {
-      brands = await listBrands();
+      brands = await listBrands(orgId);
     } catch {
       brandError = 'Las credenciales configuradas no son válidas o caducaron.';
     }
@@ -500,6 +521,39 @@ export default async function SourcesPage({
           />
         </div>
       </div>
+
+      {panel.checks.length > 0 && (
+        <Panel className="mt-4" aria-labelledby="checks-title">
+          <PanelHeader
+            icon={ShieldCheck}
+            tone={panel.checks.every((c) => c.ok) ? 'success' : 'warning'}
+            title="Verificaciones del servidor"
+            titleId="checks-title"
+            description="Comprobadas en cada carga de esta página, sin mostrar ningún valor secreto."
+          />
+          <ul className="space-y-1.5 text-sm">
+            {panel.checks.map((c) => (
+              <li key={c.label} className="flex items-start gap-2">
+                {c.ok ? (
+                  <CircleCheck
+                    aria-hidden
+                    className="text-success-fg mt-0.5 h-4 w-4 shrink-0"
+                  />
+                ) : (
+                  <CircleAlert
+                    aria-hidden
+                    className="text-critical-fg mt-0.5 h-4 w-4 shrink-0"
+                  />
+                )}
+                <span>
+                  <b>{c.label}:</b> {c.ok ? '' : 'no superada. '}
+                  {c.detail}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      )}
 
       {panel.mode === 'not_ready' && (
         <Panel className="mt-4" aria-labelledby="pend-title">

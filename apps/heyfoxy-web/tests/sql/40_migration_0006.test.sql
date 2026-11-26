@@ -52,6 +52,42 @@ select t_expect_error($$insert into public.social_posts (organization_id, data_s
   values ('aaaaaaaa-0000-0000-0000-000000000000', 'aaaaaaaa-0000-0000-0000-0000000000d1', 'x', 'x-9', 'hologram')$$,
   'tipo de contenido desconocido');
 
+-- Datos reales nunca en organizaciones demo; una marca, una organización; interruptor global
+insert into public.organizations (id, name, slug, is_demo) values
+  ('dddddddd-0000-0000-0000-000000000000', 'Org Demo', 'org-demo', true);
+insert into public.data_sources (id, organization_id, provider, display_name, status) values
+  ('dddddddd-0000-0000-0000-0000000000d0', 'dddddddd-0000-0000-0000-000000000000', 'demo', 'Demo', 'connected'),
+  ('dddddddd-0000-0000-0000-0000000000d1', 'dddddddd-0000-0000-0000-000000000000', 'metricool', 'Metricool demo', 'not_connected');
+select t_expect_error($$update public.data_sources set status = 'connected' where id = 'dddddddd-0000-0000-0000-0000000000d1'$$,
+  'fuente real no se conecta en una organización demo');
+select t_expect_error($$update public.data_sources set external_account_ref = '700001' where id = 'dddddddd-0000-0000-0000-0000000000d1'$$,
+  'organización demo no se vincula a una marca real');
+select t_expect_error($$insert into public.data_sources (organization_id, provider, display_name, status)
+  values ('dddddddd-0000-0000-0000-000000000000', 'meta_graph', 'Meta demo', 'connected')$$,
+  'fuente real conectada en demo rechazada también al insertar');
+insert into public.social_posts (organization_id, data_source_id, platform, external_id, is_synthetic) values
+  ('dddddddd-0000-0000-0000-000000000000', 'dddddddd-0000-0000-0000-0000000000d0', 'instagram', 'demo-1', true);
+select t_assert((select count(*) from public.social_posts where organization_id = 'dddddddd-0000-0000-0000-000000000000') = 1,
+  'contenido sintético sigue permitido en la organización demo');
+select t_expect_error($$insert into public.social_posts (organization_id, data_source_id, platform, external_id, is_synthetic)
+  values ('dddddddd-0000-0000-0000-000000000000', 'dddddddd-0000-0000-0000-0000000000d1', 'instagram', 'real-1', false)$$,
+  'publicación real rechazada en organización demo');
+select t_expect_error($$insert into public.social_comments (organization_id, data_source_id, platform, external_id, body, published_at, content_hash, is_synthetic)
+  values ('dddddddd-0000-0000-0000-000000000000', 'dddddddd-0000-0000-0000-0000000000d1', 'instagram', 'rc-1', 'x', now(), 'h', false)$$,
+  'comentario real rechazado en organización demo');
+select t_expect_error($$insert into public.post_metric_snapshots (organization_id, post_id, likes, is_synthetic)
+  select 'dddddddd-0000-0000-0000-000000000000', id, 1, false from public.social_posts where external_id = 'demo-1'$$,
+  'métrica real rechazada en organización demo');
+update public.data_sources set external_account_ref = '700001' where id = 'aaaaaaaa-0000-0000-0000-0000000000d1';
+select t_expect_error($$update public.data_sources set external_account_ref = '700001' where id = 'bbbbbbbb-0000-0000-0000-0000000000d1'$$,
+  'la misma marca no se vincula a dos organizaciones');
+select t_assert((select not enabled from public.hf_runtime_flags where flag = 'sync_kill_switch'), 'interruptor global creado y apagado');
+select t_expect_error($$insert into public.hf_runtime_flags (flag) values ('otro_flag')$$, 'solo flags conocidos');
+select t_expect_error($$update public.data_sources set last_sync_status = 'inventado' where id = 'aaaaaaaa-0000-0000-0000-0000000000d1'$$,
+  'estado de sync desconocido rechazado');
+update public.data_sources set last_sync_status = 'stopped' where id = 'aaaaaaaa-0000-0000-0000-0000000000d1';
+update public.data_sources set last_sync_status = null where id = 'aaaaaaaa-0000-0000-0000-0000000000d1';
+
 -- Como usuario de A
 select set_config('request.jwt.claim.sub', 'a0000000-0000-0000-0000-000000000001', false);
 set role authenticated;
@@ -71,6 +107,8 @@ select t_assert((select last_sync_status is null and api_calls_today = 0 and max
                  from public.data_sources where id = 'aaaaaaaa-0000-0000-0000-0000000000d1'), 'A lee el estado de su fuente');
 select t_assert((select reactions->>'like' = '8' and impressions_unique = 80 from public.post_metric_snapshots limit 1),
   'métricas nuevas legibles por miembros');
+select t_expect_error($$select * from public.hf_runtime_flags$$, 'authenticated no lee el interruptor global');
+select t_expect_error($$update public.hf_runtime_flags set enabled = true$$, 'authenticated no activa el interruptor global');
 reset role;
 
 -- Como usuario de B
@@ -111,4 +149,12 @@ select t_assert(not has_function_privilege('authenticated', 'public.hf_purge_exp
                 and has_function_privilege('service_role', 'public.hf_purge_expired_media(timestamptz)', 'execute'),
   'purga ejecutable solo por service_role');
 select t_assert((select not public from storage.buckets where id = 'hf-media'), 'bucket hf-media privado');
+select t_assert((select string_agg(privilege_type, ',' order by privilege_type) from information_schema.role_table_grants
+                 where table_schema = 'public' and table_name = 'hf_runtime_flags' and grantee = 'service_role') = 'SELECT,UPDATE',
+  'service_role: solo SELECT y UPDATE en el interruptor global');
+select t_assert(not exists (select 1 from information_schema.role_table_grants where table_schema = 'public'
+                 and table_name = 'hf_runtime_flags' and grantee in ('anon', 'PUBLIC', 'authenticated')),
+  'nadie más tiene privilegios sobre el interruptor global');
+select t_assert(not has_function_privilege('authenticated', 'public.hf_guard_real_data_org()', 'execute'),
+  'guarda de datos reales no ejecutable por authenticated');
 \echo 'MIGRATION 0006 TESTS PASSED'

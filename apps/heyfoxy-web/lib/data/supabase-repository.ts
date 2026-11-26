@@ -29,15 +29,57 @@ function fail(error: { message: string } | null) {
   if (error) throw new Error(error.message);
 }
 
-const POST_COLUMNS =
+const POST_COLUMNS_0005 =
   'id, organization_id, platform, body, permalink, published_at, is_synthetic, social_accounts(handle), post_metric_snapshots(captured_at, likes, comments, shares, views, reach)';
+/**
+ * Con la migración 0006 (HF_MIGRATION_0006_APPLIED=true): autor, medios y métricas por red.
+ * Sin ella se usan solo las columnas de 0005 (las de 0006 no existen y la consulta fallaría).
+ */
+const POST_COLUMNS_0006 =
+  'id, organization_id, platform, body, permalink, published_at, is_synthetic, content_type, author_display, author_handle, author_avatar_url, social_accounts(handle), ' +
+  'post_metric_snapshots(captured_at, likes, comments, shares, views, reach, impressions, impressions_unique, interactions, saves, video_views, engagement, reactions), ' +
+  'post_media(position, kind, source_url, preview_url, width, height, duration_sec, alt_text, url_status)';
+const postColumns = () =>
+  process.env.HF_MIGRATION_0006_APPLIED === 'true'
+    ? POST_COLUMNS_0006
+    : POST_COLUMNS_0005;
+
+const numOrNull = (v: unknown) =>
+  v === null || v === undefined ? null : Number(v);
+
+function toMedia(r: Row): Post['media'] {
+  const rows = ((r.post_media ?? []) as Row[])
+    .filter((m) => m.url_status !== 'removed')
+    .sort((a, b) => a.position - b.position);
+  if (!rows.length) return undefined;
+  return rows.map((m) => ({
+    kind: m.kind,
+    url: m.source_url,
+    previewUrl: m.preview_url ?? null,
+    alt: m.alt_text ?? null,
+    width: m.width ?? null,
+    height: m.height ?? null,
+    durationSec: numOrNull(m.duration_sec),
+    // Metricool solo entrega la miniatura de los videos: nunca se reproduce.
+    playable: m.kind === 'video' ? false : undefined,
+  }));
+}
 
 function toPost(r: Row): Post {
+  const hasAuthor = r.author_display || r.author_handle || r.author_avatar_url;
   return {
     id: r.id,
     organizationId: r.organization_id,
     platform: r.platform,
-    accountHandle: r.social_accounts?.handle ?? null,
+    accountHandle: r.social_accounts?.handle ?? r.author_handle ?? null,
+    media: toMedia(r),
+    author: hasAuthor
+      ? {
+          displayName: r.author_display ?? null,
+          handle: r.author_handle ?? null,
+          avatarUrl: r.author_avatar_url ?? null,
+        }
+      : undefined,
     body: r.body,
     permalink: r.permalink,
     publishedAt: r.published_at,
@@ -50,6 +92,13 @@ function toPost(r: Row): Post {
         shares: m.shares,
         views: m.views,
         reach: m.reach,
+        impressions: m.impressions,
+        impressionsUnique: m.impressions_unique,
+        interactions: m.interactions,
+        saves: m.saves,
+        videoViews: m.video_views,
+        engagement: numOrNull(m.engagement),
+        reactions: m.reactions ?? null,
       }))
       .sort((a, b) => b.capturedAt.localeCompare(a.capturedAt)),
   };
@@ -83,7 +132,10 @@ export class SupabaseRepository implements Repository {
     const { data, error } = await db
       .from('memberships')
       .select('role, organizations(id, name, slug, is_demo, retention_days)')
-      .eq('user_id', viewer.userId);
+      .eq('user_id', viewer.userId)
+      // Orden estable: la organización por defecto es la membresía más antigua (una nueva
+      // membresía no cambia la vista de nadie; se elige con el selector de organización).
+      .order('created_at', { ascending: true });
     fail(error);
     return (data ?? []).map((m: Row) => ({
       role: m.role,
@@ -471,7 +523,7 @@ export class SupabaseRepository implements Repository {
     const db = await supabaseServer();
     let q = db
       .from('social_posts')
-      .select(POST_COLUMNS)
+      .select(postColumns())
       .eq('organization_id', orgId)
       .is('deleted_at_source', null)
       .order('published_at', { ascending: false })
@@ -487,7 +539,7 @@ export class SupabaseRepository implements Repository {
     const db = await supabaseServer();
     const { data, error } = await db
       .from('social_posts')
-      .select(POST_COLUMNS)
+      .select(postColumns())
       .eq('organization_id', orgId)
       .eq('id', id)
       .maybeSingle();

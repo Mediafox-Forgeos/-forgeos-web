@@ -71,7 +71,13 @@ export const POSTS_UNSUPPORTED_REASON: Partial<Record<Platform, string>> = {
 };
 
 export type MetricoolErrorKind =
-  'auth' | 'rate_limit' | 'server' | 'network' | 'bad_response' | 'budget';
+  | 'auth'
+  | 'rate_limit'
+  | 'server'
+  | 'network'
+  | 'bad_response'
+  | 'budget'
+  | 'brand_not_authorized';
 
 /** Error tipado. El mensaje nunca contiene el token, la URL completa ni los ids. */
 export class MetricoolError extends Error {
@@ -111,6 +117,11 @@ export interface MetricoolConfig {
   retryBaseMs?: number;
   sleep?: (ms: number) => Promise<void>;
   budget?: CallBudget;
+  /**
+   * Marcas (blogId) autorizadas para esta organización. Si se indica, ninguna llamada con marca
+   * sale a la red para un blogId fuera de la lista (defensa en profundidad del motor).
+   */
+  allowedBlogIds?: readonly string[];
 }
 
 export function metricoolConfigFromEnv(secret: {
@@ -287,6 +298,16 @@ export class MetricoolConnector implements SourceConnector {
       throw new ConnectorDisabledError(
         'metricool',
         'falta habilitación o credenciales',
+      );
+    }
+    if (
+      requireBrand &&
+      this.cfg.allowedBlogIds &&
+      !this.cfg.allowedBlogIds.includes(String(this.cfg.blogId))
+    ) {
+      throw new MetricoolError(
+        'brand_not_authorized',
+        'Marca de Metricool no autorizada para esta organización',
       );
     }
     if (!isAllowedMetricoolPath(path)) {

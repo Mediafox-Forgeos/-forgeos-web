@@ -1,10 +1,10 @@
 import {
+  Bookmark,
   ExternalLink,
   Eye,
   Heart,
   ImageOff,
   MessageCircle,
-  Play,
   Repeat2,
   TrendingUp,
   Users,
@@ -13,8 +13,8 @@ import Link from 'next/link';
 import { cn } from '@/lib/cn';
 import { PLATFORM_LABEL, SENTIMENT_LABEL, fmtRelative } from '@/lib/format';
 import type { PostStats } from '@/lib/insights';
-import type { Post, PostMediaItem, Sentiment } from '@/lib/types';
-import { MediaCarousel, SafeImage } from './post-client';
+import type { Post, PostMediaItem, PostMetrics, Sentiment } from '@/lib/types';
+import { MediaCarousel, SafeImage, VideoThumbnail } from './post-client';
 import { NetworkIcon } from './network-icons';
 import { Avatar, StatusPill, SyntheticBadge, type Tone } from './primitives';
 
@@ -58,21 +58,7 @@ export function MediaItem({
   // Video del que la fuente solo entrega miniatura: miniatura + duración, sin reproductor.
   if (item.kind === 'video' && item.playable === false)
     return (
-      <span className={cn('relative block h-full w-full', className)}>
-        {item.previewUrl ? (
-          <SafeImage src={item.previewUrl} alt={alt} />
-        ) : (
-          <span className="bg-muted block h-full w-full" />
-        )}
-        <span
-          aria-hidden
-          className="absolute inset-0 flex items-center justify-center"
-        >
-          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-white">
-            <Play className="h-6 w-6" />
-          </span>
-        </span>
-      </span>
+      <VideoThumbnail src={item.previewUrl} alt={alt} className={className} />
     );
   if (item.kind === 'video')
     return (
@@ -228,6 +214,10 @@ export function PostMetricsRow({
     { icon: Repeat2, label: 'Compartidos', v: m?.shares },
     { icon: Eye, label: 'Vistas', v: m?.views },
     { icon: Users, label: 'Alcance', v: m?.reach },
+    // Solo si la fuente las entrega (Metricool, 0006); los datos sintéticos no las tienen.
+    ...(m?.saves != null
+      ? [{ icon: Bookmark, label: 'Guardados', v: m.saves }]
+      : []),
   ];
   return (
     <dl
@@ -340,5 +330,108 @@ export function SocialPostCard({
         </p>
       </div>
     </article>
+  );
+}
+
+const REACTION_LABEL: Record<string, string> = {
+  like: 'Me gusta',
+  love: 'Me encanta',
+  haha: 'Me divierte',
+  wow: 'Me asombra',
+  sad: 'Me entristece',
+  angry: 'Me enoja',
+  care: 'Me importa',
+};
+
+/**
+ * Métricas por red con su nombre real (Metricool, migración 0006). Solo aparecen las que la red
+ * entregó: «Impresiones únicas» de Facebook no se presenta como alcance. Sin métricas
+ * extendidas (datos sintéticos, 0005) no se renderiza nada.
+ */
+export function NetworkMetrics({
+  metrics,
+  platform,
+}: {
+  metrics: PostMetrics | null | undefined;
+  platform: Post['platform'];
+}) {
+  if (!metrics) return null;
+  const pct = (v: number) =>
+    `${v.toLocaleString('es-CO', { maximumFractionDigits: 2 })} %`;
+  const rows: Array<{ label: string; value: string; hint?: string }> = [];
+  const add = (label: string, v: number | null | undefined, hint?: string) => {
+    if (v != null) rows.push({ label, value: fmtNum(v), hint });
+  };
+  add('Impresiones', metrics.impressions);
+  add(
+    'Impresiones únicas',
+    metrics.impressionsUnique,
+    platform === 'facebook'
+      ? 'Facebook no entrega «alcance»: es la métrica equivalente con su nombre real'
+      : undefined,
+  );
+  add('Interacciones (según la red)', metrics.interactions);
+  add('Guardados', metrics.saves);
+  add('Reproducciones de video', metrics.videoViews);
+  if (metrics.engagement != null)
+    rows.push({
+      label: 'Engagement',
+      value: pct(metrics.engagement),
+      hint: 'Calculado por Metricool',
+    });
+  const reactions = Object.entries(metrics.reactions ?? {}).filter(
+    ([, n]) => n > 0,
+  );
+  if (!rows.length && !reactions.length) return null;
+  return (
+    <section
+      aria-labelledby="net-metrics-title"
+      className="rounded-card border-border/80 bg-card shadow-card border p-4 sm:p-5"
+    >
+      <h2
+        id="net-metrics-title"
+        className="text-base font-extrabold leading-tight tracking-tight"
+      >
+        Métricas de {PLATFORM_LABEL[platform]}
+      </h2>
+      <p className="text-muted-foreground mt-0.5 text-xs">
+        Última medición entregada por Metricool, con el nombre que usa la red.
+      </p>
+      {rows.length > 0 && (
+        <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {rows.map((r) => (
+            <div key={r.label} className="bg-muted/50 rounded-lg p-2.5">
+              <dt className="text-muted-foreground text-xs font-semibold">
+                {r.label}
+              </dt>
+              <dd className="text-lg font-extrabold tabular-nums">{r.value}</dd>
+              {r.hint && (
+                <dd className="text-muted-foreground text-[11px] leading-snug">
+                  {r.hint}
+                </dd>
+              )}
+            </div>
+          ))}
+        </dl>
+      )}
+      {reactions.length > 0 && (
+        <div className="mt-3">
+          <h3 className="text-muted-foreground text-xs font-bold">
+            Reacciones por tipo
+          </h3>
+          <ul className="mt-1.5 flex flex-wrap gap-1.5 text-xs">
+            {reactions.map(([k, n]) => (
+              <li
+                key={k}
+                className="border-border rounded-full border px-2.5 py-0.5"
+              >
+                {REACTION_LABEL[k] ?? k}{' '}
+                <b className="tabular-nums">{fmtNum(n)}</b>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
   );
 }

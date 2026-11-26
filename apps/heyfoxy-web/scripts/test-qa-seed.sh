@@ -89,4 +89,21 @@ ok "usuarios, membresías, incidentes, incident_events, auditoría y filas manua
 [[ "$DATES_BEFORE" == "$(q "select md5(string_agg(published_at::text, ',' order by id)) from public.social_comments where is_synthetic")" ]] || fail "el rollback de fechas no restauró el estado"
 [[ "$(q "select count(*) from public.social_comments c join public.social_posts p on p.id = c.post_id where c.is_synthetic and c.platform <> p.platform")" == 6 ]] || fail "rollback de qa_fix_001"
 ok "rollback de fechas y de qa_fix_001 restauran el estado exacto anterior"
+# Organización independiente para la marca real (GO 1, punto 6), sobre 0006 y el seed QA.
+AU="$(q "select md5(string_agg(x, ',' order by x)) from (select 'p'||id x from public.social_posts union all select 'c'||id from public.social_comments union all select 'm'||organization_id||user_id||role from public.memberships) t")"
+"${P[@]}" -f "$S/hf_org_marca_autorizada.sql"
+"${P[@]}" -f "$S/hf_org_marca_autorizada.sql"
+C=9c000000-0000-4000-a000-0000000000c1
+[[ "$(q "select is_demo from public.organizations where id = '$C'")" == f ]] || fail "la organización de la marca debe ser NO demo"
+[[ "$(q "select count(*) from public.memberships where organization_id = '$C'")" == 1 ]] || fail "un único miembro"
+[[ "$(q "select count(*) from public.audit_logs where action = 'hf_org_marca_autorizada_creada'")" == 1 ]] || fail "registro de auditoría único"
+[[ "$(q "select count(*) from public.memberships m join public.memberships n on n.user_id = m.user_id and n.organization_id <> m.organization_id where m.organization_id = '$C'")" == 1 ]] || fail "qa-owner conserva su membresía en Clínica Aurora"
+[[ "$AU" == "$(q "select md5(string_agg(x, ',' order by x)) from (select 'p'||id x from public.social_posts union all select 'c'||id from public.social_comments union all select 'm'||organization_id||user_id||role from public.memberships where organization_id <> '$C') t")" ]] || fail "la organización nueva alteró datos o miembros de Aurora/Horizonte"
+ok "organización de la marca autorizada: no demo, 1 owner, fuente pausada, idempotente; Aurora y Horizonte intactas"
+# La fuente de Aurora no puede conectarse ni recibir datos reales; la marca no se comparte entre organizaciones.
+if q "update public.data_sources set status = 'connected' where id = '9a000000-0000-4000-c000-000000000002'" 2>/dev/null; then fail "Aurora (demo) aceptó una fuente real conectada"; fi
+q "update public.data_sources set external_account_ref = '700001', status = 'connected' where id = '9c000000-0000-4000-c000-000000000001'"
+if q "update public.data_sources set external_account_ref = '700001' where id = '9a000000-0000-4000-c000-000000000002'" 2>/dev/null; then fail "la misma marca se vinculó a dos organizaciones"; fi
+q "insert into public.social_posts (organization_id, data_source_id, platform, external_id, is_synthetic) values ('$C', '9c000000-0000-4000-c000-000000000001', 'instagram', 'real-ig-1', false)"
+ok "datos reales solo en la organización autorizada; Aurora los rechaza; una marca, una organización"
 echo "QA SEED FIXES PASSED"

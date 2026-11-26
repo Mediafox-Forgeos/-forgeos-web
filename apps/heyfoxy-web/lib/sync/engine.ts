@@ -23,7 +23,10 @@ import type {
  * Motor de sincronización Metricool → Hey Foxy (solo lectura en la fuente).
  *
  * Reglas:
- *  - Interruptor de emergencia y pausa por organización se comprueban ANTES de tocar la red.
+ *  - Interruptor de emergencia y pausa por organización se comprueban ANTES de tocar la red y
+ *    otra vez antes de CADA llamada (por red y por página): activarlos detiene una ejecución en
+ *    curso, que termina como «detenida» sin escribir nada más.
+ *  - Solo se sincroniza la marca autorizada para la organización (`allowedBlogIds`).
  *  - Presupuesto diario de llamadas a la API y de elementos importados (requisito I).
  *  - Incremental: publicaciones desde el fin de la última ventana con éxito (con 48 h de
  *    solape para refrescar métricas); comentarios desde el más reciente importado (1 h de solape).
@@ -39,6 +42,13 @@ export interface SyncDeps {
   now?: Date;
   trigger?: 'manual' | 'scheduled';
   killSwitch?: boolean;
+  /**
+   * Comprobación de parada (interruptor global en la base, pausa de la organización…).
+   * Devuelve el motivo para detener o null. Se consulta antes de cada llamada a la fuente.
+   */
+  stop?: () => Promise<string | null>;
+  /** Marcas autorizadas para esta organización; si se indica, otra marca no se sincroniza. */
+  allowedBlogIds?: readonly string[];
   timezone?: string;
   initialDays?: number;
   maxCommentPages?: number;
@@ -90,15 +100,12 @@ export async function runSync(deps: SyncDeps): Promise<SyncRun> {
     return r;
   };
 
-  if (deps.killSwitch) {
-    return finish('skipped_kill_switch', {
-      ...base,
-      errors: [
-        skip(
-          'Interruptor de emergencia activo: sincronización detenida para todas las organizaciones',
-        ),
-      ],
-    });
+  const stopReason = async () => (deps.stop ? deps.stop() : null);
+  const killed = deps.killSwitch
+    ? 'Interruptor de emergencia activo: sincronización detenida para todas las organizaciones'
+    : await stopReason();
+  if (killed) {
+    return finish('skipped_kill_switch', { ...base, errors: [skip(killed)] });
   }
   const state = await deps.store.load(deps.orgId);
   if (!state || state.status !== 'connected' || !state.brand) {
@@ -106,6 +113,26 @@ export async function runSync(deps: SyncDeps): Promise<SyncRun> {
       ...base,
       errors: [skip('La fuente no está conectada a una marca de Metricool')],
     });
+  }
+  if (
+    deps.allowedBlogIds &&
+    !deps.allowedBlogIds.includes(state.brand.blogId)
+  ) {
+    return finish(
+      'skipped_not_authorized',
+      {
+        ...base,
+        errors: [
+          skip(
+            'La marca conectada no está autorizada para esta organización: no se importa nada',
+          ),
+        ],
+      },
+      {
+        status: 'error',
+        statusReason: 'Marca no autorizada para esta organización',
+      },
+    );
   }
   if (state.paused) {
     return finish('skipped_paused', {
@@ -140,6 +167,7 @@ export async function runSync(deps: SyncDeps): Promise<SyncRun> {
   cursor.commentsSince ??= {};
   let itemsUsed = itemsToday;
   let authFailure: MetricoolError | null = null;
+  let stopped: string | null = null;
   const initialFrom = new Date(now.getTime() - (deps.initialDays ?? 30) * DAY);
 
   // Permisos de comentarios por red (sin leer contenido).
@@ -151,8 +179,10 @@ export async function runSync(deps: SyncDeps): Promise<SyncRun> {
     authFailure = asMcError(e);
   }
 
-  for (const platform of authFailure ? [] : state.brand.networks) {
+  networks: for (const platform of authFailure ? [] : state.brand.networks) {
     const label = PLATFORM_LABEL[platform];
+    stopped = await stopReason();
+    if (stopped) break;
     // 1. Publicaciones y métricas
     if (POSTS_SUPPORTED.includes(platform)) {
       const prevTo = cursor.postsTo[platform];
@@ -244,6 +274,14 @@ export async function runSync(deps: SyncDeps): Promise<SyncRun> {
         let inserted = 0;
         let newest = since ? Date.parse(since) : 0;
         do {
+          if (pages > 0) {
+            stopped = await stopReason();
+            if (stopped) {
+              // Lo ya importado en páginas anteriores se conserva; el cursor no avanza.
+              run.commentsInserted += inserted;
+              break networks;
+            }
+          }
           const r = await mc.fetchThreads(platform, next);
           await deps.store.enrichPostMedia(
             deps.orgId,
@@ -333,8 +371,21 @@ export async function runSync(deps: SyncDeps): Promise<SyncRun> {
     itemsToday: itemsUsed,
   };
 
+  if (stopped) {
+    run.errors.unshift(skip(`Detenida durante la ejecución: ${stopped}`));
+    // Sin recalcular cobertura (incompleta) y sin avanzar cursores de redes no terminadas:
+    // `cursor` solo contiene lo completado antes de la parada.
+    return finish('stopped', run, { ...usage, cursor });
+  }
   if (authFailure) {
     run.errors.unshift(toSyncError(authFailure, null, null));
+    if (authFailure.kind === 'brand_not_authorized') {
+      return finish('skipped_not_authorized', run, {
+        ...usage,
+        status: 'error',
+        statusReason: 'Marca no autorizada para esta organización',
+      });
+    }
     return finish('failed', run, {
       ...usage,
       status: 'error',
