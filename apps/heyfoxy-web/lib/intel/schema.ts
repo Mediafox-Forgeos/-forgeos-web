@@ -57,6 +57,8 @@ export const PostIntelSchema = z.object({
     intent: z.string().max(160).nullable(),
     hook: z.string().max(300).nullable(),
     cta: z.string().max(200).nullable(),
+    /** El CTA forma parte de la misma frase que el hook (copy de una sola frase). */
+    ctaInHook: z.boolean().default(false),
     visual: z.string().max(400).nullable(),
     findings: z.array(FindingSchema).max(10),
   }),
@@ -86,6 +88,11 @@ export type PostIntel = z.infer<typeof PostIntelSchema>;
 
 export const AskAnswerSchema = z.object({
   question: z.string().max(500),
+  /**
+   * Respuesta principal: el título del hallazgo más relevante, compuesto por reglas (no es
+   * texto generado). null si no hay respuesta.
+   */
+  headline: z.string().max(240).nullable().default(null),
   findings: z.array(FindingSchema).max(10),
   /** Si el motor no puede responder con la evidencia disponible, lo dice. */
   unanswerable: z.string().max(400).nullable(),

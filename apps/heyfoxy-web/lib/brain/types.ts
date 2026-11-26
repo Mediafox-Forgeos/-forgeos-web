@@ -70,6 +70,8 @@ export interface StoredBrandContext {
   version: number;
   updatedAt: string | null;
   isSynthetic: boolean;
+  /** Quién guardó la versión vigente (id de usuario), si se conoce. */
+  updatedBy?: string | null;
 }
 
 export const emptyBrandContext = (): BrandContext =>
@@ -114,6 +116,15 @@ export const MEMORY_KIND_LABEL: Record<MemoryKind, string> = {
   test_result: 'Resultado de prueba',
 };
 
+export type MemoryStatus = 'proposed' | 'validated' | 'rejected' | 'archived';
+
+export const MEMORY_STATUS_LABEL: Record<MemoryStatus, string> = {
+  proposed: 'Pendiente de revisión',
+  validated: 'Aprobado',
+  rejected: 'Rechazado',
+  archived: 'Archivado',
+};
+
 export interface MemoryEntry {
   id: string;
   kind: MemoryKind;
@@ -121,7 +132,23 @@ export interface MemoryEntry {
   body: string;
   evidence: Array<{ label: string; href?: string }>;
   sourcePostId: string | null;
-  status: 'proposed' | 'validated' | 'archived';
+  status: MemoryStatus;
   createdAt: string;
   isSynthetic: boolean;
+  /** Autor de la propuesta (id de usuario), si se conoce. */
+  createdBy?: string | null;
+  /** Quién decidió (aprobó, rechazó o archivó) y cuándo. */
+  reviewedBy?: string | null;
+  reviewedAt?: string | null;
+  /** Motivo de la decisión (obligatorio al rechazar). */
+  reviewNote?: string | null;
+}
+
+/** Decisión humana sobre una propuesta. */
+export type MemoryDecision = 'validated' | 'rejected' | 'archived';
+
+/** Transiciones permitidas (las mismas que impone la migración 0008 en la base). */
+export function canTransition(from: MemoryStatus, to: MemoryDecision): boolean {
+  if (from === 'proposed') return true;
+  return (from === 'validated' || from === 'rejected') && to === 'archived';
 }

@@ -3,6 +3,7 @@ import {
   PostIntelSchema,
   type AskAnswer,
   type Evidence,
+  type Finding,
   type PostIntel,
 } from './schema';
 
@@ -87,16 +88,26 @@ const keepRef = (ids: Set<string>) => (e: Evidence) =>
  * Valida una salida (de cualquier proveedor) y descarta referencias a publicaciones que no
  * estaban en la entrada: una respuesta no puede «citar» evidencia inventada.
  */
+/**
+ * Normaliza un hallazgo venga del proveedor que venga: descarta evidencia que no estaba en la
+ * entrada y quita el nivel de confianza de los HECHOS (un hecho verificado no tiene
+ * «confianza»; solo interpretaciones, hipótesis y recomendaciones la llevan).
+ */
+export function normalizeFinding<T extends Finding>(f: T, ids: Set<string>): T {
+  return {
+    ...f,
+    confidence: f.kind === 'fact' ? null : f.confidence,
+    evidence: f.evidence.filter(keepRef(ids)),
+  };
+}
+
 export function validateIntel(
   raw: unknown,
   allowedPostIds: Iterable<string>,
 ): PostIntel {
   const intel = PostIntelSchema.parse(raw);
   const ids = new Set(allowedPostIds);
-  const fix = <T extends { evidence: Evidence[] }>(f: T): T => ({
-    ...f,
-    evidence: f.evidence.filter(keepRef(ids)),
-  });
+  const fix = <T extends Finding>(f: T): T => normalizeFinding(f, ids);
   return {
     ...intel,
     content: { ...intel.content, findings: intel.content.findings.map(fix) },
@@ -119,10 +130,7 @@ export function validateAnswer(
   const ids = new Set(allowedPostIds);
   return {
     ...a,
-    findings: a.findings.map((f) => ({
-      ...f,
-      evidence: f.evidence.filter(keepRef(ids)),
-    })),
+    findings: a.findings.map((f) => normalizeFinding(f, ids)),
   };
 }
 

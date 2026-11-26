@@ -1,14 +1,20 @@
 import {
   Brain,
   BookOpen,
+  CheckCircle2,
   Compass,
+  History,
   Library,
   Megaphone,
-  Save,
   Sparkles,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { CopilotScope } from '@/components/ds/copilot';
 import { BrandContextCard } from '@/components/ds/intel';
+import {
+  BrandBrainForm,
+  LearningReviewCard,
+} from '@/components/ds/learning-review';
 import { ModuleSurface, PageHeaderV2 } from '@/components/ds/layout';
 import { Panel, PanelHeader, StatusPill } from '@/components/ds/primitives';
 import { EmptyStateV2 } from '@/components/ds/states';
@@ -17,10 +23,12 @@ import {
   brainAvailability,
   getBrandContext,
   listMemory,
+  reviewAvailability,
 } from '@/lib/brain/store';
-import { MEMORY_KIND_LABEL, emptyBrandContext } from '@/lib/brain/types';
+import { brandContextCompleteness, emptyBrandContext } from '@/lib/brain/types';
 import { fmtDateTime } from '@/lib/format';
-import { saveBrandBrainAction } from './actions';
+import { BRAND_QUESTIONS } from '@/lib/intel/local';
+import { PERIOD_PARAM, parsePeriod, withPeriod } from '@/lib/period';
 
 export const metadata = { title: 'Foxy Brand Brain' };
 
@@ -100,13 +108,24 @@ export default async function BrandBrainPage({
   searchParams: Promise<Record<string, string>>;
 }) {
   const sp = await searchParams;
-  const { active } = await requireContext();
+  const period = parsePeriod(sp[PERIOD_PARAM]);
+  const { active, repo } = await requireContext();
   const orgId = active.organization.id;
   const availability = brainAvailability();
-  const [stored, memory] = await Promise.all([
+  const reviewMode = reviewAvailability();
+  const [stored, memory, members] = await Promise.all([
     getBrandContext(orgId),
     listMemory(orgId),
+    repo.members(orgId),
   ]);
+  const nameOf = (id: string | null | undefined) =>
+    id ? (members.find((m) => m.userId === id)?.name ?? null) : null;
+  const canReview = ['owner', 'admin'].includes(active.role);
+  const pendingMem = memory.filter((m) => m.status === 'proposed');
+  const historyMem = memory.filter((m) => m.status !== 'proposed');
+  const periodQ = withPeriod('', period);
+  const comp = brandContextCompleteness(stored?.context ?? emptyBrandContext());
+  const synthetic = stored?.isSynthetic || active.organization.isDemo;
   const c = stored?.context ?? emptyBrandContext();
   const canEdit =
     ['owner', 'admin'].includes(active.role) && availability === 'ready';
@@ -122,24 +141,45 @@ export default async function BrandBrainPage({
         title="Foxy Brand Brain"
         description={`Contexto estratégico autorizado de ${active.organization.name}. Foxy lo usa para personalizar sus análisis y recomendaciones; nunca lo modifica.`}
       />
-      {sp.guardado && (
-        <p
-          role="status"
-          className="bg-success-bg text-success-fg mb-4 rounded-xl px-4 py-2.5 text-sm font-bold"
-        >
-          Contexto guardado (versión {stored?.version ?? 1}).
-        </p>
-      )}
-      {sp.error && (
-        <p
-          role="alert"
-          className="bg-critical-bg text-critical-fg mb-4 rounded-xl px-4 py-2.5 text-sm font-bold"
-        >
-          {sp.error === 'rol'
-            ? 'Solo owner o admin pueden editar Brand Brain.'
-            : 'Revisa los campos: hay valores fuera de los límites permitidos.'}
-        </p>
-      )}
+      <CopilotScope
+        screen="Foxy Brand Brain"
+        postId={null}
+        platform={null}
+        label={`${active.organization.name} · estrategia y memoria`}
+        suggestions={[
+          '¿Estamos cumpliendo nuestra estrategia?',
+          ...BRAND_QUESTIONS.filter((q) => !/estrategia/.test(q)),
+        ]}
+        postHrefPattern={withPeriod('/publicaciones/{id}', period)}
+      />
+      <div className="mb-4 flex flex-wrap items-center gap-2 text-[13px]">
+        {stored ? (
+          <StatusPill tone="info" icon={History}>
+            Versión {stored.version}
+            {stored.updatedAt ? ` · ${fmtDateTime(stored.updatedAt)}` : ''}
+            {nameOf(stored.updatedBy) ? ` · ${nameOf(stored.updatedBy)}` : ''}
+          </StatusPill>
+        ) : (
+          <StatusPill tone="neutral">Sin contexto guardado</StatusPill>
+        )}
+        {synthetic && (
+          <StatusPill tone="warning">
+            Organización sintética de prueba: no describe una marca real
+          </StatusPill>
+        )}
+        {pendingMem.length > 0 && (
+          <a
+            href="#bb-mem"
+            className="text-primary-text text-xs font-extrabold"
+          >
+            {pendingMem.length}{' '}
+            {pendingMem.length === 1
+              ? 'aprendizaje pendiente'
+              : 'aprendizajes pendientes'}{' '}
+            de revisión
+          </a>
+        )}
+      </div>
 
       <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-4 lg:grid-cols-12">
         <aside className="space-y-4 lg:sticky lg:top-24 lg:col-span-4">
@@ -147,6 +187,10 @@ export default async function BrandBrainPage({
             stored={stored}
             href="#identidad"
             availability={availability}
+            learnings={{
+              proposed: pendingMem.length,
+              validated: memory.filter((m) => m.status === 'validated').length,
+            }}
           />
           <Panel aria-labelledby="bb-why">
             <PanelHeader
@@ -197,12 +241,35 @@ export default async function BrandBrainPage({
               estratégico.
             </p>
           )}
-          {stored?.isSynthetic && (
-            <StatusPill tone="warning">
-              Contexto sintético de prueba: no describe una marca real
-            </StatusPill>
+          {!stored && availability === 'ready' && (
+            <Panel aria-labelledby="bb-start">
+              <PanelHeader
+                icon={CheckCircle2}
+                tone="ai"
+                title="Empieza por lo esencial"
+                titleId="bb-start"
+                description="Con estos campos Foxy ya puede reconocer pilares y evaluar la alineación."
+              />
+              <ol className="grid gap-2 text-[13px] sm:grid-cols-2">
+                {comp.missing.map((m, i) => (
+                  <li
+                    key={m}
+                    className="bg-muted/60 flex items-center gap-2 rounded-xl px-3 py-2"
+                  >
+                    <span className="bg-ai-bg text-ai-fg flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-black">
+                      {i + 1}
+                    </span>
+                    {m}
+                  </li>
+                ))}
+              </ol>
+              <p className="text-muted-foreground mt-3 text-xs">
+                Solo información estratégica autorizada. No cargues datos de
+                pacientes, credenciales ni documentos completos.
+              </p>
+            </Panel>
           )}
-          <form action={saveBrandBrainAction} className="space-y-4">
+          <BrandBrainForm canEdit={canEdit}>
             <div id="identidad" className="scroll-mt-24">
               <Section icon={BookOpen} title="A. Identidad de marca" id="bb-a">
                 <Field
@@ -373,61 +440,77 @@ export default async function BrandBrainPage({
                 />
               </div>
             </Section>
-            {canEdit && (
-              <div className="flex justify-end">
-                <button
-                  type="submit"
-                  className="bg-brand text-brand-foreground inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-extrabold"
-                >
-                  <Save aria-hidden className="h-4 w-4" /> Guardar contexto
-                </button>
-              </div>
-            )}
-          </form>
+          </BrandBrainForm>
 
-          <Panel aria-labelledby="bb-mem">
+          <Panel aria-labelledby="bb-mem" id="bb-mem" className="scroll-mt-24">
             <PanelHeader
               icon={Brain}
-              title="E. Memoria estratégica"
+              title="E. Memoria estratégica · revisión humana"
               titleId="bb-mem"
-              description="Aprendizajes y decisiones propuestos desde Foxy. Quedan como propuesta hasta que owner o admin los validen."
+              description={
+                canReview
+                  ? 'Aprendizajes propuestos desde Foxy. Revisa la evidencia y decide: aprobar, rechazar (con motivo) o archivar. Foxy nunca modifica la estrategia.'
+                  : 'Aprendizajes propuestos desde Foxy. Solo owner o admin pueden aprobarlos o rechazarlos.'
+              }
             />
             {memory.length === 0 ? (
-              <EmptyStateV2 compact title="Sin aprendizajes guardados">
+              <EmptyStateV2 compact title="Sin aprendizajes propuestos">
                 Usa «Guardar como aprendizaje» en el análisis de una
-                publicación.
+                publicación: quedará aquí pendiente de revisión.
               </EmptyStateV2>
             ) : (
-              <ul className="divide-border divide-y">
-                {memory.map((m) => (
-                  <li key={m.id} className="py-3">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <StatusPill tone="ai">
-                        {MEMORY_KIND_LABEL[m.kind]}
-                      </StatusPill>
-                      <StatusPill
-                        tone={m.status === 'validated' ? 'success' : 'warning'}
-                      >
-                        {m.status === 'validated'
-                          ? 'Validado'
-                          : m.status === 'archived'
-                            ? 'Archivado'
-                            : 'Propuesto'}
-                      </StatusPill>
-                      {m.isSynthetic && (
-                        <StatusPill tone="warning">Sintético</StatusPill>
-                      )}
-                      <span className="text-muted-foreground text-xs">
-                        {fmtDateTime(m.createdAt)}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-sm font-extrabold">{m.title}</p>
-                    <p className="text-muted-foreground text-[13px]">
-                      {m.body}
+              <div className="space-y-5">
+                <section aria-labelledby="bb-pending">
+                  <h3
+                    id="bb-pending"
+                    className="text-muted-foreground mb-2 text-[11px] font-extrabold uppercase tracking-wider"
+                  >
+                    Pendientes de revisión ({pendingMem.length})
+                  </h3>
+                  {pendingMem.length === 0 ? (
+                    <p className="text-muted-foreground text-sm">
+                      No hay propuestas pendientes.
                     </p>
-                  </li>
-                ))}
-              </ul>
+                  ) : (
+                    <div className="space-y-3">
+                      {pendingMem.map((m) => (
+                        <LearningReviewCard
+                          key={m.id}
+                          entry={m}
+                          authorName={nameOf(m.createdBy)}
+                          reviewerName={nameOf(m.reviewedBy)}
+                          canReview={canReview}
+                          reviewMode={reviewMode}
+                          withPeriod={periodQ}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </section>
+                {historyMem.length > 0 && (
+                  <section aria-labelledby="bb-history">
+                    <h3
+                      id="bb-history"
+                      className="text-muted-foreground mb-2 text-[11px] font-extrabold uppercase tracking-wider"
+                    >
+                      Historial de decisiones ({historyMem.length})
+                    </h3>
+                    <div className="space-y-3">
+                      {historyMem.map((m) => (
+                        <LearningReviewCard
+                          key={m.id}
+                          entry={m}
+                          authorName={nameOf(m.createdBy)}
+                          reviewerName={nameOf(m.reviewedBy)}
+                          canReview={canReview}
+                          reviewMode={reviewMode}
+                          withPeriod={periodQ}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                )}
+              </div>
             )}
           </Panel>
         </div>

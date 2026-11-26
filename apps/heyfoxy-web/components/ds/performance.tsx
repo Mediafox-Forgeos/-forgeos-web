@@ -10,11 +10,13 @@ import {
   MousePointerClick,
   Percent,
   Repeat2,
+  Scale,
   Smile,
   Users,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import type { ComparisonMetric, PostComparison } from '@/lib/intel/brand';
 import {
   METRIC_STATE_LABEL,
   type InteractionBreakdownData,
@@ -93,20 +95,46 @@ export function MetricAvailabilityState({
   );
 }
 
-/** Ayuda contextual accesible: visible al pasar el cursor o al enfocar. */
-export function InfoTip({ text, label }: { text: string; label: string }) {
+/**
+ * Ayuda contextual accesible: visible al pasar el cursor o al enfocar. Se ancla al borde
+ * derecho del icono (se abre hacia la izquierda), de modo que no se sale de la tarjeta ni de
+ * la pantalla en la última columna; la tarjeta no recorta su contenido (HF-UX-15).
+ */
+export function InfoTip({
+  text,
+  label,
+  align = 'end',
+}: {
+  text: string;
+  label: string;
+  /**
+   * end: se abre hacia la izquierda (iconos a la derecha); start: hacia la derecha;
+   * card: ocupa el ancho de la tarjeta contenedora (posicionada), nunca sale de ella.
+   */
+  align?: 'start' | 'end' | 'card';
+}) {
   return (
-    <span className="group/tip relative inline-flex">
+    <span
+      className={cn('group/tip inline-flex', align !== 'card' && 'relative')}
+    >
       <button
         type="button"
         className="text-muted-foreground hover:text-foreground focus-visible:text-foreground rounded-full"
         aria-label={`Qué es ${label}`}
+        aria-describedby={undefined}
       >
         <Info aria-hidden className="h-3.5 w-3.5" />
       </button>
       <span
         role="tooltip"
-        className="bg-foreground text-background shadow-lift pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden w-60 -translate-x-1/2 rounded-lg px-3 py-2 text-xs font-semibold leading-snug group-focus-within/tip:block group-hover/tip:block"
+        className={cn(
+          'bg-foreground text-background shadow-lift pointer-events-none absolute z-30 hidden rounded-lg px-3 py-2 text-xs font-semibold leading-snug group-focus-within/tip:block group-hover/tip:block',
+          align === 'card'
+            ? 'inset-x-3 top-14'
+            : 'top-full mt-2 w-[min(15rem,80vw)]',
+          align === 'end' && 'right-0',
+          align === 'start' && 'left-0',
+        )}
       >
         {text}
       </span>
@@ -129,8 +157,11 @@ export function PerformanceMetricCard({
   const has = reading.value != null;
   const d = reading.delta;
   return (
-    <div className="rounded-card border-border/80 bg-card shadow-card relative overflow-hidden border p-4">
-      <span aria-hidden className={cn('absolute inset-x-0 top-0 h-1', t.bar)} />
+    <div className="rounded-card border-border/80 bg-card shadow-card relative border p-4">
+      <span
+        aria-hidden
+        className={cn('rounded-t-card absolute inset-x-0 top-0 h-1', t.bar)}
+      />
       <div className="flex items-center justify-between gap-2">
         <span className="flex min-w-0 items-center gap-2">
           <span
@@ -147,7 +178,7 @@ export function PerformanceMetricCard({
             {reading.label}
           </span>
         </span>
-        <InfoTip text={reading.definition} label={reading.label} />
+        <InfoTip text={reading.definition} label={reading.label} align="card" />
       </div>
       <p
         className={cn(
@@ -218,10 +249,15 @@ export function InteractionBreakdown({
   data,
   networkLabel,
   reactions = [],
+  description,
+  stacked = false,
 }: {
   data: InteractionBreakdownData;
   networkLabel: string;
   reactions?: Array<{ type: string; value: number }>;
+  description?: string;
+  /** Anillo sobre las barras siempre (contenedores estrechos, p. ej. tres columnas). */
+  stacked?: boolean;
 }) {
   const total = data.componentsTotal;
   const pct = (v: number) => (total > 0 ? Math.round((v / total) * 100) : 0);
@@ -230,7 +266,10 @@ export function InteractionBreakdown({
       icon={MousePointerClick}
       tone="high"
       title="Distribución de interacciones"
-      description={`Componentes que entrega ${networkLabel}, última medición.`}
+      description={
+        description ??
+        `Componentes que entrega ${networkLabel}, última medición.`
+      }
       table={{
         caption: 'Distribución de interacciones',
         columns: ['Tipo', 'Cantidad', '%'],
@@ -242,35 +281,54 @@ export function InteractionBreakdown({
           La fuente no entregó interacciones para esta publicación.
         </p>
       ) : (
-        <div className="grid items-center gap-5 sm:grid-cols-[auto_minmax(0,1fr)]">
-          <Donut
-            stacked
-            centerValue={total.toLocaleString('es-CO')}
-            centerLabel="interacciones"
-            segments={data.parts.map((p) => ({
-              key: p.key,
-              label: p.label,
-              value: p.value,
-              color: p.color,
-            }))}
-          />
-          <ul className="space-y-3">
+        <div
+          className={cn(
+            'flex flex-col items-center gap-5',
+            !stacked && 'md:flex-row md:items-center',
+          )}
+        >
+          {/* Anillo sin leyenda propia: la leyenda son las barras (sin duplicar). */}
+          <div className="shrink-0">
+            <Donut
+              stacked
+              legend={false}
+              centerValue={total.toLocaleString('es-CO')}
+              centerLabel="interacciones"
+              segments={data.parts.map((p) => ({
+                key: p.key,
+                label: p.label,
+                value: p.value,
+                color: p.color,
+              }))}
+            />
+          </div>
+          <ul className="w-full min-w-0 flex-1 space-y-3.5">
             {data.parts.map((p) => {
               const Icon = IX_ICON[p.key] ?? MousePointerClick;
               return (
-                <li key={p.key}>
-                  <div className="flex items-center justify-between gap-2 text-sm">
-                    <span className="flex items-center gap-2 font-bold">
-                      <Icon
-                        aria-hidden
-                        className="text-muted-foreground h-4 w-4"
-                      />
+                <li
+                  key={p.key}
+                  title={`${p.label}: ${p.value.toLocaleString('es-CO')} (${pct(p.value)} % de ${total.toLocaleString('es-CO')})`}
+                >
+                  <div className="flex items-center gap-2 text-sm">
+                    <span
+                      aria-hidden
+                      className={cn(
+                        'h-2.5 w-2.5 shrink-0 rounded-full',
+                        IX_BAR[p.key],
+                      )}
+                    />
+                    <Icon
+                      aria-hidden
+                      className="text-muted-foreground h-4 w-4 shrink-0"
+                    />
+                    <span className="min-w-0 flex-1 truncate font-bold">
                       {p.label}
                     </span>
-                    <span className="tabular-nums">
-                      <b>{p.value.toLocaleString('es-CO')}</b>{' '}
-                      <span className="text-muted-foreground">
-                        · {pct(p.value)} %
+                    <span className="shrink-0 whitespace-nowrap tabular-nums">
+                      <b>{p.value.toLocaleString('es-CO')}</b>
+                      <span className="text-muted-foreground inline-block w-14 text-right">
+                        {pct(p.value)} %
                       </span>
                     </span>
                   </div>
@@ -323,6 +381,155 @@ export function InteractionBreakdown({
           comentarios importados ni clasificados por Hey Foxy.
         </p>
       </div>
+    </ChartCard>
+  );
+}
+
+const CMP_BAR: Record<ComparisonMetric['key'], string> = {
+  engagement: 'bg-metric-engagement',
+  reach: 'bg-metric-reach',
+  interactions: 'bg-metric-interactions',
+};
+
+const fmtCmp = (v: number, unit: string) =>
+  unit === '%'
+    ? `${v.toLocaleString('es-CO', { maximumFractionDigits: 1 })} %`
+    : Math.round(v).toLocaleString('es-CO');
+
+/**
+ * Rendimiento comparable (DS v0.4): la publicación frente a la mediana de publicaciones
+ * equivalentes de la MISMA red y tipo de formato, más la mediana de engagement por formato en
+ * esa red. Declara muestra y periodo; describe, no demuestra causalidad.
+ */
+export function PerformanceComparison({
+  data,
+  periodLabel,
+}: {
+  data: PostComparison;
+  periodLabel: string;
+}) {
+  const fmtMax = Math.max(
+    0,
+    ...data.formats.map((f) => f.engagementMedian ?? 0),
+  );
+  return (
+    <ChartCard
+      icon={Scale}
+      tone="info"
+      title="Rendimiento comparable"
+      description={`Frente a ${data.sample} ${data.sample === 1 ? 'publicación' : 'publicaciones'} de ${data.network} con formato ${data.group} · ${periodLabel.toLowerCase()}.`}
+      table={{
+        caption: 'Rendimiento frente a publicaciones equivalentes',
+        columns: ['Métrica', 'Esta publicación', 'Mediana de equivalentes'],
+        rows: data.metrics.map((m) => [
+          m.label,
+          m.value != null ? fmtCmp(m.value, m.unit) : '—',
+          m.median != null ? fmtCmp(m.median, m.unit) : 'Base insuficiente',
+        ]),
+      }}
+    >
+      {!data.enough && (
+        <p className="bg-muted text-muted-foreground mb-3 rounded-xl px-3 py-2 text-xs font-semibold">
+          Base insuficiente para calcular medianas: hay {data.sample}{' '}
+          {data.sample === 1 ? 'equivalente' : 'equivalentes'} y se necesitan al
+          menos {data.minSample}. Amplía el periodo para comparar.
+        </p>
+      )}
+      <ul className="space-y-4">
+        {data.metrics.map((m) => {
+          const scale = m.max ?? 0;
+          const w = (v: number | null) =>
+            v != null && scale > 0 ? Math.max(2, (v / scale) * 100) : 0;
+          return (
+            <li key={m.key}>
+              <p className="text-sm font-extrabold">{m.label}</p>
+              <div className="mt-1.5 space-y-1.5 text-xs">
+                {(
+                  [
+                    ['Esta publicación', m.value, CMP_BAR[m.key]],
+                    [
+                      'Mediana de equivalentes',
+                      m.median,
+                      'bg-muted-foreground/45',
+                    ],
+                  ] as const
+                ).map(([label, v, bar]) => (
+                  <div
+                    key={label}
+                    className="grid grid-cols-[minmax(0,9.5rem)_minmax(0,1fr)_auto] items-center gap-2"
+                  >
+                    <span className="text-muted-foreground truncate font-semibold">
+                      {label}
+                    </span>
+                    <span
+                      className="bg-muted h-2.5 overflow-hidden rounded-full"
+                      aria-hidden
+                    >
+                      <span
+                        className={cn('block h-full rounded-full', bar)}
+                        style={{ width: `${w(v)}%` }}
+                      />
+                    </span>
+                    <b className="w-16 whitespace-nowrap text-right tabular-nums">
+                      {v != null ? fmtCmp(v, m.unit) : '—'}
+                    </b>
+                  </div>
+                ))}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      {data.formats.length > 0 && (
+        <div className="border-border mt-4 border-t pt-3">
+          <p className="text-sm font-extrabold">
+            Engagement por formato en {data.network}
+          </p>
+          <ul className="mt-2 space-y-1.5 text-xs">
+            {data.formats.map((f) => (
+              <li
+                key={f.format}
+                className="grid grid-cols-[minmax(0,9.5rem)_minmax(0,1fr)_auto] items-center gap-2"
+              >
+                <span className="truncate font-semibold">
+                  {f.format}{' '}
+                  <span className="text-muted-foreground">(n = {f.n})</span>
+                </span>
+                <span
+                  className="bg-muted h-2.5 overflow-hidden rounded-full"
+                  aria-hidden
+                >
+                  <span
+                    className={cn(
+                      'block h-full rounded-full',
+                      f.n >= data.minSample
+                        ? 'bg-metric-engagement'
+                        : 'bg-metric-engagement/40',
+                    )}
+                    style={{
+                      width: `${fmtMax > 0 && f.engagementMedian != null ? Math.max(2, (f.engagementMedian / fmtMax) * 100) : 0}%`,
+                    }}
+                  />
+                </span>
+                <b className="w-16 whitespace-nowrap text-right tabular-nums">
+                  {f.engagementMedian != null
+                    ? fmtCmp(f.engagementMedian, '%')
+                    : '—'}
+                </b>
+              </li>
+            ))}
+          </ul>
+          <p className="text-muted-foreground mt-2 text-[11.5px]">
+            Mediana por formato; con n &lt; {data.minSample} la barra se atenúa
+            (base pequeña).
+          </p>
+        </div>
+      )}
+      <p className="text-muted-foreground mt-3 text-[11.5px]">
+        Engagement de {data.network} = {data.engagementBasis}. Solo se compara
+        dentro de la misma red. Descriptivo: no controla horario, pauta ni tema
+        y no demuestra causalidad.
+      </p>
     </ChartCard>
   );
 }

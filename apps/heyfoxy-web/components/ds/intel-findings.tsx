@@ -2,6 +2,7 @@ import {
   BadgeCheck,
   BarChart3,
   BookOpen,
+  ChevronRight,
   FileText,
   FlaskConical,
   Lightbulb,
@@ -107,16 +108,51 @@ export function EvidenceReference({
   );
 }
 
+/**
+ * Evidencia expandible (DS v0.4): cerrada por defecto para no saturar la lectura; se abre con
+ * clic o teclado (elemento nativo <details>). Muestra cuántas referencias hay.
+ */
+export function EvidenceDisclosure({
+  evidence,
+  postHref,
+  open = false,
+}: {
+  evidence: Evidence[];
+  postHref?: (id: string) => string;
+  open?: boolean;
+}) {
+  if (!evidence.length) return null;
+  return (
+    <details className="group/ev mt-2 pl-1.5" open={open}>
+      <summary className="text-primary-text inline-flex cursor-pointer list-none items-center gap-1 text-[11.5px] font-extrabold [&::-webkit-details-marker]:hidden">
+        <ChevronRight
+          aria-hidden
+          className="h-3.5 w-3.5 transition-transform group-open/ev:rotate-90"
+        />
+        Evidencia ({evidence.length})
+      </summary>
+      <div className="mt-1.5 flex flex-wrap gap-1" aria-label="Evidencia">
+        {evidence.map((e, i) => (
+          <EvidenceReference key={i} e={e} postHref={postHref} />
+        ))}
+      </div>
+    </details>
+  );
+}
+
 export function FindingCard({
   f,
   postHref,
   compact = false,
   action,
+  hideLimitation = false,
 }: {
   f: Finding;
   postHref?: (id: string) => string;
   compact?: boolean;
   action?: React.ReactNode;
+  /** La limitación se muestra aparte (p. ej. lista de limitaciones de una respuesta). */
+  hideLimitation?: boolean;
 }) {
   return (
     <article
@@ -131,7 +167,7 @@ export function FindingCard({
       />
       <div className="flex flex-wrap items-center gap-1.5 pl-1.5">
         <FindingKindBadge kind={f.kind} />
-        {f.confidence && (
+        {f.confidence && f.kind !== 'fact' && (
           <span className="text-muted-foreground text-[11px] font-bold">
             Confianza {f.confidence}
           </span>
@@ -145,17 +181,8 @@ export function FindingCard({
           {f.detail}
         </p>
       )}
-      {f.evidence.length > 0 && (
-        <div
-          className="mt-2 flex flex-wrap gap-1 pl-1.5"
-          aria-label="Evidencia"
-        >
-          {f.evidence.map((e, i) => (
-            <EvidenceReference key={i} e={e} postHref={postHref} />
-          ))}
-        </div>
-      )}
-      {f.limitation && (
+      <EvidenceDisclosure evidence={f.evidence} postHref={postHref} />
+      {f.limitation && !hideLimitation && (
         <p className="text-muted-foreground mt-1.5 pl-1.5 text-[11.5px] italic">
           Limitación: {f.limitation}
         </p>

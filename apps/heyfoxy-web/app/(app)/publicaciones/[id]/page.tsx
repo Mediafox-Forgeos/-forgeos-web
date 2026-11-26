@@ -11,12 +11,14 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ChartCard } from '@/components/ds/charts';
 import { ConversationRow } from '@/components/ds/conversation';
+import { CopilotAskButton, CopilotScope } from '@/components/ds/copilot';
 import {
   BrandContextCard,
+  CoverageStatus,
   FoxyContentIntelligence,
+  ResponsiveIntelligenceLayout,
 } from '@/components/ds/intel';
 import {
-  AskFoxyContextual,
   ExpandableCopy,
   PerformanceTimeline,
   type TimelineSeries,
@@ -25,6 +27,7 @@ import { ModuleSurface } from '@/components/ds/layout';
 import {
   InteractionBreakdown,
   MetricAvailabilityState,
+  PerformanceComparison,
   PerformanceMetricCard,
 } from '@/components/ds/performance';
 import { AuthorChip, OriginalLink, PostMedia } from '@/components/ds/post';
@@ -34,12 +37,12 @@ import {
   StatusPill,
   SyntheticBadge,
 } from '@/components/ds/primitives';
-import { EmptyStateV2 } from '@/components/ds/states';
 import { requireContext } from '@/lib/auth/session';
 import { brainAvailability, getBrandContext } from '@/lib/brain/store';
 import { explorerQuery, parseExplorerFilters } from '@/lib/explorer-filters';
 import { PLATFORM_LABEL, fmtDateTime } from '@/lib/format';
 import { inWindow } from '@/lib/home-insights';
+import { postComparison } from '@/lib/intel/brand';
 import { commentsDisabledFor, getPostIntel } from '@/lib/intel/engine';
 import { formatOf, SUGGESTED_QUESTIONS } from '@/lib/intel/local';
 import {
@@ -133,6 +136,7 @@ export default async function PostDetailPage({
   const ixNet = readMetric(post, 'interactions');
   const views = readMetric(post, 'views');
   const breakdown = interactionBreakdown(post);
+  const comparison = postComparison(post, peers);
   const engFinding = intel?.performance.findings.find((f) =>
     /equivalentes/.test(f.title),
   );
@@ -217,170 +221,181 @@ export default async function PostDetailPage({
         </nav>
       </div>
 
-      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-4 lg:grid-cols-12">
-        {/* A. Publicación original */}
-        <div className="space-y-4 lg:sticky lg:top-24 lg:col-span-4">
-          <Panel as="article" aria-labelledby="post-title">
-            <div className="mb-3 flex items-start justify-between gap-2">
-              <AuthorChip post={post} size={42} />
-              {post.isSynthetic && <SyntheticBadge />}
-            </div>
-            <div className="mb-3 flex flex-wrap items-center gap-1.5">
-              <StatusPill tone="info">{formatOf(post)}</StatusPill>
-              {post.publishedAt && (
-                <span className="text-muted-foreground inline-flex items-center gap-1 text-xs font-semibold">
-                  <CalendarClock aria-hidden className="h-3.5 w-3.5" />
-                  {fmtDateTime(post.publishedAt)}
-                </span>
-              )}
-            </div>
-            <PostMedia post={post} variant="detail" />
-            <h1 id="post-title" className="sr-only">
-              Publicación de {net}
-              {post.publishedAt ? ` del ${fmtDateTime(post.publishedAt)}` : ''}
-            </h1>
-            <div className="mt-4">
-              <ExpandableCopy text={post.body} />
-            </div>
-            <OriginalLink post={post} className="mt-3" />
-          </Panel>
-          <BrandContextCard
-            stored={stored}
-            href={withPeriod('/brand-brain', period)}
-            availability={availability}
-          />
+      <CopilotScope
+        screen="Detalle de publicación"
+        postId={post.id}
+        platform={post.platform}
+        label={`${active.organization.name} · ${net} · ${formatOf(post)} · ${periodLabel(period).toLowerCase()}${fq ? ' · con filtros' : ''}`}
+        suggestions={SUGGESTED_QUESTIONS}
+        postHrefPattern={withPeriod(
+          `/publicaciones/{id}${fq ? `?${fq}` : ''}`,
+          period,
+        )}
+      />
+      <h1 id="post-title" className="sr-only">
+        Publicación de {net}
+        {post.publishedAt ? ` del ${fmtDateTime(post.publishedAt)}` : ''}
+      </h1>
+
+      {/* 2. Cuatro KPI principales, a todo el ancho */}
+      <h2 className="sr-only">Rendimiento</h2>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <PerformanceMetricCard reading={reach} tone="reach" />
+        <PerformanceMetricCard
+          reading={engagement}
+          tone="engagement"
+          comparison={engComparison}
+        />
+        <PerformanceMetricCard reading={impressions} tone="impressions" />
+        <PerformanceMetricCard reading={ixNet} tone="interactions" />
+      </div>
+      {(views.state === 'value' || views.state === 'zero') &&
+        views.value !== impressions.value && (
+          <p className="text-muted-foreground mt-2 text-xs">
+            <b className="text-foreground">{views.label}:</b> {views.display} ·{' '}
+            {views.definition}
+          </p>
+        )}
+      {views.state === 'not_applicable' && (
+        <p className="text-muted-foreground mt-2 flex items-center gap-1.5 text-xs">
+          <b className="text-foreground">Vistas:</b>{' '}
+          <MetricAvailabilityState state="not_applicable" /> {net} no entrega
+          vistas para este formato.
+        </p>
+      )}
+
+      <div className="mt-4 space-y-4">
+        {/* 3–5. Publicación original · distribución · rendimiento comparable */}
+        <ResponsiveIntelligenceLayout
+          primary={
+            <Panel as="article" aria-label={`Publicación original de ${net}`}>
+              <div className="md:grid md:grid-cols-2 md:gap-5 lg:block">
+                <div>
+                  <div className="mb-3 flex items-start justify-between gap-2">
+                    <AuthorChip post={post} size={42} />
+                    {post.isSynthetic && <SyntheticBadge />}
+                  </div>
+                  <div className="mb-3 flex flex-wrap items-center gap-1.5">
+                    <StatusPill tone="info">{formatOf(post)}</StatusPill>
+                    {post.publishedAt && (
+                      <span className="text-muted-foreground inline-flex items-center gap-1 text-xs font-semibold">
+                        <CalendarClock aria-hidden className="h-3.5 w-3.5" />
+                        {fmtDateTime(post.publishedAt)}
+                      </span>
+                    )}
+                  </div>
+                  <PostMedia post={post} variant="detail" />
+                </div>
+                <div className="mt-4 md:mt-0 lg:mt-4">
+                  <ExpandableCopy text={post.body} />
+                  <OriginalLink post={post} className="mt-3" />
+                </div>
+              </div>
+            </Panel>
+          }
+          secondary={
+            <>
+              <InteractionBreakdown
+                data={breakdown}
+                networkLabel={net}
+                reactions={reactionsByType(post)}
+              />
+              <PerformanceComparison
+                data={comparison}
+                periodLabel={periodLabel(period)}
+              />
+            </>
+          }
+        />
+
+        {/* 6. Evolución histórica */}
+        <div id="historial" className="scroll-mt-24">
+          <ChartCard
+            icon={ChartColumn}
+            tone="info"
+            title="Evolución del rendimiento"
+            description={`${post.metrics.length} ${post.metrics.length === 1 ? 'medición' : 'mediciones'} de ${post.isSynthetic ? 'datos sintéticos' : 'Metricool'}. Elige la métrica.`}
+            table={{
+              caption: 'Historial de mediciones de la publicación',
+              columns: [
+                'Medición',
+                'Me gusta',
+                'Comentarios en la red',
+                'Compartidos',
+                'Guardados',
+                reach.label,
+                'Impresiones',
+                'Engagement',
+              ],
+              rows: post.metrics.map((m) => [
+                fmtDateTime(m.capturedAt),
+                m.likes ?? '—',
+                m.comments ?? '—',
+                m.shares ?? '—',
+                m.saves ?? '—',
+                (post.platform === 'facebook' && m.reach == null
+                  ? m.impressionsUnique
+                  : m.reach) ?? '—',
+                m.impressions ?? '—',
+                m.engagement != null
+                  ? `${m.engagement.toLocaleString('es-CO', { maximumFractionDigits: 2 })} %`
+                  : '—',
+              ]),
+            }}
+          >
+            <PerformanceTimeline series={series} />
+          </ChartCard>
         </div>
 
-        <div className="min-w-0 space-y-4 lg:col-span-8">
-          {/* B. Rendimiento: KPI principales */}
-          <h2 className="sr-only">Rendimiento</h2>
-          <div className="grid grid-cols-2 gap-3 2xl:grid-cols-4">
-            <PerformanceMetricCard reading={reach} tone="reach" />
-            <PerformanceMetricCard
-              reading={engagement}
-              tone="engagement"
-              comparison={engComparison}
+        {/* 7. Foxy Intelligence */}
+        <FoxyContentIntelligence
+          intel={status === 'ok' ? intel : null}
+          meta={meta}
+          postId={post.id}
+          postHref={linkTo}
+          canSave={canSave}
+          saveDisabledReason={
+            availability !== 'ready'
+              ? 'Memoria estratégica pendiente de la migración 0007'
+              : !canSave
+                ? 'Tu rol no puede proponer aprendizajes'
+                : undefined
+          }
+          brandHref={withPeriod('/brand-brain', period)}
+          disabledReason={reason}
+        />
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-muted-foreground mr-1 text-xs font-extrabold">
+            Pregúntale a Foxy:
+          </span>
+          {SUGGESTED_QUESTIONS.slice(0, 4).map((q) => (
+            <CopilotAskButton
+              key={q}
+              question={q}
+              className="bg-card hover:border-ai-fg/40 border-border rounded-full border px-3 py-1.5 text-left text-xs font-bold"
             />
-            <PerformanceMetricCard reading={impressions} tone="impressions" />
-            <PerformanceMetricCard reading={ixNet} tone="interactions" />
-          </div>
-          {(views.state === 'value' || views.state === 'zero') &&
-            views.value !== impressions.value && (
-              <p className="text-muted-foreground text-xs">
-                <b className="text-foreground">{views.label}:</b>{' '}
-                {views.display} · {views.definition}
-              </p>
-            )}
-          {views.state === 'not_applicable' && (
-            <p className="text-muted-foreground flex items-center gap-1.5 text-xs">
-              <b className="text-foreground">Vistas:</b>{' '}
-              <MetricAvailabilityState state="not_applicable" /> {net} no
-              entrega vistas para este formato.
-            </p>
-          )}
+          ))}
+        </div>
 
-          {/* C. Inteligencia */}
-          <FoxyContentIntelligence
-            intel={status === 'ok' ? intel : null}
-            meta={meta}
-            postId={post.id}
-            postHref={linkTo}
-            canSave={canSave}
-            saveDisabledReason={
-              availability !== 'ready'
-                ? 'Memoria estratégica pendiente de la migración 0007'
-                : !canSave
-                  ? 'Tu rol no puede proponer aprendizajes'
-                  : undefined
-            }
-            brandHref={withPeriod('/brand-brain', period)}
-            disabledReason={reason}
-          />
-
-          <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-4 2xl:grid-cols-2">
-            <InteractionBreakdown
-              data={breakdown}
-              networkLabel={net}
-              reactions={reactionsByType(post)}
-            />
-            <div id="historial" className="scroll-mt-24">
-              <ChartCard
-                icon={ChartColumn}
-                tone="info"
-                title="Evolución del rendimiento"
-                description={`${post.metrics.length} ${post.metrics.length === 1 ? 'medición' : 'mediciones'} de Metricool. Elige la métrica.`}
-                table={{
-                  caption: 'Historial de mediciones de la publicación',
-                  columns: [
-                    'Medición',
-                    'Me gusta',
-                    'Comentarios en la red',
-                    'Compartidos',
-                    'Guardados',
-                    reach.label,
-                    'Impresiones',
-                    'Engagement',
-                  ],
-                  rows: post.metrics.map((m) => [
-                    fmtDateTime(m.capturedAt),
-                    m.likes ?? '—',
-                    m.comments ?? '—',
-                    m.shares ?? '—',
-                    m.saves ?? '—',
-                    (post.platform === 'facebook' && m.reach == null
-                      ? m.impressionsUnique
-                      : m.reach) ?? '—',
-                    m.impressions ?? '—',
-                    m.engagement != null
-                      ? `${m.engagement.toLocaleString('es-CO', { maximumFractionDigits: 2 })} %`
-                      : '—',
-                  ]),
-                }}
-              >
-                <PerformanceTimeline series={series} />
-              </ChartCard>
-            </div>
-          </div>
-
-          {/* D. Experiencia conversacional */}
-          <AskFoxyContextual
-            postId={post.id}
-            period={period}
-            platform={post.platform}
-            suggestions={SUGGESTED_QUESTIONS}
-            scopeLabel={`${active.organization.name} · ${net} · ${formatOf(post)} · ${periodLabel(period).toLowerCase()}`}
-            postHrefPattern={withPeriod(
-              `/publicaciones/{id}${fq ? `?${fq}` : ''}`,
-              period,
-            )}
-          />
-
-          {/* Conversación: reputación solo con comentarios autorizados */}
+        {/* 8. Comentarios y cobertura */}
+        <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-4 lg:grid-cols-12">
           <Panel
             aria-labelledby="comentarios-titulo"
             id="comentarios"
-            className="scroll-mt-24"
+            className="scroll-mt-24 lg:col-span-8"
           >
             {commentsDisabledFor(post) ? (
               <>
                 <PanelHeader
                   icon={ShieldAlert}
                   tone="neutral"
-                  title="Comentarios"
+                  title="Comentarios y cobertura"
                   titleId="comentarios-titulo"
-                  description="Importación de comentarios desactivada por la política de privacidad del piloto."
                 />
-                <p className="text-muted-foreground text-sm">
-                  {net} reporta{' '}
-                  <b className="text-foreground">
-                    {post.metrics[0]?.comments != null
-                      ? post.metrics[0].comments.toLocaleString('es-CO')
-                      : 'un número no disponible de'}
-                  </b>{' '}
-                  comentarios en la red. Hey Foxy no los importa ni los
-                  clasifica: que no se muestren aquí no significa que no haya
-                  conversación.
-                </p>
+                <CoverageStatus
+                  state="privacy_disabled"
+                  detail={`${net} reporta ${post.metrics[0]?.comments != null ? post.metrics[0].comments.toLocaleString('es-CO') : 'un número no disponible de'} comentarios en la red. Hey Foxy no los importa ni los clasifica por la política de privacidad del piloto: que no se muestren aquí no significa que no haya conversación.`}
+                />
               </>
             ) : (
               <>
@@ -390,9 +405,9 @@ export default async function PostDetailPage({
                   titleId="comentarios-titulo"
                 />
                 {comments.length === 0 ? (
-                  <EmptyStateV2
-                    compact
-                    title="Sin comentarios clasificados para esta publicación"
+                  <CoverageStatus
+                    state="no_conversations"
+                    detail="Las fuentes conectadas no entregaron comentarios para esta publicación."
                   />
                 ) : (
                   <div className="divide-border divide-y">
@@ -404,6 +419,13 @@ export default async function PostDetailPage({
               </>
             )}
           </Panel>
+          <div className="lg:col-span-4">
+            <BrandContextCard
+              stored={stored}
+              href={withPeriod('/brand-brain', period)}
+              availability={availability}
+            />
+          </div>
         </div>
       </div>
     </ModuleSurface>

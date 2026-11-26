@@ -1,73 +1,69 @@
 import {
   ArrowRight,
   BellRing,
-  ChartColumn,
+  CalendarRange,
+  Clock3,
   Gauge,
   Images,
-  Lightbulb,
-  MessagesSquare,
-  Radio,
+  Layers,
+  MousePointerClick,
+  Network,
+  Percent,
   ShieldAlert,
-  Frown,
-  Meh,
-  Smile,
-  Tags,
+  Sparkles,
+  Star,
   TrendingUp,
-  TriangleAlert,
   Users,
-  Heart,
-  type LucideIcon,
+  Eye,
 } from 'lucide-react';
 import Link from 'next/link';
-import { BarList, ChannelShare, ChartCard } from '@/components/ds/charts';
-import { AreaTrend, Donut } from '@/components/ds/charts-client';
-import { FoxyMark } from '@/components/ds/foxy';
+import { ChartCard } from '@/components/ds/charts';
+import { AreaTrend } from '@/components/ds/charts-client';
+import { CopilotAskButton, CopilotScope } from '@/components/ds/copilot';
 import {
-  CoverageBannerV2,
-  FoxyInsightPanel,
-  KpiCard,
-  ModuleSurface,
-  type FoxyFindingView,
-} from '@/components/ds/layout';
-import { SEVERITY_TONE } from '@/components/ds/conversation';
+  BrandContextCard,
+  CoverageStatus,
+  FoxyExecutiveBrief,
+} from '@/components/ds/intel';
+import { KpiCard, ModuleSurface } from '@/components/ds/layout';
+import { NetworkIcon } from '@/components/ds/network-icons';
+import { InteractionBreakdown } from '@/components/ds/performance';
 import { SocialPostCard } from '@/components/ds/post';
 import {
+  Avatar,
   Panel,
   PanelHeader,
   StatusPill,
-  SyntheticBadge,
-  type Tone,
 } from '@/components/ds/primitives';
 import { EmptyStateV2 } from '@/components/ds/states';
 import { requireContext } from '@/lib/auth/session';
-import { summarizeCoverage } from '@/lib/coverage';
-import { PLATFORM_LABEL, SEVERITY_LABEL, fmtRelative } from '@/lib/format';
 import {
-  channelBreakdown,
-  compareWhen,
-  foxyActions,
-  foxyFindings,
-  inWindow,
-  netSentiment,
-  pctDelta,
-  pctOf,
-  postTotals,
-  ptsDelta,
-  type FindingKind,
-  type FoxyActionKind,
-} from '@/lib/home-insights';
+  brainAvailability,
+  getBrandContext,
+  listMemory,
+} from '@/lib/brain/store';
+import { conversationCoverage, summarizeCoverage } from '@/lib/coverage';
+import { fmtDateTime, fmtRelative } from '@/lib/format';
+import { inWindow, netSentiment } from '@/lib/home-insights';
 import {
-  dailySentiment,
   dominantSentiment,
   postStats,
   sentimentBreakdown,
-  topTopics,
 } from '@/lib/insights';
+import {
+  executiveBrief,
+  featuredPosts,
+  networkInteractionBreakdown,
+  networkSummaries,
+} from '@/lib/intel/brand';
+import { engagementOf, formatOf } from '@/lib/intel/common';
+import { BRAND_QUESTIONS } from '@/lib/intel/local';
 import {
   PERIOD_PARAM,
   parsePeriod,
   periodDays,
   periodLabel,
+  periodRange,
   withPeriod,
 } from '@/lib/period';
 import { getUiTheme } from '@/lib/shell';
@@ -76,32 +72,20 @@ import { LegacyOverview } from './legacy-overview';
 
 export const metadata = { title: 'Inicio' };
 
-const FINDING_STYLE: Record<FindingKind, { tone: Tone; icon: LucideIcon }> = {
-  critical_pending: { tone: 'critical', icon: TriangleAlert },
-  negative_rise: { tone: 'critical', icon: TrendingUp },
-  negative_topic: { tone: 'high', icon: Tags },
-  unusual_post: { tone: 'info', icon: Radio },
-  positive_topic: { tone: 'success', icon: Lightbulb },
-};
-
-const ACTION_ICON: Record<FoxyActionKind, LucideIcon> = {
-  review_pending: BellRing,
-  explore_negative: MessagesSquare,
-  explore_unusual: Radio,
-};
-
 const num = (n: number) => n.toLocaleString('es-CO');
-const dayLabel = new Intl.DateTimeFormat('es-CO', {
+const pctFmt = (n: number) =>
+  `${n.toLocaleString('es-CO', { maximumFractionDigits: 1 })} %`;
+const dayFmt = new Intl.DateTimeFormat('es-CO', {
   day: 'numeric',
   month: 'short',
-  timeZone: 'UTC',
+  timeZone: 'America/Bogota',
 });
-const shortDay = (iso: string) => {
-  const parts = dayLabel.formatToParts(Date.parse(`${iso}T12:00:00Z`));
-  return `${parts.find((p) => p.type === 'day')?.value} ${parts.find((p) => p.type === 'month')?.value.replace('.', '')}`;
-};
 
-/** Intelligence Home (WO-HF-V2-04): integra el antiguo Resumen (decisión 2, opción A). */
+/**
+ * Intelligence Home (WO-HF-V2-UX-REFINEMENT-002, fase A): centro ejecutivo de inteligencia
+ * estratégica de marca. Contenido y rendimiento primero; la reputación se mantiene como módulo
+ * y su ausencia de datos no domina la pantalla. Métricas por red, nunca sumadas entre redes.
+ */
 export default async function HomePage({
   searchParams,
 }: {
@@ -111,487 +95,552 @@ export default async function HomePage({
 
   const period = parsePeriod((await searchParams)[PERIOD_PARAM]);
   const days = periodDays(period);
-  const { viewer, active, repo } = await requireContext();
+  const { active, repo } = await requireContext();
   const orgId = active.organization.id;
-  const [items, alerts, incidents, coverage, posts] = await Promise.all([
-    repo.items(orgId, { limit: 1000 }),
-    repo.alerts(orgId),
-    repo.incidents(orgId),
-    repo.coverage(orgId),
-    repo.posts(orgId),
-  ]);
-
+  const [items, alerts, incidents, coverage, posts, stored, memory] =
+    await Promise.all([
+      repo.items(orgId, { limit: 1000 }),
+      repo.alerts(orgId),
+      repo.incidents(orgId),
+      repo.coverage(orgId),
+      repo.posts(orgId),
+      getBrandContext(orgId),
+      listMemory(orgId),
+    ]);
+  const P = (href: string) => withPeriod(href, period);
   const now = Date.now();
-  const current = inWindow(items, days, now);
-  const previous = inWindow(items, days, now, days);
-  const cur = sentimentBreakdown(current);
-  const prev = sentimentBreakdown(previous);
   const curPosts = inWindow(posts, days, now);
-  const prevPosts = inWindow(posts, days, now, days);
-  const pt = postTotals(curPosts);
-  const ptPrev = postTotals(prevPosts);
+  const current = inWindow(items, days, now);
+  const sent = sentimentBreakdown(current);
   const pendingReview = alerts.filter(
     (a) => a.reviewStatus === 'pending',
   ).length;
   const openInc = incidents.filter(
     (i) => !['closed', 'false_positive', 'resolved'].includes(i.status),
   ).length;
-  const daily = dailySentiment(current, days, now);
-  const topics = topTopics(current, 5);
-  const channels = channelBreakdown(current);
-  const findings = foxyFindings({ current, previous, posts: curPosts, alerts });
-  const relevant = curPosts
-    .map((p) => ({
-      p,
-      s: postStats(p),
-      comments: items.filter((i) => i.postId === p.id),
-    }))
-    .sort((a, b) => b.s.interactions - a.s.interactions)
-    .slice(0, 3);
-  const topAlerts = alerts.slice(0, 5);
-  const firstName = viewer.name.split(' ')[0] ?? viewer.name;
-  const P = (href: string) => withPeriod(href, period);
-  const dailyTotals = daily.map((d) => d.pos + d.neg + d.other);
-  const peak = dailyTotals.reduce(
-    (best, v, i) => (v > (dailyTotals[best] ?? 0) ? i : best),
-    0,
-  );
-  const unusual = curPosts.find((p) => postStats(p).unusual);
-  const actions = foxyActions({
-    pendingReview,
-    negatives: cur.negative,
-    unusualPostId: unusual?.id ?? null,
-  }).map((a) => ({
-    label: a.label,
-    href: P(a.href),
-    icon: ACTION_ICON[a.kind],
-  }));
-  const hasConv = cur.total > 0;
-  const hasPosts = pt.posts > 0;
-
-  const findingViews: FoxyFindingView[] = findings.map((f) => ({
-    ...f,
-    ...FINDING_STYLE[f.kind],
-    evidence: f.evidence.map((e) => ({ ...e, href: P(e.href) })),
-  }));
+  const conv = conversationCoverage(coverage, sent.total);
+  const cov = summarizeCoverage(coverage);
+  const nets = networkSummaries(curPosts);
+  const connectedNets = [
+    ...new Set(
+      coverage
+        .filter((r) => r.status === 'complete' || r.status === 'partial')
+        .map((r) => r.platform),
+    ),
+  ];
+  const lastUpdate = curPosts
+    .flatMap((p) => p.metrics.map((m) => m.capturedAt))
+    .sort()
+    .at(-1);
+  const brand = stored?.context ?? null;
+  const brief = executiveBrief({
+    posts: curPosts,
+    brand,
+    periodLabel: periodLabel(period),
+    risk:
+      conv === 'available'
+        ? { pendingAlerts: pendingReview, negatives: sent.negative }
+        : null,
+  });
+  const featured = featuredPosts(curPosts, 4);
+  const learnings = {
+    proposed: memory.filter((m) => m.status === 'proposed').length,
+    validated: memory.filter((m) => m.status === 'validated').length,
+  };
+  const postHrefPattern = P('/publicaciones/{id}');
+  const postHref = (id: string) =>
+    postHrefPattern.replace('{id}', encodeURIComponent(id));
+  const measured = curPosts.filter((p) => p.metrics.length > 0);
+  // Clases literales (Tailwind solo genera las que aparecen escritas en el código).
+  const perfCols =
+    nets.length >= 3
+      ? 'lg:grid-cols-2 2xl:grid-cols-3'
+      : nets.length === 2
+        ? 'lg:grid-cols-2'
+        : '';
+  const netCols =
+    nets.length >= 3
+      ? 'md:grid-cols-2 2xl:grid-cols-3'
+      : nets.length === 2
+        ? 'md:grid-cols-2'
+        : '';
 
   return (
     <ModuleSurface module="home">
-      {/* Saludo */}
+      <CopilotScope
+        screen="Intelligence Home"
+        postId={null}
+        platform={null}
+        label={`${active.organization.name} · todas las redes · ${periodLabel(period).toLowerCase()}`}
+        suggestions={BRAND_QUESTIONS}
+        postHrefPattern={postHrefPattern}
+      />
+
+      {/* A. Cabecera ejecutiva */}
       <section
         aria-labelledby="home-title"
-        className="rounded-panel border-border/70 from-card to-primary-pale/60 shadow-card relative mb-4 overflow-hidden border bg-gradient-to-br p-5 lg:pr-48"
+        className="rounded-panel border-border/70 from-card to-primary-pale/60 shadow-card mb-4 border bg-gradient-to-br p-4 sm:p-5"
       >
-        <div className="relative z-10 max-w-3xl">
-          <p className="text-primary-text flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-[0.12em]">
-            <Gauge aria-hidden className="h-4 w-4" /> Inicio · Inteligencia
-            reputacional
-          </p>
-          <h1
-            id="home-title"
-            className="mt-1 text-[26px] font-black leading-tight tracking-tight sm:text-[30px]"
-          >
-            Hola, {firstName}
-          </h1>
-          <p className="text-muted-foreground mt-1 text-[15px] sm:text-base">
-            Así se percibe{' '}
-            <strong className="text-foreground">
-              {active.organization.name}
-            </strong>{' '}
-            en los canales digitales · {periodLabel(period).toLowerCase()}.
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <StatusPill
-              tone={
-                !hasConv
-                  ? 'neutral'
-                  : cur.negativePct >= 50
-                    ? 'critical'
-                    : cur.negativePct >= 30
-                      ? 'warning'
-                      : 'success'
-              }
+        <div className="flex flex-wrap items-start gap-4">
+          <Avatar name={active.organization.name} size={52} />
+          <div className="min-w-0 flex-1 basis-56">
+            <p className="text-primary-text flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-[0.12em]">
+              <Gauge aria-hidden className="h-4 w-4" /> Intelligence Home
+            </p>
+            <h1
+              id="home-title"
+              className="mt-0.5 text-[24px] font-black leading-tight tracking-tight sm:text-[28px]"
             >
-              {cur.total
-                ? `${cur.negativePct} % negativas`
-                : 'Sin conversaciones en el periodo'}
-            </StatusPill>
-            {pendingReview > 0 && (
-              <StatusPill tone="high" icon={BellRing}>
-                {pendingReview} por revisar
-              </StatusPill>
-            )}
-            {openInc > 0 && (
-              <StatusPill tone="info" icon={ShieldAlert}>
-                {openInc}{' '}
-                {openInc === 1 ? 'incidente activo' : 'incidentes activos'}
-              </StatusPill>
-            )}
+              {active.organization.name}
+            </h1>
+            <div className="text-muted-foreground mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13px] font-semibold">
+              <span className="inline-flex items-center gap-1.5">
+                <CalendarRange aria-hidden className="h-4 w-4" />
+                {periodLabel(period)} · {periodRange(period)}
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <Network aria-hidden className="h-4 w-4" />
+                {cov.sources.length
+                  ? `${cov.sources.join(', ')} · ${connectedNets.length} ${connectedNets.length === 1 ? 'red' : 'redes'}`
+                  : 'Sin fuentes conectadas'}
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <Clock3 aria-hidden className="h-4 w-4" />
+                {lastUpdate
+                  ? `Última medición ${fmtRelative(lastUpdate)} (${fmtDateTime(lastUpdate)})`
+                  : 'Sin mediciones en el periodo'}
+              </span>
+            </div>
+            <div className="mt-2.5 flex flex-wrap gap-1.5">
+              {connectedNets.map((p) => (
+                <StatusPill key={p} tone="success">
+                  <span className="inline-flex items-center gap-1">
+                    <NetworkIcon platform={p} size={12} /> Conectada
+                  </span>
+                </StatusPill>
+              ))}
+              {cov.disabled.length > 0 && (
+                <StatusPill tone="ai">
+                  Desactivado por privacidad: {cov.disabled.join(', ')}
+                </StatusPill>
+              )}
+              <Link
+                href={P('/cobertura')}
+                className="text-primary-text inline-flex items-center gap-1 px-1 text-xs font-extrabold"
+              >
+                Cobertura <ArrowRight aria-hidden className="h-3.5 w-3.5" />
+              </Link>
+            </div>
           </div>
+          <CopilotAskButton
+            question="¿Qué contenidos están funcionando mejor?"
+            className="bg-brand text-brand-foreground inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-extrabold sm:w-auto"
+          >
+            <Sparkles aria-hidden className="h-4 w-4" /> Preguntar a Foxy
+          </CopilotAskButton>
         </div>
-        <FoxyMark
-          variant="illustration"
-          size={124}
-          className="pointer-events-none absolute -bottom-3 right-8 hidden opacity-95 lg:block"
-        />
       </section>
 
-      <CoverageBannerV2 {...summarizeCoverage(coverage)} />
-
-      {/* KPI */}
+      {/* B. KPI principales: por red, sin sumar métricas incompatibles */}
       <h2 className="sr-only">Indicadores del periodo</h2>
-      <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <KpiCard
-          icon={MessagesSquare}
-          tone="ai"
-          label="Conversaciones analizadas"
-          value={num(cur.total)}
-          period={
-            hasConv ? periodLabel(period) : 'Sin conversaciones en el periodo'
-          }
-          delta={{
-            ...compareWhen(hasConv, pctDelta(cur.total, prev.total)),
-            goodWhen: 'neutral',
-          }}
-          href={P('/conversaciones')}
-          spark={hasConv ? dailyTotals : undefined}
-        />
-        <KpiCard
-          icon={Smile}
-          tone={
-            !hasConv
-              ? 'neutral'
-              : netSentiment(cur) >= 0
-                ? 'success'
-                : 'critical'
-          }
-          label="Sentimiento neto"
-          value={
-            hasConv
-              ? `${netSentiment(cur) > 0 ? '+' : ''}${netSentiment(cur)} pts`
-              : '—'
-          }
-          period={
-            hasConv
-              ? `${cur.positive} positivas · ${cur.negative} negativas`
-              : 'Sin conversaciones clasificadas'
-          }
-          delta={{
-            ...compareWhen(
-              hasConv,
-              ptsDelta(netSentiment(cur), netSentiment(prev), prev.total),
-            ),
-            unit: ' pts',
-          }}
-        />
-        <KpiCard
-          icon={Users}
-          tone="info"
-          label="Alcance total"
-          value={pt.reach === null ? '—' : num(pt.reach)}
-          period={
-            !hasPosts
-              ? 'Sin publicaciones en el periodo'
-              : pt.reach === null
-                ? 'Las fuentes no entregan alcance'
-                : `${pt.posts} ${pt.posts === 1 ? 'publicación propia' : 'publicaciones propias'}`
-          }
-          delta={compareWhen(
-            pt.reach !== null,
-            pctDelta(pt.reach ?? 0, ptPrev.reach ?? 0),
-          )}
-          href={P('/publicaciones')}
-        />
-        <KpiCard
-          icon={Heart}
-          tone="high"
-          label="Interacciones"
-          value={hasPosts ? num(pt.interactions) : '—'}
-          period={
-            hasPosts
-              ? 'Me gusta, comentarios y compartidos'
-              : 'Sin publicaciones en el periodo'
-          }
-          delta={compareWhen(
-            hasPosts,
-            pctDelta(pt.interactions, ptPrev.interactions),
-          )}
-          href={P('/publicaciones?orden=interacciones')}
-        />
-        <KpiCard
-          icon={BellRing}
-          tone="critical"
-          label="Alertas por revisar"
-          value={num(pendingReview)}
-          period="Revisión humana antes de escalar"
-          href={P('/revision')}
-        />
-        <KpiCard
-          icon={ShieldAlert}
-          tone="warning"
-          label="Incidentes activos"
-          value={num(openInc)}
-          period="Abiertos o en seguimiento"
-          href={P('/incidentes')}
-        />
-      </div>
-
-      {/* Evolución y sentimiento */}
-      <div className="mb-4 grid grid-cols-[minmax(0,1fr)] items-start gap-4 xl:grid-cols-12">
-        <ChartCard
-          className="xl:col-span-7"
-          icon={ChartColumn}
-          title="Evolución de la conversación"
-          description={`Conversaciones analizadas por día · ${periodLabel(period).toLowerCase()}`}
-          table={{
-            caption: 'Conversaciones por día y sentimiento',
-            columns: [
-              'Día',
-              'Total',
-              'Positivas',
-              'Negativas',
-              'Neutrales o mixtas',
-            ],
-            rows: daily.map((d) => [
-              d.d,
-              d.pos + d.neg + d.other,
-              d.pos,
-              d.neg,
-              d.other,
-            ]),
-          }}
-        >
-          {cur.total === 0 ? (
-            <EmptyStateV2 compact title="Sin conversaciones en el periodo" />
-          ) : (
-            <AreaTrend
-              height={190}
-              unit="conversaciones"
-              highlight={`Pico · ${shortDay(daily[peak]!.d)}`}
-              highlightIndex={peak}
-              primaryLabel="Total de conversaciones"
-              secondary={{
-                label: 'Negativas',
-                values: daily.map((d) => d.neg),
-                color: 'chart-neg',
-              }}
-              points={daily.map((d) => ({
-                label: shortDay(d.d),
-                value: d.pos + d.neg + d.other,
-                detail: `${d.neg} negativas · ${d.pos} positivas`,
-              }))}
-            />
-          )}
-        </ChartCard>
-        <ChartCard
-          className="xl:col-span-5"
-          icon={Smile}
-          tone="success"
-          title="Sentimiento de marca"
-          description="Pasa el cursor o enfoca una fila; abre las conversaciones."
-          table={{
-            caption: 'Distribución del sentimiento',
-            columns: ['Sentimiento', 'Conversaciones', '%'],
-            rows: [
-              ['Positivo', cur.positive, pctOf(cur.positive, cur.total)],
-              [
-                'Neutral o mixto',
-                cur.neutral + cur.mixed,
-                pctOf(cur.neutral + cur.mixed, cur.total),
-              ],
-              ['Negativo', cur.negative, pctOf(cur.negative, cur.total)],
-            ],
-          }}
-        >
-          {cur.total === 0 ? (
-            <EmptyStateV2 compact title="Sin conversaciones analizadas" />
-          ) : (
-            <Donut
-              centerValue={num(cur.total)}
-              centerLabel="conversaciones"
-              segments={[
-                {
-                  key: 'pos',
-                  label: 'Positivo',
-                  value: cur.positive,
-                  color: 'chart-pos',
-                  icon: (
-                    <Smile aria-hidden className="text-success-fg h-4 w-4" />
-                  ),
-                  href: P('/conversaciones?sentiment=positive'),
-                },
-                {
-                  key: 'neu',
-                  label: 'Neutral o mixto',
-                  value: cur.neutral + cur.mixed,
-                  color: 'chart-neu',
-                  icon: (
-                    <Meh
-                      aria-hidden
-                      className="text-muted-foreground h-4 w-4"
-                    />
-                  ),
-                  href: P('/conversaciones?sentiment=neutral'),
-                },
-                {
-                  key: 'neg',
-                  label: 'Negativo',
-                  value: cur.negative,
-                  color: 'chart-neg',
-                  icon: (
-                    <Frown aria-hidden className="text-critical-fg h-4 w-4" />
-                  ),
-                  href: P('/conversaciones?sentiment=negative'),
-                },
-              ]}
-            />
-          )}
-        </ChartCard>
-      </div>
-
-      {/* Foxy (ancho) y, a su lado, temas y canales apilados: sin columnas estiradas. */}
-      <div className="mb-4 grid grid-cols-[minmax(0,1fr)] items-start gap-4 xl:grid-cols-12">
-        <div id="foxy" className="scroll-mt-24 xl:col-span-7">
-          <FoxyInsightPanel
-            wide
-            title="Tendencias y hallazgos de Foxy IA"
-            subtitle={`Con base en ${num(cur.total)} conversaciones y ${num(curPosts.length)} publicaciones del periodo`}
-            findings={findingViews}
-            limitation="Solo considera las fuentes conectadas (ver cobertura). Foxy no ejecuta acciones: propone y enlaza la evidencia."
-            actions={actions}
-          />
-        </div>
-        <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-4 lg:grid-cols-2 xl:col-span-5 xl:grid-cols-1">
-          <ChartCard
-            icon={Radio}
-            tone="info"
-            title="Menciones por canal"
-            description="Solo redes con fuente conectada. Abre las conversaciones."
-            table={{
-              caption: 'Conversaciones por red',
-              columns: ['Red', 'Conversaciones', '%'],
-              rows: channels.map((c) => [
-                PLATFORM_LABEL[c.platform],
-                c.count,
-                pctOf(c.count, cur.total),
-              ]),
-            }}
-          >
-            {channels.length === 0 ? (
-              <EmptyStateV2 compact title="Sin conversaciones en el periodo" />
-            ) : (
-              <ChannelShare
-                rows={channels.map((c) => ({
-                  platform: c.platform,
-                  label: PLATFORM_LABEL[c.platform],
-                  value: c.count,
-                  href: P(`/conversaciones?platform=${c.platform}`),
-                }))}
-              />
-            )}
-          </ChartCard>
-          <ChartCard
-            icon={Tags}
-            tone="high"
-            title="Temas principales"
-            description="Abre el detalle por tema."
-            table={{
-              caption: 'Temas principales',
-              columns: ['Tema', 'Conversaciones'],
-              rows: topics,
-            }}
-          >
-            {topics.length === 0 ? (
-              <EmptyStateV2 compact title="Sin temas en el periodo" />
-            ) : (
-              <BarList
-                rows={topics.map(([label, value]) => ({
-                  label,
-                  value,
-                  href: P('/temas'),
-                }))}
-                total={cur.total}
-              />
-            )}
-          </ChartCard>
-        </div>
-      </div>
-
-      {/* Publicaciones relevantes y alertas */}
-      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-4 xl:grid-cols-12">
-        <Panel className="xl:col-span-8" aria-labelledby="home-posts">
-          <PanelHeader
+      <div className="mb-4 grid grid-cols-[minmax(0,1fr)] gap-3 xl:grid-cols-12">
+        <div className="grid grid-cols-2 gap-3 xl:col-span-3 xl:grid-cols-1">
+          <KpiCard
             icon={Images}
             tone="info"
-            title="Publicaciones relevantes"
-            titleId="home-posts"
-            description="Las de más interacciones del periodo."
-            action={
-              <Link
-                href={P('/publicaciones')}
-                className="text-primary-text inline-flex items-center gap-1 text-sm font-extrabold"
+            label="Publicaciones"
+            value={num(curPosts.length)}
+            period={`${measured.length} con métricas · ${periodLabel(period).toLowerCase()}`}
+            href={P('/publicaciones')}
+          />
+          <KpiCard
+            icon={Network}
+            tone="ai"
+            label="Redes conectadas"
+            value={num(connectedNets.length)}
+            period={
+              nets.length
+                ? nets.map((n) => n.label).join(' · ')
+                : 'Sin publicaciones'
+            }
+            href={P('/cobertura')}
+          />
+        </div>
+        {nets.length === 0 ? (
+          <div className="xl:col-span-9">
+            <EmptyStateV2 title="Sin publicaciones en el periodo">
+              Aparecen cuando una fuente conectada las entrega. Amplía el
+              periodo o revisa la cobertura.
+            </EmptyStateV2>
+          </div>
+        ) : (
+          <div
+            className={`grid grid-cols-[minmax(0,1fr)] gap-3 xl:col-span-9 ${netCols}`}
+          >
+            {nets.map((n) => (
+              <section
+                key={n.platform}
+                aria-label={`Indicadores de ${n.label}`}
+                className="rounded-card border-border/80 bg-card shadow-card border p-4"
               >
-                Social Explorer <ArrowRight aria-hidden className="h-4 w-4" />
-              </Link>
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="flex items-center gap-2 text-sm font-extrabold">
+                    <NetworkIcon platform={n.platform} size={18} /> {n.label}
+                  </h3>
+                  <span className="text-muted-foreground text-xs font-bold">
+                    {n.measured} de {n.posts} con métricas
+                  </span>
+                </div>
+                <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3">
+                  {(
+                    [
+                      [
+                        Users,
+                        'text-metric-reach',
+                        `${n.reachLabel} acumulado`,
+                        n.reachSum != null ? num(n.reachSum) : '—',
+                        'Suma por publicación; no son personas únicas.',
+                      ],
+                      [
+                        Percent,
+                        'text-metric-engagement',
+                        'Engagement mediano',
+                        n.engagementMedian != null
+                          ? pctFmt(n.engagementMedian)
+                          : '—',
+                        `Engagement = ${n.engagementBasis}.`,
+                      ],
+                      [
+                        Eye,
+                        'text-metric-impressions',
+                        'Impresiones',
+                        n.impressionsSum != null ? num(n.impressionsSum) : '—',
+                        'Suma por publicación.',
+                      ],
+                      [
+                        MousePointerClick,
+                        'text-metric-interactions',
+                        `Interacciones según ${n.label}`,
+                        n.interactionsSum != null
+                          ? num(n.interactionsSum)
+                          : '—',
+                        'Total que reporta la red.',
+                      ],
+                    ] as const
+                  ).map(([Icon, cls, label, value, hint]) => (
+                    <div key={label} className="min-w-0">
+                      <dt className="text-muted-foreground flex items-center gap-1.5 text-[11.5px] font-bold leading-tight">
+                        <Icon aria-hidden className={`h-3.5 w-3.5 ${cls}`} />
+                        {label}
+                      </dt>
+                      <dd className="mt-1 text-[22px] font-extrabold tabular-nums leading-none">
+                        {value}
+                      </dd>
+                      <dd className="text-muted-foreground mt-1 text-[11px] leading-snug">
+                        {hint}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </section>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* C. Foxy Executive Brief + Brand Brain + Ask Foxy */}
+      <div className="mb-4 grid grid-cols-[minmax(0,1fr)] items-start gap-4 xl:grid-cols-12">
+        <div className="xl:col-span-8">
+          <FoxyExecutiveBrief
+            items={brief}
+            hrefFor={P}
+            postHref={postHref}
+            subtitle={`${measured.length} publicaciones con métricas · ${periodLabel(period).toLowerCase()}`}
+            footer={
+              <p className="text-muted-foreground text-xs">
+                Solo datos autorizados de las fuentes conectadas. Cada red se
+                evalúa con su propia definición de engagement y alcance; Foxy
+                propone y enlaza la evidencia, no ejecuta acciones.
+              </p>
             }
           />
-          {relevant.length === 0 ? (
-            <EmptyStateV2 compact title="Sin publicaciones en el periodo">
-              Aparecen cuando una fuente conectada las entrega.
-            </EmptyStateV2>
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {relevant.map(({ p, s, comments }) => (
-                <SocialPostCard
-                  key={p.id}
-                  post={p}
-                  stats={s}
-                  comments={comments.length}
-                  dominant={dominantSentiment(comments)}
-                  href={P(`/publicaciones/${encodeURIComponent(p.id)}`)}
+        </div>
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-2 xl:col-span-4 xl:grid-cols-1">
+          <BrandContextCard
+            stored={stored}
+            href={P('/brand-brain')}
+            availability={brainAvailability()}
+            learnings={learnings}
+            detailed
+          />
+          <Panel aria-labelledby="home-ask">
+            <PanelHeader
+              icon={Sparkles}
+              tone="ai"
+              title="Pregúntale a Foxy"
+              titleId="home-ask"
+              description="Se abre a un lado, sin salir de esta pantalla."
+            />
+            <div className="flex flex-col gap-1.5">
+              {BRAND_QUESTIONS.slice(0, 5).map((q) => (
+                <CopilotAskButton
+                  key={q}
+                  question={q}
+                  className="bg-card hover:border-ai-fg/40 border-border rounded-xl border px-3 py-2 text-left text-[13px] font-bold"
                 />
               ))}
             </div>
-          )}
-        </Panel>
-        <Panel className="xl:col-span-4" aria-labelledby="home-alerts">
-          <PanelHeader
-            icon={BellRing}
-            tone="critical"
-            title="Alertas de mayor prioridad"
-            titleId="home-alerts"
-            action={
-              <Link
-                href={P('/alertas')}
-                className="text-primary-text inline-flex items-center gap-1 text-sm font-extrabold"
-              >
-                Todas <ArrowRight aria-hidden className="h-4 w-4" />
-              </Link>
+          </Panel>
+        </div>
+      </div>
+
+      {/* E. Publicaciones destacadas */}
+      <Panel className="mb-4" aria-labelledby="home-featured">
+        <PanelHeader
+          icon={Star}
+          tone="high"
+          title="Publicaciones destacadas"
+          titleId="home-featured"
+          description="Cada una con el motivo verificable por el que destaca, dentro de su propia red."
+          action={
+            <Link
+              href={P('/publicaciones')}
+              className="text-primary-text inline-flex items-center gap-1 text-sm font-extrabold"
+            >
+              Social Explorer <ArrowRight aria-hidden className="h-4 w-4" />
+            </Link>
+          }
+        />
+        {featured.length === 0 ? (
+          <EmptyStateV2 compact title="Sin base para destacar publicaciones">
+            Se necesitan al menos dos publicaciones con métricas en la misma
+            red.
+          </EmptyStateV2>
+        ) : (
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {featured.map((f) => (
+              <div key={f.post.id} className="flex flex-col gap-2">
+                <SocialPostCard
+                  post={f.post}
+                  stats={postStats(f.post)}
+                  comments={items.filter((i) => i.postId === f.post.id).length}
+                  dominant={dominantSentiment(
+                    items.filter((i) => i.postId === f.post.id),
+                  )}
+                  href={postHref(f.post.id)}
+                />
+                <p className="bg-high-bg/60 rounded-xl px-3 py-2 text-[12.5px] leading-snug">
+                  <b>
+                    {f.metricLabel} {f.metricValue}
+                  </b>{' '}
+                  · {formatOf(f.post)} ·{' '}
+                  {f.post.publishedAt
+                    ? dayFmt.format(Date.parse(f.post.publishedAt))
+                    : 'sin fecha'}
+                  <span className="text-muted-foreground block">
+                    {f.reason}
+                  </span>
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </Panel>
+
+      {/* D. Content performance (por red) */}
+      {nets.length > 0 && (
+        <section aria-labelledby="home-perf" className="mb-4">
+          <h2
+            id="home-perf"
+            className="mb-3 flex items-center gap-2 text-base font-extrabold"
+          >
+            <TrendingUp aria-hidden className="text-info-fg h-5 w-5" /> Content
+            performance
+          </h2>
+          <div
+            className={`grid grid-cols-[minmax(0,1fr)] items-start gap-4 ${perfCols}`}
+          >
+            {nets.map((n) => {
+              const ps = measured
+                .filter((p) => p.platform === n.platform && p.publishedAt)
+                .sort(
+                  (a, b) =>
+                    Date.parse(a.publishedAt!) - Date.parse(b.publishedAt!),
+                );
+              const pts = ps
+                .map((p) => ({ p, e: engagementOf(p) }))
+                .filter(
+                  (x): x is { p: (typeof ps)[number]; e: number } =>
+                    x.e != null,
+                );
+              const fmtMax = Math.max(
+                0,
+                ...n.formats.map((f) => f.engagementMedian ?? 0),
+              );
+              const ix = networkInteractionBreakdown(curPosts, n.platform);
+              return (
+                <div key={n.platform} className="min-w-0 space-y-4">
+                  <ChartCard
+                    icon={Layers}
+                    tone="info"
+                    title={`${n.label} · rendimiento`}
+                    description={`Engagement = ${n.engagementBasis} · ${n.measured} publicaciones · ${periodLabel(period).toLowerCase()}`}
+                    table={{
+                      caption: `Engagement por formato y por publicación en ${n.label}`,
+                      columns: ['Fecha', 'Formato', 'Engagement'],
+                      rows: pts.map(({ p, e }) => [
+                        fmtDateTime(p.publishedAt),
+                        formatOf(p),
+                        pctFmt(e),
+                      ]),
+                    }}
+                  >
+                    <p className="text-muted-foreground mb-2 text-[11px] font-extrabold uppercase tracking-wider">
+                      Mediana de engagement por formato
+                    </p>
+                    <ul className="space-y-2.5">
+                      {n.formats.map((f) => (
+                        <li
+                          key={f.format}
+                          className="grid grid-cols-[minmax(0,8rem)_minmax(0,1fr)_auto] items-center gap-2 text-sm"
+                        >
+                          <span className="truncate font-bold">
+                            {f.format}{' '}
+                            <span className="text-muted-foreground text-xs font-semibold">
+                              (n = {f.n})
+                            </span>
+                          </span>
+                          <span
+                            className="bg-muted h-2.5 overflow-hidden rounded-full"
+                            aria-hidden
+                          >
+                            <span
+                              className={`block h-full rounded-full ${f.n >= 3 ? 'bg-metric-engagement' : 'bg-metric-engagement/40'}`}
+                              style={{
+                                width: `${fmtMax > 0 && f.engagementMedian != null ? Math.max(2, (f.engagementMedian / fmtMax) * 100) : 0}%`,
+                              }}
+                            />
+                          </span>
+                          <b className="w-14 text-right tabular-nums">
+                            {f.engagementMedian != null
+                              ? pctFmt(f.engagementMedian)
+                              : '—'}
+                          </b>
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="border-border mt-4 border-t pt-3">
+                      <p className="text-muted-foreground mb-2 text-[11px] font-extrabold uppercase tracking-wider">
+                        Engagement de cada publicación por fecha
+                      </p>
+                      {pts.length < 2 ? (
+                        <p className="text-muted-foreground text-[13px]">
+                          {pts.length === 1
+                            ? `Una sola publicación con engagement (${pctFmt(pts[0]!.e)}): la evolución aparece con más publicaciones.`
+                            : 'Sin publicaciones con engagement en el periodo.'}
+                        </p>
+                      ) : (
+                        <AreaTrend
+                          height={150}
+                          unit="% de engagement"
+                          points={pts.map(({ p, e }) => ({
+                            label: dayFmt
+                              .format(Date.parse(p.publishedAt!))
+                              .replace('.', ''),
+                            value: Math.round(e * 10) / 10,
+                            detail: formatOf(p),
+                          }))}
+                        />
+                      )}
+                    </div>
+                    <p className="text-muted-foreground mt-3 text-[11.5px]">
+                      Barra atenuada: menos de 3 publicaciones (base pequeña).
+                      Un punto por publicación real; sin puntos intermedios.
+                      Descriptivo: no demuestra causalidad.
+                    </p>
+                  </ChartCard>
+                  {ix && (
+                    <InteractionBreakdown
+                      data={ix}
+                      networkLabel={n.label}
+                      stacked={nets.length >= 3}
+                      description={`Suma de la última medición de ${n.measured} ${n.measured === 1 ? 'publicación' : 'publicaciones'} de ${n.label}.`}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* G. Reputación: módulo propio, sin dominar la pantalla */}
+      <Panel aria-labelledby="home-rep">
+        <PanelHeader
+          icon={ShieldAlert}
+          tone="neutral"
+          title="Reputación"
+          titleId="home-rep"
+          description="Conversación sobre la marca en las fuentes autorizadas."
+          action={
+            <Link
+              href={P('/conversaciones')}
+              className="text-primary-text inline-flex items-center gap-1 text-sm font-extrabold"
+            >
+              Conversaciones <ArrowRight aria-hidden className="h-4 w-4" />
+            </Link>
+          }
+        />
+        {conv === 'available' ? (
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <KpiCard
+              icon={BellRing}
+              tone="critical"
+              label="Alertas por revisar"
+              value={num(pendingReview)}
+              period="Revisión humana antes de escalar"
+              href={P('/revision')}
+            />
+            <KpiCard
+              icon={ShieldAlert}
+              tone="warning"
+              label="Incidentes activos"
+              value={num(openInc)}
+              period="Abiertos o en seguimiento"
+              href={P('/incidentes')}
+            />
+            <KpiCard
+              icon={Users}
+              tone="ai"
+              label="Conversaciones analizadas"
+              value={num(sent.total)}
+              period={periodLabel(period)}
+              href={P('/conversaciones')}
+            />
+            <KpiCard
+              icon={TrendingUp}
+              tone={netSentiment(sent) >= 0 ? 'success' : 'critical'}
+              label="Sentimiento neto"
+              value={`${netSentiment(sent) > 0 ? '+' : ''}${netSentiment(sent)} pts`}
+              period={`${sent.positive} positivas · ${sent.negative} negativas`}
+            />
+          </div>
+        ) : (
+          <CoverageStatus
+            state={conv}
+            compact
+            detail={
+              conv === 'privacy_disabled'
+                ? 'La importación de comentarios está desactivada por la política de privacidad del piloto. Que Hey Foxy no los importe no significa que no haya conversación en la red.'
+                : conv === 'not_connected'
+                  ? 'Ninguna fuente de comentarios, menciones o reseñas está conectada para esta organización.'
+                  : conv === 'not_imported'
+                    ? 'Hay fuentes de conversación configuradas, pero todavía no entregan comentarios.'
+                    : `Las fuentes conectadas no registraron conversaciones en ${periodLabel(period).toLowerCase()}.`
             }
           />
-          {topAlerts.length === 0 ? (
-            <EmptyStateV2 compact title="Sin alertas" />
-          ) : (
-            <ul className="divide-border divide-y">
-              {topAlerts.map((a) => (
-                <li key={a.id} className="py-3">
-                  <p className="text-sm font-bold leading-snug">{a.title}</p>
-                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                    <StatusPill tone={SEVERITY_TONE[a.severity]}>
-                      {SEVERITY_LABEL[a.severity]}
-                    </StatusPill>
-                    {a.isSynthetic && <SyntheticBadge />}
-                    <span className="text-muted-foreground text-xs">
-                      Prioridad {Math.round(a.priorityScore)} ·{' '}
-                      {fmtRelative(a.createdAt)}
-                    </span>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Panel>
-      </div>
+        )}
+      </Panel>
     </ModuleSurface>
   );
 }

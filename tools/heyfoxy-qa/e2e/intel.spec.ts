@@ -40,7 +40,7 @@ test.beforeEach(async ({ context, baseURL }, info) => {
   await signInDemo(context, baseURL!);
 });
 
-test('detalle: KPI, Foxy Content Intelligence, distribución, evolución y navegación', async ({
+test('detalle: KPI, Foxy Intelligence con pestañas, distribución, evolución y navegación', async ({
   page,
 }) => {
   await page.goto(POST, { waitUntil: 'networkidle' });
@@ -52,31 +52,58 @@ test('detalle: KPI, Foxy Content Intelligence, distribución, evolución y naveg
   await expect(
     page.getByText('Motor local por reglas · sin IA generativa').first(),
   ).toBeVisible();
-  for (const layer of [
-    'Content Intelligence',
-    'Performance Intelligence',
-    'Strategic Intelligence',
-    'Creative Intelligence',
-    'Reputation Intelligence',
+  // Pestañas reales: solo la activa se muestra.
+  const tabs = page.getByRole('tablist', { name: 'Dimensiones del análisis' });
+  for (const t of [
+    'Resumen',
+    'Contenido',
+    'Rendimiento',
+    'Estrategia',
+    'Creatividad',
+    'Reputación',
   ])
-    await expect(page.getByRole('heading', { name: layer })).toBeVisible();
+    await expect(
+      tabs.getByRole('tab', { name: new RegExp(`^${t}`) }),
+    ).toBeVisible();
+  await expect(page.getByText('Lo más importante')).toBeVisible();
+  await expect(page.getByRole('tabpanel')).toHaveCount(1);
+  await tabs.getByRole('tab', { name: /^Rendimiento/ }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Performance Intelligence' }),
+  ).toBeVisible();
+  await expect(page.getByText('Lo más importante')).toHaveCount(0);
+  // Teclado: flecha a la derecha pasa a Estrategia.
+  await page.keyboard.press('ArrowRight');
+  await expect(
+    page.getByRole('heading', { name: 'Strategic Intelligence' }),
+  ).toBeVisible();
+  await tabs.getByRole('tab', { name: /^Reputación/ }).click();
+  await expect(page.getByRole('tabpanel')).toContainText(
+    /Sin conversaciones detectadas|desactivado por privacidad|disponible/i,
+  );
+  // Evidencia expandible.
+  await tabs.getByRole('tab', { name: /^Resumen/ }).click();
+  const ev = page.locator('details', { hasText: /^Evidencia/ }).first();
+  await expect(ev).not.toHaveAttribute('open', '');
+  await ev.locator('summary').click();
+  await expect(ev).toHaveAttribute('open', '');
   await expect(page.getByText('Hecho', { exact: true }).first()).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'Distribución de interacciones' }),
   ).toBeVisible();
   await expect(
+    page.getByRole('heading', { name: 'Rendimiento comparable' }),
+  ).toBeVisible();
+  await expect(
     page.getByRole('heading', { name: 'Evolución del rendimiento' }),
   ).toBeVisible();
-  // Selector de métrica de la evolución
   await page.getByRole('button', { name: 'Me gusta', exact: true }).click();
   await expect(
     page.getByRole('button', { name: 'Me gusta', exact: true }),
   ).toHaveAttribute('aria-pressed', 'true');
-  // Próximas capacidades: visibles, sin simular acciones
   await expect(
     page.getByText('Generar brief creativo · próximamente'),
   ).toBeVisible();
-  // Navegación entre publicaciones conserva el periodo
   const next = page.getByRole('link', { name: /Siguiente/ });
   if (await next.count()) {
     await next.click();
@@ -84,70 +111,94 @@ test('detalle: KPI, Foxy Content Intelligence, distribución, evolución y naveg
   }
 });
 
-test('Ask Foxy contextual: pregunta sugerida y consulta libre honesta', async ({
+test('Ask Foxy en el panel lateral: contexto de la publicación, sugerida y consulta libre honesta', async ({
   page,
 }) => {
   await page.goto(POST, { waitUntil: 'networkidle' });
-  await page
+  const panel = page.getByRole('dialog', { name: 'Pregúntale a Foxy' });
+  await expect(panel).toHaveCount(0);
+  await page.getByRole('button', { name: 'Foxy IA' }).click();
+  await expect(panel).toBeVisible();
+  await expect(panel).toContainText('Detalle de publicación');
+  await panel
     .getByRole('button', { name: '¿Qué prueba A/B recomendarías?' })
     .click();
-  const answer = page.locator('ol[aria-live="polite"]');
+  const answer = panel.locator('ol[aria-live="polite"]');
   await expect(answer.getByText('Prueba A/B sugerida').first()).toBeVisible();
-  await expect(answer.getByText('Recomendación').first()).toBeVisible();
+  await expect(answer.getByText('Recomendaciones')).toBeVisible();
+  await expect(answer.getByText('Preguntas de seguimiento')).toBeVisible();
   await expect(answer.getByText(/Datos sintéticos de prueba/)).toBeVisible();
-  await page
+  await panel
     .getByLabel('Pregunta para Foxy')
     .fill('¿Cuál es el sentido de la vida?');
-  await page.getByRole('button', { name: 'Enviar pregunta' }).click();
+  await panel.getByRole('button', { name: 'Enviar pregunta' }).click();
   await expect(
     answer.getByText(/no puede responder esta pregunta/),
   ).toBeVisible();
+  // La página sigue detrás; Escape cierra y devuelve el foco al botón.
+  await page.keyboard.press('Escape');
+  await expect(panel).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Foxy IA' })).toBeFocused();
+  // La conversación se conserva al reabrir en el mismo contexto.
+  await page.getByRole('button', { name: 'Foxy IA' }).click();
+  await expect(
+    panel.getByText('¿Cuál es el sentido de la vida?'),
+  ).toBeVisible();
 });
 
-test('Guardar como aprendizaje queda como propuesta en Brand Brain', async ({
+test('Guardar como aprendizaje queda pendiente de revisión en Brand Brain', async ({
   page,
   baseURL,
 }) => {
   await useHorizonte(page, baseURL!);
   await firstPost(page);
-  const save = page
+  await page
+    .getByRole('tablist', { name: 'Dimensiones del análisis' })
+    .getByRole('tab', { name: /^Creatividad/ })
+    .click();
+  await page
     .getByRole('button', { name: 'Guardar como aprendizaje' })
-    .first();
-  await save.click();
+    .first()
+    .click();
   await expect(
     page.getByRole('button', { name: 'Propuesto como aprendizaje' }).first(),
   ).toBeVisible();
   await page.goto('/brand-brain');
   await expect(
-    page.getByText('Propuesto', { exact: true }).first(),
+    page.getByText('Pendiente de revisión', { exact: true }).first(),
   ).toBeVisible();
 });
 
-test('Foxy Brand Brain: owner edita y la versión sube; Ask Foxy de marca', async ({
+test('Foxy Brand Brain: owner edita sin perder el periodo y la versión sube; Ask Foxy de marca', async ({
   page,
   baseURL,
 }) => {
   await useHorizonte(page, baseURL!);
-  await page.goto('/brand-brain');
+  await page.goto('/brand-brain?periodo=7d');
   await page
     .getByLabel('Propuesta de valor')
     .fill('[SINTÉTICO] Prevención cercana para familias.');
   await page.getByRole('button', { name: 'Guardar contexto' }).click();
-  await expect(page.getByText(/Contexto guardado \(versión/)).toBeVisible();
+  await expect(page.getByText(/Contexto guardado · versión/)).toBeVisible();
+  await expect(page).toHaveURL(/periodo=7d/);
   await expect(page.getByLabel('Propuesta de valor')).toHaveValue(
     '[SINTÉTICO] Prevención cercana para familias.',
   );
+  await expect(
+    page.getByText(/Organización sintética de prueba/),
+  ).toBeVisible();
   await page.goto('/foxy?periodo=30d');
   await expect(
     page.getByRole('heading', { name: 'Ask Foxy', level: 1 }),
   ).toBeVisible();
   await page
+    .getByRole('main')
     .getByRole('button', { name: '¿Cómo se comparan Instagram y Facebook?' })
     .click();
   await expect(
     page
       .locator('ol[aria-live="polite"]')
-      .getByText(/mediana de engagement/)
+      .getByText(/engagement mediano/)
       .first(),
   ).toBeVisible();
 });

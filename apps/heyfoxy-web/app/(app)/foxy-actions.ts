@@ -63,7 +63,7 @@ export async function saveLearningAction(input: {
   postId: string | null;
   kind?: string;
 }): Promise<{ ok: true } | { error: string }> {
-  const { active, repo } = await requireContext();
+  const { viewer, active, repo } = await requireContext();
   if (!['owner', 'admin', 'analyst'].includes(active.role))
     return { error: 'Tu rol no puede proponer aprendizajes.' };
   if (brainAvailability() !== 'ready')
@@ -88,7 +88,8 @@ export async function saveLearningAction(input: {
           ]
         : [],
       sourcePostId: post?.id ?? null,
-      isSynthetic: post?.isSynthetic ?? false,
+      isSynthetic: (post?.isSynthetic ?? false) || active.organization.isDemo,
+      createdBy: viewer.userId,
     });
     return { ok: true };
   } catch (e) {

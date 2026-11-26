@@ -61,3 +61,45 @@ export function summarizeCoverage(rows: CoverageRow[]) {
     networks: [...new Set(live.map((r) => PLATFORM_LABEL[r.platform]))],
   };
 }
+
+/**
+ * Estado de la conversación para el módulo reputacional (WO-HF-V2-UX-REFINEMENT-002 §2G).
+ * Distingue: análisis desactivado por privacidad · fuente no conectada · sin comentarios
+ * importados · sin conversaciones detectadas · disponible. Nunca confunde «no importado» con
+ * «no hay conversación».
+ */
+export type ConversationCoverage =
+  | 'available'
+  | 'no_conversations'
+  | 'not_imported'
+  | 'not_connected'
+  | 'privacy_disabled';
+
+const CONV_KINDS = new Set([
+  'comments',
+  'mentions',
+  'reviews',
+  'direct_messages',
+]);
+
+export function conversationCoverage(
+  rows: CoverageRow[],
+  conversationsInPeriod: number,
+): ConversationCoverage {
+  if (conversationsInPeriod > 0) return 'available';
+  const conv = rows.filter((r) => CONV_KINDS.has(r.dataKind));
+  const live = conv.filter(
+    (r) => r.status === 'complete' || r.status === 'partial',
+  );
+  if (!live.length) {
+    if (
+      conv.some(
+        (r) =>
+          r.status === 'not_requested' && /privacidad/i.test(r.reason ?? ''),
+      )
+    )
+      return 'privacy_disabled';
+    return conv.length ? 'not_imported' : 'not_connected';
+  }
+  return 'no_conversations';
+}

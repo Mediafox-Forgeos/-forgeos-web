@@ -1,5 +1,6 @@
 import { Compass, Sparkles, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
+import { CopilotScope } from '@/components/ds/copilot';
 import { BrandContextCard } from '@/components/ds/intel';
 import { AskFoxyContextual } from '@/components/ds/intel-client';
 import { FindingCard } from '@/components/ds/intel-findings';
@@ -82,6 +83,14 @@ export default async function FoxyPage({
         title="Ask Foxy"
         description="Pregunta por tus publicaciones, una red, un periodo o el rendimiento de la marca. Foxy responde con evidencia y separa hechos, interpretaciones, hipótesis y recomendaciones."
       />
+      <CopilotScope
+        screen="Ask Foxy"
+        postId={null}
+        platform={platform}
+        label={scope}
+        suggestions={BRAND_QUESTIONS}
+        postHrefPattern={withPeriod('/publicaciones/{id}', period)}
+      />
       <nav aria-label="Red" className="mb-4 flex flex-wrap gap-1.5">
         {chip(null, 'Todas las redes')}
         {networks.map((n) => chip(n, PLATFORM_LABEL[n]))}
@@ -100,9 +109,9 @@ export default async function FoxyPage({
             <Panel aria-labelledby="foxy-top">
               <PanelHeader
                 icon={TrendingUp}
-                title="Mejor rendimiento del periodo"
+                title="Mejor rendimiento por red"
                 titleId="foxy-top"
-                description="Por engagement, con su publicación de referencia."
+                description="Por engagement dentro de cada red; las redes no se ordenan entre sí."
               />
               <div className="space-y-2">
                 {top.answer.findings.map((f, i) => (
@@ -115,7 +124,7 @@ export default async function FoxyPage({
                 icon={Compass}
                 title="Formatos por red"
                 titleId="foxy-fmt"
-                description="Mediana de engagement con al menos 2 publicaciones."
+                description="Mediana de engagement por formato dentro de cada red, con su tamaño de muestra."
               />
               <div className="space-y-2">
                 {formats.answer.findings.length ? (

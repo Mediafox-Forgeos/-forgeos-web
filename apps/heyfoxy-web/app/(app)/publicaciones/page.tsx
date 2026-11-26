@@ -12,6 +12,7 @@ import {
   ModuleSurface,
   PageHeaderV2,
 } from '@/components/ds/layout';
+import { CopilotScope } from '@/components/ds/copilot';
 import { NetworkIcon } from '@/components/ds/network-icons';
 import { SocialPostCard } from '@/components/ds/post';
 import {
@@ -25,7 +26,9 @@ import { requireContext } from '@/lib/auth/session';
 import { explorerQuery, parseExplorerFilters } from '@/lib/explorer-filters';
 import { summarizeCoverage } from '@/lib/coverage';
 import { PLATFORM_LABEL } from '@/lib/format';
-import { inWindow, postTotals } from '@/lib/home-insights';
+import { inWindow } from '@/lib/home-insights';
+import { networkSummaries } from '@/lib/intel/brand';
+import { BRAND_QUESTIONS } from '@/lib/intel/local';
 import { dominantSentiment, postStats } from '@/lib/insights';
 import {
   PERIOD_PARAM,
@@ -76,7 +79,18 @@ export default async function SocialExplorerPage({
   if (f.orden === 'interacciones')
     rows.sort((a, b) => b.s.interactions - a.s.interactions);
   const networks = [...new Set(inPeriod.map((p) => p.platform))] as Platform[];
-  const totals = postTotals(rows.map((r) => r.p));
+  // Por red: alcance (Instagram) e impresiones únicas (Facebook) no se suman entre sí.
+  const selNets = networkSummaries(rows.map((r) => r.p));
+  const perNet = (pick: (n: (typeof selNets)[number]) => number | null) =>
+    selNets.length === 0
+      ? '—'
+      : selNets
+          .map((n) => {
+            const v = pick(n);
+            const t = v == null ? '—' : v.toLocaleString('es-CO');
+            return selNets.length === 1 ? t : `${n.label} ${t}`;
+          })
+          .join(' · ');
   const withMedia = rows.filter((r) => (r.p.media?.length ?? 0) > 0).length;
 
   const href = (
@@ -98,6 +112,17 @@ export default async function SocialExplorerPage({
         title="Publicaciones monitoreadas"
         description={`Publicaciones de las cuentas conectadas, con métricas, comentarios clasificados y actividad inusual · ${periodLabel(period).toLowerCase()}.`}
       />
+      <CopilotScope
+        screen="Social Explorer"
+        postId={null}
+        platform={f.platform ?? null}
+        label={`${active.organization.name} · ${f.platform ? PLATFORM_LABEL[f.platform as Platform] : 'todas las redes'} · ${periodLabel(period).toLowerCase()}${f.q ? ` · búsqueda «${f.q}»` : ''}`}
+        suggestions={BRAND_QUESTIONS}
+        postHrefPattern={withPeriod(
+          `/publicaciones/{id}${fq ? `?${fq}` : ''}`,
+          period,
+        )}
+      />
       <CoverageBannerV2 {...summarizeCoverage(coverage)} />
 
       <h2 className="sr-only">Resumen de la selección</h2>
@@ -112,17 +137,20 @@ export default async function SocialExplorerPage({
           {
             icon: Heart,
             tone: 'high' as const,
-            label: 'Interacciones',
-            value: totals.interactions.toLocaleString('es-CO'),
+            label:
+              selNets.length === 1
+                ? `Interacciones según ${selNets[0]!.label}`
+                : 'Interacciones según cada red',
+            value: perNet((n) => n.interactionsSum),
           },
           {
             icon: Users,
             tone: 'ai' as const,
-            label: 'Alcance',
-            value:
-              totals.reach === null
-                ? '—'
-                : totals.reach.toLocaleString('es-CO'),
+            label:
+              selNets.length === 1
+                ? `${selNets[0]!.reachLabel} acumulado`
+                : 'Alcance / impresiones únicas (por red)',
+            value: perNet((n) => n.reachSum),
           },
           {
             icon: ImageOff,

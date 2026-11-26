@@ -153,6 +153,7 @@ export function askFoxy(args: {
       reason: decision.reason,
       answer: {
         question: q,
+        headline: null,
         findings: [],
         unanswerable: decision.reason,
         suggestions: [],

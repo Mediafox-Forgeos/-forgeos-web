@@ -60,35 +60,45 @@ test('riel de tablet: tooltip visible y sin scroll horizontal', async ({
 test('la cabecera conserva el periodo', async ({ page }) => {
   await page.goto('/publicaciones?periodo=30d');
   await expect(
-    // «Foxy IA» abre Ask Foxy (WO-HF-V2-INTELLIGENCE-001), con el periodo.
-    page.locator('header a[href="/foxy?periodo=30d"]'),
-  ).toHaveCount(1);
-  await expect(
     page.locator('header a[href="/alertas?periodo=30d"]'),
+  ).toHaveCount(1);
+  // «Foxy IA» abre el copiloto lateral sin salir de la pantalla
+  // (WO-HF-V2-UX-REFINEMENT-002); el acceso a Ask Foxy general conserva el periodo.
+  await page.getByRole('button', { name: 'Foxy IA' }).click();
+  await expect(page).toHaveURL(/\/publicaciones\?periodo=30d$/);
+  await expect(
+    page
+      .getByRole('dialog', { name: 'Pregúntale a Foxy' })
+      .locator('a[href="/foxy?periodo=30d"]'),
   ).toHaveCount(1);
 });
 
-test('escritorio: KPI en una fila y gráficos en la primera pantalla', async ({
+test('escritorio: cabecera ejecutiva, KPI por red y Executive Brief en la primera pantalla', async ({
   page,
 }) => {
   const vp = page.viewportSize()!;
   test.skip(vp.width < 1280, 'solo escritorio');
   await page.goto('/?periodo=30d');
-  const chart = page.getByRole('heading', {
-    name: 'Evolución de la conversación',
-  });
-  const cb = (await chart.boundingBox())!;
-  expect(cb.y + 80, 'gráfico visible sin desplazarse').toBeLessThan(vp.height);
-  const tops = new Set(
-    await Promise.all(
-      (
-        await page
-          .getByText(
-            /^(Conversaciones analizadas|Sentimiento neto|Alcance total|Interacciones|Alertas por revisar|Incidentes activos)$/,
-          )
-          .all()
-      ).map(async (l) => Math.round(((await l.boundingBox())?.y ?? 0) / 20)),
-    ),
-  );
-  expect(tops.size, 'las seis KPI comparten fila').toBe(1);
+  for (const name of [
+    /^Indicadores de Instagram$/,
+    /^Indicadores de Facebook$/,
+  ]) {
+    const b = (await page.getByRole('region', { name }).boundingBox())!;
+    expect(b.y + b.height, 'KPI por red sin desplazarse').toBeLessThan(
+      vp.height,
+    );
+  }
+  const brief = (await page
+    .getByRole('heading', {
+      name: '¿Qué debería saber hoy el director de marca?',
+    })
+    .boundingBox())!;
+  expect(brief.y + 40, 'brief visible sin desplazarse').toBeLessThan(vp.height);
+  const igTop = (await page
+    .getByRole('region', { name: /^Indicadores de Instagram$/ })
+    .boundingBox())!.y;
+  const fbTop = (await page
+    .getByRole('region', { name: /^Indicadores de Facebook$/ })
+    .boundingBox())!.y;
+  expect(Math.abs(igTop - fbTop), 'las redes comparten fila').toBeLessThan(4);
 });

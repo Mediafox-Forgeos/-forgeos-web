@@ -9,7 +9,13 @@ import {
   Send,
   Sparkles,
 } from 'lucide-react';
-import { useState, useTransition, type FormEvent } from 'react';
+import {
+  useRef,
+  useState,
+  useTransition,
+  type FormEvent,
+  type ReactNode,
+} from 'react';
 import { askFoxyAction, saveLearningAction } from '@/app/(app)/foxy-actions';
 import { cn } from '@/lib/cn';
 import type { AskAnswer, IntelMeta } from '@/lib/intel/schema';
@@ -139,7 +145,233 @@ export function PerformanceTimeline({ series }: { series: TimelineSeries[] }) {
   );
 }
 
-type Turn = { q: string; a?: AskAnswer; meta?: IntelMeta; error?: string };
+export type TurnStatus = 'pending' | 'streaming' | 'done' | 'error';
+export type Turn = {
+  q: string;
+  status: TurnStatus;
+  a?: AskAnswer;
+  meta?: IntelMeta;
+  error?: string;
+};
+
+export interface FoxyScope {
+  postId: string | null;
+  period: string;
+  platform?: string | null;
+}
+
+/**
+ * Conversación con Foxy (motor local hoy; preparada para streaming: cada turno tiene estado
+ * pending → streaming → done, y la respuesta puede completarse por partes cuando un proveedor
+ * autorizado la entregue en flujo).
+ */
+export function useFoxyConversation(scope: FoxyScope, initial: Turn[] = []) {
+  const [turns, setTurns] = useState<Turn[]>(initial);
+  const [pending, start] = useTransition();
+  const ask = (question: string) => {
+    const q = question.trim();
+    if (q.length < 3 || pending) return;
+    setTurns((t) => [...t, { q, status: 'pending' }]);
+    start(async () => {
+      const r = await askFoxyAction({ question: q, ...scope });
+      setTurns((t) => {
+        const next = [...t];
+        next[next.length - 1] =
+          'error' in r
+            ? { q, status: 'error', error: r.error }
+            : { q, status: 'done', a: r.answer, meta: r.meta };
+        return next;
+      });
+    });
+  };
+  return { turns, ask, pending, setTurns };
+}
+
+/** Respuesta de Foxy: principal, evidencias expandibles, limitaciones, recomendaciones y seguimiento. */
+export function FoxyAnswer({
+  turn,
+  postHref,
+  onFollowUp,
+  disabled,
+}: {
+  turn: Turn;
+  postHref: (id: string) => string;
+  onFollowUp: (q: string) => void;
+  disabled?: boolean;
+}) {
+  if (turn.status === 'pending')
+    return (
+      <p className="text-muted-foreground flex items-center gap-2 text-sm">
+        <LoaderCircle aria-hidden className="h-4 w-4 animate-spin" /> Foxy está
+        analizando…
+      </p>
+    );
+  if (turn.status === 'error')
+    return <p className="text-critical-fg text-sm font-bold">{turn.error}</p>;
+  const a = turn.a!;
+  const info = a.findings.filter((f) => f.kind !== 'recommendation');
+  const recs = a.findings.filter((f) => f.kind === 'recommendation');
+  const limits = [
+    ...new Set(a.findings.map((f) => f.limitation).filter(Boolean)),
+  ] as string[];
+  return (
+    <div className="space-y-2.5">
+      {a.unanswerable ? (
+        <p className="bg-card border-border rounded-xl border p-3 text-sm">
+          {a.unanswerable}
+        </p>
+      ) : (
+        a.headline &&
+        a.findings.length > 1 && (
+          <p className="text-[15px] font-extrabold leading-snug">
+            {a.headline}
+          </p>
+        )
+      )}
+      {info.map((f, j) => (
+        <FindingCard key={j} f={f} postHref={postHref} compact hideLimitation />
+      ))}
+      {recs.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-success-fg text-[11px] font-extrabold uppercase tracking-wider">
+            Recomendaciones
+          </p>
+          {recs.map((f, j) => (
+            <FindingCard
+              key={j}
+              f={f}
+              postHref={postHref}
+              compact
+              hideLimitation
+            />
+          ))}
+        </div>
+      )}
+      {limits.length > 0 && (
+        <div className="bg-muted/70 rounded-xl px-3 py-2">
+          <p className="text-muted-foreground text-[11px] font-extrabold uppercase tracking-wider">
+            Limitaciones
+          </p>
+          <ul className="text-muted-foreground mt-1 space-y-0.5 text-[12px]">
+            {limits.map((l) => (
+              <li key={l}>· {l}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {turn.meta?.syntheticInput && (
+        <p className="text-warning-fg text-xs font-bold">
+          Datos sintéticos de prueba: no describen una marca real.
+        </p>
+      )}
+      {a.suggestions.length > 0 && (
+        <div>
+          <p className="text-muted-foreground text-[11px] font-extrabold uppercase tracking-wider">
+            Preguntas de seguimiento
+          </p>
+          <div className="mt-1 flex flex-wrap gap-1.5">
+            {a.suggestions.map((s) => (
+              <button
+                key={s}
+                type="button"
+                disabled={disabled}
+                onClick={() => onFollowUp(s)}
+                className="bg-card hover:border-ai-fg/40 border-border rounded-full border px-2.5 py-1 text-left text-[12px] font-bold disabled:opacity-60"
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Caja de pregunta compartida (contextual, panel lateral y módulo general). */
+export function AskBox({
+  id,
+  onAsk,
+  pending,
+  autoFocus,
+}: {
+  id: string;
+  onAsk: (q: string) => void;
+  pending: boolean;
+  autoFocus?: boolean;
+}) {
+  const [q, setQ] = useState('');
+  const submit = (e?: FormEvent) => {
+    e?.preventDefault();
+    if (q.trim().length < 3) return;
+    onAsk(q);
+    setQ('');
+  };
+  return (
+    <form onSubmit={submit} className="flex items-end gap-2">
+      <label htmlFor={id} className="sr-only">
+        Pregunta para Foxy
+      </label>
+      <textarea
+        id={id}
+        rows={1}
+        maxLength={500}
+        value={q}
+        autoFocus={autoFocus}
+        onChange={(e) => setQ(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && !e.shiftKey) submit(e);
+        }}
+        placeholder="Pregúntale lo que quieras a Foxy..."
+        className="bg-card border-border focus-visible:ring-primary-text min-h-[44px] flex-1 resize-none rounded-xl border px-3.5 py-2.5 text-sm"
+      />
+      <button
+        type="submit"
+        disabled={pending || q.trim().length < 3}
+        className="bg-brand text-brand-foreground flex h-11 w-11 shrink-0 items-center justify-center rounded-xl disabled:opacity-50"
+        aria-label="Enviar pregunta"
+      >
+        {pending ? (
+          <LoaderCircle aria-hidden className="h-5 w-5 animate-spin" />
+        ) : (
+          <Send aria-hidden className="h-5 w-5" />
+        )}
+      </button>
+    </form>
+  );
+}
+
+/** Lista de turnos (pregunta del usuario + respuesta de Foxy). */
+export function FoxyThread({
+  turns,
+  postHref,
+  onAsk,
+  pending,
+}: {
+  turns: Turn[];
+  postHref: (id: string) => string;
+  onAsk: (q: string) => void;
+  pending: boolean;
+}) {
+  if (!turns.length) return null;
+  return (
+    <ol className="space-y-4" aria-live="polite">
+      {turns.map((t, i) => (
+        <li key={i} className="space-y-2">
+          <p className="bg-brand text-brand-foreground ml-auto w-fit max-w-[90%] rounded-2xl rounded-br-sm px-3.5 py-2 text-sm font-bold">
+            {t.q}
+          </p>
+          <FoxyAnswer
+            turn={t}
+            postHref={postHref}
+            onFollowUp={onAsk}
+            disabled={pending}
+          />
+        </li>
+      ))}
+    </ol>
+  );
+}
 
 /** Ask Foxy contextual: preguntas sugeridas + consulta libre; respuestas con evidencia. */
 export function AskFoxyContextual({
@@ -160,29 +392,11 @@ export function AskFoxyContextual({
 }) {
   const postHref = (id: string) =>
     postHrefPattern.replace('{id}', encodeURIComponent(id));
-  const [turns, setTurns] = useState<Turn[]>([]);
-  const [q, setQ] = useState('');
-  const [pending, start] = useTransition();
-  const ask = (question: string) => {
-    if (!question.trim() || pending) return;
-    setQ('');
-    setTurns((t) => [...t, { q: question }]);
-    start(async () => {
-      const r = await askFoxyAction({ question, postId, period, platform });
-      setTurns((t) => {
-        const next = [...t];
-        next[next.length - 1] =
-          'error' in r
-            ? { q: question, error: r.error }
-            : { q: question, a: r.answer, meta: r.meta };
-        return next;
-      });
-    });
-  };
-  const onSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    ask(q);
-  };
+  const { turns, ask, pending } = useFoxyConversation({
+    postId,
+    period,
+    platform,
+  });
   return (
     <section
       aria-labelledby="ask-foxy-title"
@@ -218,76 +432,108 @@ export function AskFoxyContextual({
           </button>
         ))}
       </div>
-      {turns.length > 0 && (
-        <ol className="mt-4 space-y-4" aria-live="polite">
-          {turns.map((t, i) => (
-            <li key={i} className="space-y-2">
-              <p className="bg-brand text-brand-foreground ml-auto w-fit max-w-[90%] rounded-2xl rounded-br-sm px-3.5 py-2 text-sm font-bold">
-                {t.q}
-              </p>
-              {!t.a && !t.error && (
-                <p className="text-muted-foreground flex items-center gap-2 text-sm">
-                  <LoaderCircle aria-hidden className="h-4 w-4 animate-spin" />{' '}
-                  Foxy está analizando…
-                </p>
-              )}
-              {t.error && (
-                <p className="text-critical-fg text-sm font-bold">{t.error}</p>
-              )}
-              {t.a && (
-                <div className="space-y-2">
-                  {t.a.unanswerable && (
-                    <p className="bg-card border-border rounded-xl border p-3 text-sm">
-                      {t.a.unanswerable}
-                    </p>
-                  )}
-                  {t.a.findings.map((f, j) => (
-                    <FindingCard key={j} f={f} postHref={postHref} compact />
-                  ))}
-                  {t.meta?.syntheticInput && (
-                    <p className="text-warning-fg text-xs font-bold">
-                      Datos sintéticos de prueba: no describen una marca real.
-                    </p>
-                  )}
-                </div>
-              )}
-            </li>
-          ))}
-        </ol>
-      )}
-      <form onSubmit={onSubmit} className="mt-4 flex items-end gap-2">
-        <label htmlFor={`ask-${postId ?? 'brand'}`} className="sr-only">
-          Pregunta para Foxy
-        </label>
-        <textarea
-          id={`ask-${postId ?? 'brand'}`}
-          rows={1}
-          maxLength={500}
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              ask(q);
-            }
-          }}
-          placeholder="Pregúntale lo que quieras a Foxy..."
-          className="bg-card border-border focus-visible:ring-primary-text min-h-[44px] flex-1 resize-none rounded-xl border px-3.5 py-2.5 text-sm"
+      <div className="mt-4">
+        <FoxyThread
+          turns={turns}
+          postHref={postHref}
+          onAsk={ask}
+          pending={pending}
         />
-        <button
-          type="submit"
-          disabled={pending || q.trim().length < 3}
-          className="bg-brand text-brand-foreground flex h-11 w-11 shrink-0 items-center justify-center rounded-xl disabled:opacity-50"
-          aria-label="Enviar pregunta"
-        >
-          {pending ? (
-            <LoaderCircle aria-hidden className="h-5 w-5 animate-spin" />
-          ) : (
-            <Send aria-hidden className="h-5 w-5" />
-          )}
-        </button>
-      </form>
+      </div>
+      <div className="mt-4">
+        <AskBox id={`ask-${postId ?? 'brand'}`} onAsk={ask} pending={pending} />
+      </div>
     </section>
+  );
+}
+
+/**
+ * Pestañas de Foxy Intelligence (DS v0.4): solo se muestra la pestaña activa. Navegación por
+ * teclado (flechas, Inicio, Fin) según el patrón ARIA de pestañas.
+ */
+export function IntelligenceTabs({
+  tabs,
+  label,
+}: {
+  label: string;
+  tabs: Array<{
+    id: string;
+    label: string;
+    badge?: string;
+    content: ReactNode;
+  }>;
+}) {
+  const [active, setActive] = useState(tabs[0]?.id ?? '');
+  const refs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const move = (to: number) => {
+    const t = tabs[(to + tabs.length) % tabs.length]!;
+    setActive(t.id);
+    refs.current[t.id]?.focus();
+  };
+  const idx = tabs.findIndex((t) => t.id === active);
+  return (
+    <div>
+      <div
+        role="tablist"
+        aria-label={label}
+        className="flex gap-1.5 overflow-x-auto pb-1 text-xs font-extrabold"
+      >
+        {tabs.map((t, i) => (
+          <button
+            key={t.id}
+            ref={(el) => {
+              refs.current[t.id] = el;
+            }}
+            id={`tab-${t.id}`}
+            role="tab"
+            type="button"
+            aria-selected={t.id === active}
+            aria-controls={`panel-${t.id}`}
+            tabIndex={t.id === active ? 0 : -1}
+            onClick={() => setActive(t.id)}
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowRight') move(i + 1);
+              else if (e.key === 'ArrowLeft') move(i - 1);
+              else if (e.key === 'Home') move(0);
+              else if (e.key === 'End') move(tabs.length - 1);
+              else return;
+              e.preventDefault();
+            }}
+            className={cn(
+              'inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-1.5 transition-colors',
+              t.id === active
+                ? 'bg-brand text-brand-foreground'
+                : 'bg-card/80 hover:bg-card text-foreground',
+            )}
+          >
+            {t.label}
+            {t.badge && (
+              <span
+                className={cn(
+                  'rounded-full px-1.5 text-[10px]',
+                  t.id === active ? 'bg-white/20' : 'bg-muted',
+                )}
+              >
+                {t.badge}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+      {tabs.map((t, i) => (
+        <div
+          key={t.id}
+          id={`panel-${t.id}`}
+          role="tabpanel"
+          aria-labelledby={`tab-${t.id}`}
+          hidden={i !== idx}
+          tabIndex={0}
+          className="mt-4 outline-none"
+        >
+          {i === idx ? t.content : null}
+        </div>
+      ))}
+    </div>
   );
 }
 

@@ -2,6 +2,32 @@ import type { BrandContext } from '@/lib/brain/types';
 import { PLATFORM_LABEL } from '@/lib/format';
 import { interactions } from '@/lib/insights';
 import type { Post } from '@/lib/types';
+import {
+  featuredPosts,
+  formatLearnings,
+  networkSummaries,
+  strategyAlignment,
+} from './brand';
+import {
+  analyzeCopy,
+  comparisonRef,
+  engagementBasis,
+  engagementOf,
+  fold,
+  formatGroup,
+  formatOf,
+  groupBy,
+  matchCampaign,
+  matchPillar,
+  median,
+  metricRef,
+  num,
+  pct,
+  postRef,
+  reachLabel,
+  reachOf,
+  savesOf,
+} from './common';
 import { readMetric } from './metrics';
 import type { AskAnswer, Evidence, Finding, PostIntel } from './schema';
 
@@ -24,63 +50,7 @@ export interface IntelInput {
   periodLabel: string;
 }
 
-// --- Utilidades de texto ------------------------------------------------------------------------
-const fold = (t: string) =>
-  t
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .toLowerCase();
-
-const CTA_RE =
-  /(comenta|cuentanos|escribenos|agenda|reserva|descubre|conoce|visita|link en (la )?bio|haz clic|inscribete|afiliate|llamanos|dejanos|comparte|guarda|etiqueta|descarga|solicita|cotiza)/;
-
-function sentences(body: string): string[] {
-  return body
-    .split(/(?<=[.!?¡¿])\s+|\n+/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
-export function analyzeCopy(body: string | null) {
-  const text = body ?? '';
-  const ss = sentences(text);
-  const hook = ss[0] ? ss[0].slice(0, 160) : null;
-  const ctaSentence = ss.find((s) => CTA_RE.test(fold(s))) ?? null;
-  const hashtags = text.match(/#[\p{L}\p{N}_]+/gu) ?? [];
-  const emojis = text.match(/\p{Extended_Pictographic}/gu) ?? [];
-  return {
-    hook,
-    cta: ctaSentence ? ctaSentence.slice(0, 160) : null,
-    hashtags: hashtags.length,
-    emojis: emojis.length,
-    length: text.length,
-    questionHook: hook ? /[¿?]/.test(hook) : false,
-    hasText: text.trim().length > 0,
-  };
-}
-
-const FORMAT_LABEL: Record<string, string> = {
-  reel: 'Reel (video corto)',
-  video: 'Video',
-  carousel: 'Carrusel',
-  image: 'Imagen',
-  text: 'Texto',
-  link: 'Enlace',
-  story: 'Historia',
-};
-
-export function formatOf(post: Post): string {
-  return (
-    FORMAT_LABEL[post.contentType ?? ''] ??
-    ((post.media ?? []).some((m) => m.kind === 'video') ? 'Video' : 'Imagen')
-  );
-}
-
-const formatGroup = (post: Post) =>
-  ['reel', 'video'].includes(post.contentType ?? '') ||
-  (post.media ?? []).some((m) => m.kind === 'video')
-    ? 'video'
-    : 'static';
+export { analyzeCopy, formatOf } from './common';
 
 const THEMES: Array<{ re: RegExp; theme: string; territory: string }> = [
   {
@@ -133,42 +103,6 @@ function objectiveOf(post: Post, cta: string | null): string {
   return 'Reconocimiento de marca';
 }
 
-const median = (xs: number[]) => {
-  if (!xs.length) return null;
-  const s = [...xs].sort((a, b) => a - b);
-  const m = Math.floor(s.length / 2);
-  return s.length % 2 ? s[m]! : (s[m - 1]! + s[m]!) / 2;
-};
-const pct = (n: number) =>
-  `${n.toLocaleString('es-CO', { maximumFractionDigits: 1 })} %`;
-const num = (n: number) => Math.round(n).toLocaleString('es-CO');
-
-const postRef = (p: Post, label?: string): Evidence => ({
-  type: 'post',
-  label:
-    label ??
-    `${PLATFORM_LABEL[p.platform]} · ${formatOf(p)}${p.body ? ` · «${p.body.slice(0, 40)}…»` : ''}`,
-  postId: p.id,
-  value: null,
-});
-const metricRef = (label: string, value: string): Evidence => ({
-  type: 'metric',
-  label,
-  postId: null,
-  value,
-});
-
-/** Engagement comparable: el de la fuente; si no hay, interacciones / alcance. */
-function engagementOf(p: Post): number | null {
-  const m = p.metrics[0];
-  if (!m) return null;
-  if (m.engagement != null) return m.engagement;
-  const reach = m.reach ?? m.impressionsUnique ?? null;
-  return reach ? (interactions(m) / reach) * 100 : null;
-}
-const reachOf = (p: Post) =>
-  p.metrics[0]?.reach ?? p.metrics[0]?.impressionsUnique ?? null;
-
 function comparables(post: Post, peers: Post[]) {
   return peers.filter(
     (p) =>
@@ -176,29 +110,6 @@ function comparables(post: Post, peers: Post[]) {
       p.platform === post.platform &&
       formatGroup(p) === formatGroup(post) &&
       p.metrics.length > 0,
-  );
-}
-
-function matchPillar(body: string | null, brand: BrandContext | null) {
-  if (!brand || !body) return null;
-  const t = fold(body);
-  for (const p of brand.strategy.pillars) {
-    const keys = [p.name, ...p.keywords].map(fold).filter((k) => k.length >= 4);
-    if (keys.some((k) => t.includes(k))) return p;
-  }
-  return null;
-}
-function matchCampaign(body: string | null, brand: BrandContext | null) {
-  if (!brand || !body) return null;
-  const t = fold(body);
-  return (
-    brand.campaigns.find(
-      (c) =>
-        c.status === 'active' &&
-        [c.name, ...c.channels]
-          .map(fold)
-          .some((k) => k.length >= 5 && t.includes(k)),
-    ) ?? null
   );
 }
 
@@ -559,6 +470,7 @@ export function analyzePostLocal(input: IntelInput): PostIntel {
       intent: copy.cta ? `Invitar a: «${copy.cta.slice(0, 80)}»` : null,
       hook: copy.hook,
       cta: copy.cta,
+      ctaInHook: copy.ctaInHook,
       visual: null,
       findings: content,
     },
@@ -574,11 +486,12 @@ export function analyzePostLocal(input: IntelInput): PostIntel {
       ? {
           status: 'disabled_privacy',
           reason:
-            'Análisis reputacional no disponible: importación de comentarios desactivada por política de privacidad del piloto. Que no haya comentarios importados no significa que no haya conversación en la red.',
+            'La importación de comentarios está desactivada por la política de privacidad del piloto. Que Hey Foxy no los importe no significa que no haya conversación en la red.',
         }
       : {
           status: 'no_data',
-          reason: 'Sin comentarios clasificados para esta publicación.',
+          reason:
+            'Hey Foxy no tiene comentarios clasificados de esta publicación en las fuentes conectadas.',
         },
     limitations,
   };
@@ -621,22 +534,23 @@ export const SUGGESTED_QUESTIONS = [
   '¿Qué formato debería tener la siguiente pieza?',
   '¿Cómo se compara con otras publicaciones?',
   '¿Está alineado con nuestra estrategia orgánica?',
-  '¿A qué pilar de contenido pertenece?',
   '¿Qué oportunidades creativas podemos aprovechar?',
   '¿Qué aprendizajes nos deja esta publicación?',
-  '¿Cómo incorporamos este aprendizaje al próximo cronopost?',
   '¿Qué prueba A/B recomendarías?',
-  '¿Qué podemos hacer para mejorar el engagement?',
+  '¿Cómo conseguimos más guardados?',
 ] as const;
 
+/** Preguntas generales de marca (Intelligence Home, Ask Foxy general, panel lateral). */
 export const BRAND_QUESTIONS = [
-  '¿Qué publicaciones rindieron mejor en el periodo?',
-  '¿Qué formato funciona mejor en cada red?',
-  '¿Cómo se comparan Instagram y Facebook?',
+  '¿Qué contenidos están funcionando mejor?',
+  '¿Qué formatos deberíamos priorizar?',
+  '¿Qué oportunidades creativas tenemos?',
   '¿Qué deberíamos publicar la próxima semana?',
+  '¿Estamos cumpliendo nuestra estrategia?',
+  '¿Cómo se comparan Instagram y Facebook?',
 ] as const;
 
-type Intent =
+export type Intent =
   | 'improve'
   | 'format'
   | 'compare'
@@ -645,39 +559,425 @@ type Intent =
   | 'creative'
   | 'learnings'
   | 'cronopost'
+  | 'nextweek'
   | 'abtest'
   | 'engagement'
+  | 'saves'
+  | 'reach'
   | 'top'
   | 'networks'
   | 'unknown';
 
+/** Reconocimiento de intención por reglas (vocabulario plegado, sin tildes). */
 export function intentOf(q: string): Intent {
   const t = fold(q);
-  if (/a\/?b|prueba/.test(t)) return 'abtest';
+  if (/\ba\/b\b|\bab\b|prueba a\/?b|\bprueba\b|experiment/.test(t))
+    return 'abtest';
   if (
-    /cronopost|calendario|proxima semana|que deberiamos publicar|siguiente publicacion/.test(
+    /proxima semana|proximo mes|que deberiamos publicar|que publicar|que publicamos|plan de contenido/.test(
       t,
     )
   )
+    return 'nextweek';
+  if (/cronopost|calendario|siguiente publicacion|proxima pieza/.test(t))
     return 'cronopost';
   if (/pilar/.test(t)) return 'pillar';
-  if (/estrategi|alinead|objetivo/.test(t)) return 'strategy';
+  if (/estrategi|alinead|objetivo|cumpli/.test(t)) return 'strategy';
   if (/aprendizaje|aprend|lecci/.test(t)) return 'learnings';
+  if (/guardad|guardar/.test(t)) return 'saves';
+  if (/alcance|llegar a mas|visibilidad|impresion/.test(t)) return 'reach';
   if (/engagement|interaccion/.test(t)) return 'engagement';
-  if (/formato|siguiente pieza/.test(t)) return 'format';
-  if (/instagram y facebook|facebook e instagram|redes|por red/.test(t))
+  if (/formato|siguiente pieza|priorizar/.test(t)) return 'format';
+  if (
+    /instagram y facebook|facebook e instagram|entre redes|por red|cada red|que red/.test(
+      t,
+    )
+  )
     return 'networks';
-  if (/mejor(es)? (publicacion|rindi)|top|rindieron mejor/.test(t))
+  if (
+    /mejor(es)? (publicacion|contenido)|funcionando mejor|funciona mejor|rindieron mejor|rinden mejor|\btop\b|destacad/.test(
+      t,
+    )
+  )
     return 'top';
   if (/compar/.test(t)) return 'compare';
-  if (/oportunidad|creativ|idea/.test(t)) return 'creative';
-  if (/mejorar/.test(t)) return 'improve';
+  if (/oportunidad|creativ|idea|hook|llamado a la accion|\bcta\b/.test(t))
+    return 'creative';
+  if (/mejorar|optimizar|subir|aumentar|crecer/.test(t)) return 'improve';
   return 'unknown';
 }
 
+const fact = (
+  title: string,
+  detail: string,
+  evidence: Evidence[] = [],
+  limitation: string | null = null,
+): Finding => ({
+  kind: 'fact',
+  title,
+  detail,
+  evidence,
+  confidence: null,
+  limitation,
+});
+
+const NO_CROSS_NETWORK =
+  'Las redes no se ordenan entre sí: Metricool calcula el engagement de Instagram sobre el alcance y el de Facebook sobre las impresiones únicas.';
+
+/** Publicaciones de la misma red con más guardados y la recomendación por reglas. */
+function savesFindings(posts: Post[], current: Post | null): Finding[] {
+  const ig = posts.filter((p) => savesOf(p) != null);
+  if (!ig.length)
+    return [
+      fact(
+        'Sin datos de guardados',
+        'Solo Instagram entrega guardados y no hay publicaciones con esa métrica en el periodo.',
+      ),
+    ];
+  const sorted = [...ig].sort((a, b) => savesOf(b)! - savesOf(a)!);
+  const out: Finding[] = [];
+  if (current && savesOf(current) != null) {
+    const med = median(
+      ig.filter((p) => p.id !== current.id).map((p) => savesOf(p)!),
+    );
+    out.push(
+      fact(
+        `Esta publicación tiene ${num(savesOf(current)!)} guardados`,
+        med != null
+          ? `Mediana de ${ig.length - 1} publicaciones de Instagram del periodo: ${num(med)}.`
+          : 'No hay otras publicaciones de Instagram con guardados para comparar.',
+        [metricRef('Guardados', num(savesOf(current)!))],
+      ),
+    );
+  }
+  const top = sorted.slice(0, 3).filter((p) => savesOf(p)! > 0);
+  if (top.length)
+    out.push(
+      fact(
+        `Más guardados en Instagram: ${top.map((p) => `${formatOf(p)} (${num(savesOf(p)!)})`).join(' · ')}`,
+        `${ig.length} publicaciones de Instagram con guardados medidos.`,
+        top.map((p) => postRef(p)),
+      ),
+    );
+  const formats = new Set(top.map(formatOf));
+  out.push({
+    kind: 'recommendation',
+    title: 'Crear contenido de referencia y pedir que lo guarden',
+    detail: `Los guardados premian lo que la audiencia quiere conservar: listas, pasos, datos útiles.${formats.size === 1 && top.length >= 2 ? ` En el periodo, lo más guardado fue ${[...formats][0]!.toLowerCase()}.` : ''} Cierra con «Guárdalo para tenerlo a mano».`,
+    evidence: top.slice(0, 2).map((p) => postRef(p)),
+    confidence: 'baja',
+    limitation:
+      top.length < 3
+        ? 'Base pequeña: confírmalo con una prueba.'
+        : 'Patrón descriptivo; confírmalo con una prueba.',
+  });
+  return out;
+}
+
+function topByNetwork(posts: Post[], period: string): Finding[] {
+  const out: Finding[] = [];
+  for (const [platform, ps] of groupBy(posts, (p) => p.platform)) {
+    const withE = ps
+      .map((p) => ({ p, e: engagementOf(p) }))
+      .filter((x): x is { p: Post; e: number } => x.e != null)
+      .sort((a, b) => b.e - a.e);
+    if (!withE.length) continue;
+    const net = PLATFORM_LABEL[platform];
+    out.push(
+      fact(
+        `${net}: ${withE
+          .slice(0, 3)
+          .map((x) => `${formatOf(x.p)} ${pct(x.e)}`)
+          .join(' · ')}`,
+        `Las publicaciones con más engagement de ${net} en ${period} (${withE.length} con métricas; engagement = ${engagementBasis(platform)}).`,
+        withE.slice(0, 3).map((x) => postRef(x.p)),
+      ),
+    );
+  }
+  if (out.length > 1)
+    out.push(fact('Cada red se evalúa por separado', NO_CROSS_NETWORK));
+  return out;
+}
+
+function networksOverview(posts: Post[], period: string): Finding[] {
+  const out = networkSummaries(posts)
+    .filter((s) => s.measured > 0)
+    .map((s) =>
+      fact(
+        `${s.label}: ${s.measured} publicaciones con métricas · engagement mediano ${s.engagementMedian != null ? pct(s.engagementMedian) : 'no disponible'}`,
+        [
+          `Engagement = ${s.engagementBasis}.`,
+          s.reachSum != null
+            ? `${s.reachLabel} acumulado: ${num(s.reachSum)} (suma por publicación; no son personas únicas).`
+            : null,
+          s.interactionsSum != null
+            ? `Interacciones según ${s.label}: ${num(s.interactionsSum)}.`
+            : null,
+        ]
+          .filter(Boolean)
+          .join(' '),
+        [
+          comparisonRef(
+            `${s.label} (${period})`,
+            s.engagementMedian != null ? pct(s.engagementMedian) : '—',
+          ),
+        ],
+        s.measured < 3 ? 'Base pequeña.' : null,
+      ),
+    );
+  if (out.length > 1)
+    out.push(
+      fact('No se comparan como si fueran la misma métrica', NO_CROSS_NETWORK),
+    );
+  return out;
+}
+
+function formatsOverview(posts: Post[], period: string): Finding[] {
+  const out: Finding[] = [];
+  const { learnings } = formatLearnings(posts);
+  for (const l of learnings) {
+    const net = PLATFORM_LABEL[l.platform];
+    out.push({
+      kind: 'interpretation',
+      title: `${net}: priorizar ${l.best.format.toLowerCase()}`,
+      detail: `Mediana de engagement ${pct(l.best.engagementMedian!)} (${l.best.n} publicaciones) frente a ${pct(l.other.engagementMedian!)} de ${l.other.format.toLowerCase()} (${l.other.n}), ${period}.`,
+      evidence: [
+        comparisonRef(
+          `${net} · ${l.best.format} (n = ${l.best.n})`,
+          pct(l.best.engagementMedian!),
+        ),
+        comparisonRef(
+          `${net} · ${l.other.format} (n = ${l.other.n})`,
+          pct(l.other.engagementMedian!),
+        ),
+      ],
+      confidence: l.best.n + l.other.n >= 10 ? 'media' : 'baja',
+      limitation:
+        'Descriptivo: confírmalo con una prueba antes de cambiar el plan.',
+    });
+  }
+  for (const s of networkSummaries(posts)) {
+    if (learnings.some((l) => l.platform === s.platform) || !s.formats.length)
+      continue;
+    out.push(
+      fact(
+        `${s.label}: ${s.formats.map((f) => `${f.format} ${f.engagementMedian != null ? pct(f.engagementMedian) : '—'} (n = ${f.n})`).join(' · ')}`,
+        'Mediana de engagement por formato. Ningún formato supera a otro con al menos 3 publicaciones cada uno y una diferencia del 20 %.',
+        [],
+        'Amplía el periodo para tener una base comparable.',
+      ),
+    );
+  }
+  return out;
+}
+
+function creativeOverview(posts: Post[]): Finding[] {
+  const texts = posts.filter(
+    (p) => p.metrics.length && analyzeCopy(p.body).hasText,
+  );
+  if (!texts.length) return [];
+  const noCta = texts.filter((p) => !analyzeCopy(p.body).cta);
+  const questions = texts.filter((p) => analyzeCopy(p.body).questionHook);
+  const out: Finding[] = [
+    fact(
+      `${noCta.length} de ${texts.length} publicaciones sin llamado a la acción explícito`,
+      `${questions.length} abren con una pregunta.`,
+      noCta.slice(0, 3).map((p) => postRef(p)),
+    ),
+  ];
+  if (noCta.length)
+    out.push({
+      kind: 'recommendation',
+      title: 'Cerrar cada pieza con una acción concreta',
+      detail:
+        '«Guárdalo» (referencia), «cuéntanos» (conversación) o «agenda» (conversión), según el objetivo.',
+      evidence: [],
+      confidence: 'media',
+      limitation: null,
+    });
+  for (const l of formatLearnings(posts).learnings)
+    out.push({
+      kind: 'recommendation',
+      title: `Probar el mismo tema en ${l.best.format.toLowerCase()} (${PLATFORM_LABEL[l.platform]})`,
+      detail: `Es el formato con mejor mediana de engagement en ${PLATFORM_LABEL[l.platform]} (${l.best.n} publicaciones).`,
+      evidence: [
+        comparisonRef(
+          `${PLATFORM_LABEL[l.platform]} · ${l.best.format}`,
+          pct(l.best.engagementMedian!),
+        ),
+      ],
+      confidence: 'baja',
+      limitation: 'Confírmalo con una prueba A/B.',
+    });
+  return out;
+}
+
+function strategyOverview(
+  posts: Post[],
+  brand: BrandContext | null,
+): Finding[] {
+  const a = strategyAlignment(posts, brand);
+  if (!a)
+    return [
+      fact(
+        'Sin contexto estratégico en Foxy Brand Brain',
+        'No hay pilares, campañas ni objetivos registrados: Foxy no puede evaluar si se cumple la estrategia ni la inventa.',
+        [],
+        'Completa Brand Brain para responder esta pregunta.',
+      ),
+    ];
+  return [
+    ...a.pillars.map((p) =>
+      p.posts.length
+        ? {
+            kind: 'interpretation' as const,
+            title: `Pilar «${p.pillar}»: ${p.posts.length} ${p.posts.length === 1 ? 'publicación' : 'publicaciones'}`,
+            detail: 'Asociadas por el vocabulario del pilar en el copy.',
+            evidence: p.posts.slice(0, 3).map((x) => postRef(x)),
+            confidence: 'baja' as const,
+            limitation: 'Confírmalo con el equipo.',
+          }
+        : {
+            kind: 'hypothesis' as const,
+            title: `Pilar «${p.pillar}» sin publicaciones reconocidas`,
+            detail:
+              'Ningún copy del periodo usa su vocabulario. Puede ser una brecha de la parrilla o un vocabulario distinto.',
+            evidence: [
+              {
+                type: 'brand' as const,
+                label: `Pilar «${p.pillar}» (Brand Brain)`,
+                postId: null,
+                value: null,
+              },
+            ],
+            confidence: 'baja' as const,
+            limitation: null,
+          },
+    ),
+    fact(
+      `${a.unmatched.length} de ${a.total} publicaciones sin pilar reconocido`,
+      'Revisa si deberían pertenecer a un pilar o si faltan palabras clave en Brand Brain.',
+      a.unmatched.slice(0, 2).map((p) => postRef(p)),
+    ),
+  ];
+}
+
+/** Propuesta por red para la próxima semana (reglas, con evidencia). No se agenda sola. */
+function nextWeekProposal(
+  posts: Post[],
+  brand: BrandContext | null,
+  period: string,
+): Finding[] {
+  const out: Finding[] = [];
+  const align = strategyAlignment(posts, brand);
+  const gap = align
+    ? [...align.pillars].sort((a, b) => a.posts.length - b.posts.length)[0]
+    : null;
+  const { learnings } = formatLearnings(posts);
+  for (const s of networkSummaries(posts).filter((x) => x.measured > 0)) {
+    const l = learnings.find((x) => x.platform === s.platform);
+    const best =
+      l?.best ??
+      [...s.formats]
+        .filter((f) => f.engagementMedian != null)
+        .sort((a, b) => b.engagementMedian! - a.engagementMedian!)[0];
+    if (!best) continue;
+    out.push({
+      kind: 'recommendation',
+      title: `${s.label}: ${best.format.toLowerCase()}${gap ? ` del pilar «${gap.pillar}»` : ''}, con un llamado a la acción explícito`,
+      detail: [
+        `Formato: ${best.format} (mediana de engagement ${pct(best.engagementMedian!)}, ${best.n} publicaciones de ${s.label}, ${period}).`,
+        gap
+          ? `Pilar: «${gap.pillar}» es el que menos publicaciones tiene (${gap.posts.length}).`
+          : 'Pilar: sin Brand Brain, Foxy no propone uno.',
+        'Cierre: «Guárdalo» si es educativo; «Cuéntanos» si busca conversación.',
+      ].join(' '),
+      evidence: [
+        comparisonRef(
+          `${s.label} · ${best.format} (n = ${best.n})`,
+          pct(best.engagementMedian!),
+        ),
+      ],
+      confidence: l ? 'media' : 'baja',
+      limitation: l
+        ? 'Propuesta por reglas para validar con el equipo; no se agenda automáticamente.'
+        : 'Base pequeña para elegir formato: tómalo como prueba. No se agenda automáticamente.',
+    });
+  }
+  return out;
+}
+
+function brandAnswer(
+  intent: Intent,
+  posts: Post[],
+  brand: BrandContext | null,
+  periodLabel: string,
+): Finding[] {
+  const period = periodLabel.toLowerCase();
+  if (!posts.some((p) => p.metrics.length))
+    return [
+      fact(
+        'Sin publicaciones con métricas en el periodo',
+        `No hay mediciones en ${period}.`,
+      ),
+    ];
+  switch (intent) {
+    case 'top':
+    case 'compare':
+      return intent === 'compare'
+        ? networksOverview(posts, period)
+        : topByNetwork(posts, period);
+    case 'networks':
+      return networksOverview(posts, period);
+    case 'format':
+      return formatsOverview(posts, period);
+    case 'saves':
+      return savesFindings(posts, null);
+    case 'reach':
+      return networkSummaries(posts)
+        .filter((s) => s.reachSum != null)
+        .map((s) => {
+          const top = [
+            ...posts.filter(
+              (p) => p.platform === s.platform && reachOf(p) != null,
+            ),
+          ].sort((a, b) => reachOf(b)! - reachOf(a)!)[0];
+          return fact(
+            `${s.label}: ${s.reachLabel.toLowerCase()} acumulado ${num(s.reachSum!)}`,
+            `Suma por publicación de ${s.measured} publicaciones (no son personas únicas).${top ? ` Mayor: ${formatOf(top)} con ${num(reachOf(top)!)}.` : ''}`,
+            top ? [postRef(top)] : [],
+          );
+        });
+    case 'creative':
+    case 'improve':
+    case 'engagement':
+      return creativeOverview(posts);
+    case 'learnings':
+      return [
+        ...formatsOverview(posts, period).filter((f) => f.kind !== 'fact'),
+        ...featuredPosts(posts).map((f) =>
+          fact(
+            `Destacada · ${PLATFORM_LABEL[f.post.platform]}: ${f.metricLabel.toLowerCase()} ${f.metricValue}`,
+            f.reason,
+            [postRef(f.post)],
+          ),
+        ),
+      ];
+    case 'strategy':
+    case 'pillar':
+      return strategyOverview(posts, brand);
+    case 'nextweek':
+    case 'cronopost':
+      return nextWeekProposal(posts, brand, period);
+    default:
+      return [];
+  }
+}
+
 /**
- * Respuesta local: compone hallazgos YA fundamentados por el análisis (no genera texto nuevo).
- * Si la pregunta excede lo que se puede responder con reglas, lo dice.
+ * Respuesta local: compone hallazgos YA fundamentados (no genera texto libre). Si la pregunta
+ * excede lo que se puede responder con reglas, lo dice. Respuesta principal = título del
+ * hallazgo más relevante.
  */
 export function answerLocal(
   question: string,
@@ -694,8 +994,8 @@ export function answerLocal(
   const pick = (...fs: (Finding[] | undefined)[]) =>
     fs.flatMap((x) => x ?? []).slice(0, 6);
   let findings: Finding[] = [];
-  let unanswerable: string | null = null;
-  if (i) {
+  const brandIntents: Intent[] = ['top', 'networks', 'nextweek'];
+  if (i && !brandIntents.includes(intent)) {
     switch (intent) {
       case 'improve':
       case 'engagement':
@@ -712,18 +1012,28 @@ export function answerLocal(
           i.content.findings.filter((f) => /formato/i.test(f.title)),
         );
         if (!findings.some((f) => f.kind === 'recommendation'))
-          findings.push({
-            kind: 'fact',
-            title: 'Sin diferencias suficientes entre formatos',
-            detail:
-              'Ningún otro formato supera claramente al actual en el periodo con al menos 3 publicaciones. Amplía el periodo o prueba una A/B.',
-            evidence: [],
-            confidence: null,
-            limitation: null,
-          });
+          findings.push(
+            fact(
+              'Sin diferencias suficientes entre formatos',
+              'Ningún otro formato supera claramente al actual en la misma red con al menos 3 publicaciones. Amplía el periodo o prueba una A/B.',
+            ),
+          );
         break;
       case 'compare':
+      case 'reach':
         findings = pick(i.performance.findings);
+        break;
+      case 'saves':
+        findings = savesFindings(
+          ctx.peers
+            .filter((p) => p.platform === ctx.post?.platform)
+            .concat(
+              ctx.post && !ctx.peers.some((p) => p.id === ctx.post!.id)
+                ? [ctx.post]
+                : [],
+            ),
+          ctx.post,
+        );
         break;
       case 'strategy':
       case 'pillar':
@@ -791,20 +1101,24 @@ export function answerLocal(
         }));
         break;
     }
+  } else {
+    findings = brandAnswer(intent, ctx.peers, ctx.brand, ctx.periodLabel).slice(
+      0,
+      8,
+    );
   }
-  if (
-    !i ||
-    intent === 'top' ||
-    intent === 'networks' ||
-    (intent === 'unknown' && !i)
-  ) {
-    findings = brandLevel(intent, ctx.peers, ctx.periodLabel);
-  }
-  if (!findings.length)
-    unanswerable =
-      'El motor local de Foxy no puede responder esta pregunta con la evidencia disponible. Prueba una de las preguntas sugeridas; las preguntas abiertas requieren un proveedor de IA autorizado (pendiente de GO).';
+  findings = findings.map((f) =>
+    f.kind === 'fact' ? { ...f, confidence: null } : f,
+  );
+  const unanswerable = findings.length
+    ? null
+    : 'El motor local de Foxy no puede responder esta pregunta con la evidencia disponible. Prueba una de las preguntas sugeridas; las preguntas abiertas requieren un proveedor de IA autorizado (pendiente de GO).';
+  const lead = ['nextweek', 'cronopost', 'abtest', 'creative'].includes(intent)
+    ? (findings.find((f) => f.kind === 'recommendation') ?? findings[0])
+    : (findings.find((f) => f.kind !== 'recommendation') ?? findings[0]);
   return {
     question: question.slice(0, 500),
+    headline: lead ? lead.title : null,
     findings,
     unanswerable,
     suggestions: (ctx.post ? SUGGESTED_QUESTIONS : BRAND_QUESTIONS)
@@ -813,84 +1127,4 @@ export function answerLocal(
   };
 }
 
-function brandLevel(
-  intent: Intent,
-  posts: Post[],
-  periodLabel: string,
-): Finding[] {
-  const withEng = posts
-    .map((p) => ({ p, e: engagementOf(p) }))
-    .filter((x): x is { p: Post; e: number } => x.e != null);
-  if (withEng.length === 0)
-    return [
-      {
-        kind: 'fact',
-        title: 'Sin publicaciones con métricas en el periodo',
-        detail: `No hay mediciones en ${periodLabel.toLowerCase()}.`,
-        evidence: [],
-        confidence: null,
-        limitation: null,
-      },
-    ];
-  if (intent === 'networks') {
-    const by = new Map<string, number[]>();
-    for (const { p, e } of withEng)
-      by.set(PLATFORM_LABEL[p.platform], [
-        ...(by.get(PLATFORM_LABEL[p.platform]) ?? []),
-        e,
-      ]);
-    return [...by].map(([net, xs]) => ({
-      kind: 'fact' as const,
-      title: `${net}: mediana de engagement ${pct(median(xs)!)}`,
-      detail: `${xs.length} publicaciones con métricas en ${periodLabel.toLowerCase()}.`,
-      evidence: [
-        {
-          type: 'comparison' as const,
-          label: `${xs.length} publicaciones de ${net}`,
-          postId: null,
-          value: pct(median(xs)!),
-        },
-      ],
-      confidence: null,
-      limitation: xs.length < 3 ? 'Base pequeña.' : null,
-    }));
-  }
-  if (intent === 'format' || intent === 'cronopost') {
-    const by = new Map<string, number[]>();
-    for (const { p, e } of withEng) {
-      const k = `${PLATFORM_LABEL[p.platform]} · ${formatOf(p)}`;
-      by.set(k, [...(by.get(k) ?? []), e]);
-    }
-    return [...by]
-      .filter(([, xs]) => xs.length >= 2)
-      .sort((a, b) => median(b[1])! - median(a[1])!)
-      .slice(0, 4)
-      .map(([k, xs], idx) => ({
-        kind: idx === 0 ? ('interpretation' as const) : ('fact' as const),
-        title: `${k}: mediana ${pct(median(xs)!)}`,
-        detail: `${xs.length} publicaciones.`,
-        evidence: [
-          {
-            type: 'comparison' as const,
-            label: k,
-            postId: null,
-            value: pct(median(xs)!),
-          },
-        ],
-        confidence: xs.length >= 5 ? 'media' : 'baja',
-        limitation:
-          idx === 0
-            ? 'Descriptivo: confirma con una prueba antes de cambiar el plan.'
-            : null,
-      }));
-  }
-  const top = [...withEng].sort((a, b) => b.e - a.e).slice(0, 3);
-  return top.map(({ p, e }, idx) => ({
-    kind: 'fact' as const,
-    title: `${idx + 1}. ${PLATFORM_LABEL[p.platform]} · ${formatOf(p)} · engagement ${pct(e)}`,
-    detail: p.body ? `«${p.body.slice(0, 100)}…»` : 'Publicación sin texto.',
-    evidence: [postRef(p)],
-    confidence: null,
-    limitation: null,
-  }));
-}
+export { reachLabel };

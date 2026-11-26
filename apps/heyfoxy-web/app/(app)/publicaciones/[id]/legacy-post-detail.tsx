@@ -10,6 +10,7 @@ import {
   SyntheticTag,
 } from '@/components/ui';
 import { requireContext } from '@/lib/auth/session';
+import { commentsDisabledFor } from '@/lib/intel/engine';
 import { PLATFORM_LABEL, fmtDateTime } from '@/lib/format';
 import { interactions, postStats, sentimentBreakdown } from '@/lib/insights';
 
@@ -118,7 +119,14 @@ export async function LegacyPostDetail({ id }: { id: string }) {
         Comentarios asociados ({comments.length}) · {b.positive} positivos ·{' '}
         {b.negative} negativos
       </h2>
-      {comments.length === 0 ? (
+      {commentsDisabledFor(post) ? (
+        <EmptyState title="Comentarios no importados: desactivados por la política de privacidad del piloto">
+          {PLATFORM_LABEL[post.platform]} reporta{' '}
+          {post.metrics[0]?.comments ?? 'un número no disponible de'}{' '}
+          comentarios en la red. Que Hey Foxy no los importe no significa que no
+          haya conversación.
+        </EmptyState>
+      ) : comments.length === 0 ? (
         <EmptyState title="Sin comentarios clasificados para esta publicación" />
       ) : (
         <ul className="space-y-2">

@@ -256,12 +256,15 @@ export function Donut({
   centerValue,
   centerLabel,
   stacked = false,
+  legend = true,
 }: {
   segments: DonutSegment[];
   centerValue: string;
   centerLabel: string;
   /** Anillo sobre la leyenda siempre (columnas estrechas). */
   stacked?: boolean;
+  /** false: solo el anillo (la leyenda la da otro elemento, p. ej. barras). */
+  legend?: boolean;
 }) {
   const [active, setActive] = useState<string | null>(null);
   const total = segments.reduce((a, s) => a + s.value, 0);
@@ -313,7 +316,9 @@ export function Donut({
                 strokeDashoffset={-off}
                 opacity={active && active !== s.key ? 0.35 : 1}
                 className="duration-base transition-all"
-              />
+              >
+                <title>{`${s.label}: ${s.value.toLocaleString('es-CO')} (${pct(s.value)} %)`}</title>
+              </circle>
             ) : null,
           )}
         </svg>
@@ -326,53 +331,55 @@ export function Donut({
           </span>
         </div>
       </div>
-      <ul className="w-full min-w-0 space-y-1.5">
-        {segments.map((s) => {
-          const inner = (
-            <>
-              <span
-                aria-hidden
-                className="h-3 w-3 shrink-0 rounded-full"
-                style={{ background: `hsl(var(--${s.color}))` }}
-              />
-              {s.icon}
-              <span className="flex-1 text-sm font-semibold">{s.label}</span>
-              <span className="text-sm font-extrabold tabular-nums">
-                {pct(s.value)}%
-              </span>
-              <span className="text-muted-foreground w-10 text-right text-xs tabular-nums">
-                ({s.value.toLocaleString('es-CO')})
-              </span>
-            </>
-          );
-          const handlers = {
-            onMouseEnter: () => setActive(s.key),
-            onMouseLeave: () => setActive(null),
-            onFocus: () => setActive(s.key),
-            onBlur: () => setActive(null),
-          };
-          const cls =
-            'flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-muted';
-          return (
-            <li key={s.key}>
-              {s.href ? (
-                <Link
-                  href={s.href}
-                  className={cls}
-                  title="Ver conversaciones"
-                  {...handlers}
-                >
-                  {inner}
-                </Link>
-              ) : (
-                <div className={cls} {...handlers}>
-                  {inner}
-                </div>
-              )}
-            </li>
-          );
-        })}
-      </ul>
+      {legend && (
+        <ul className="w-full min-w-0 space-y-1.5">
+          {segments.map((s) => {
+            const inner = (
+              <>
+                <span
+                  aria-hidden
+                  className="h-3 w-3 shrink-0 rounded-full"
+                  style={{ background: `hsl(var(--${s.color}))` }}
+                />
+                {s.icon}
+                <span className="flex-1 text-sm font-semibold">{s.label}</span>
+                <span className="text-sm font-extrabold tabular-nums">
+                  {pct(s.value)}%
+                </span>
+                <span className="text-muted-foreground w-10 text-right text-xs tabular-nums">
+                  ({s.value.toLocaleString('es-CO')})
+                </span>
+              </>
+            );
+            const handlers = {
+              onMouseEnter: () => setActive(s.key),
+              onMouseLeave: () => setActive(null),
+              onFocus: () => setActive(s.key),
+              onBlur: () => setActive(null),
+            };
+            const cls =
+              'flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-muted';
+            return (
+              <li key={s.key}>
+                {s.href ? (
+                  <Link
+                    href={s.href}
+                    className={cls}
+                    title="Ver conversaciones"
+                    {...handlers}
+                  >
+                    {inner}
+                  </Link>
+                ) : (
+                  <div className={cls} {...handlers}>
+                    {inner}
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }
