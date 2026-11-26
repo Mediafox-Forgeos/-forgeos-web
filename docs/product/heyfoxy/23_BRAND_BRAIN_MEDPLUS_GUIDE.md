@@ -10,6 +10,7 @@
 - **Dónde:** Hey Foxy → menú **Foxy** → **Foxy Brand Brain**.
 - **Trazabilidad:** cada vez que se guarda, sube la versión y queda registrado quién la hizo.
 - **Foxy nunca modifica la estrategia.** Lo que Foxy aprende se guarda como **propuesta** en la memoria estratégica, hasta que una persona la valida.
+- **Revisión humana** (Brand Brain → «Memoria estratégica · revisión humana»): owner o admin revisan la evidencia y aprueban, rechazan con motivo o archivan. Queda registrado quién propuso, quién decidió, cuándo y por qué. Rechazar con motivo requiere la migración 0008 (doc 24).
 
 ## 2. Qué preparar (MediaFOX, con la estrategia orgánica de MedPlus)
 

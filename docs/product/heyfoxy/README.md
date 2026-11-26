@@ -37,6 +37,7 @@ Plataforma SaaS multiempresa de escucha social con IA, monitoreo reputacional, a
 | 21  | [WO-HF-V2-INTELLIGENCE-001: estabilización Metricool, Foxy Intelligence, Ask Foxy y Brand Brain](./21_WO_HF_V2_INTELLIGENCE_001.md) | Inteligencia                          |
 | 22  | [Proveedor de IA: arquitectura de modelos por tarea, costos y datos (para GO)](./22_AI_PROVIDER_RECOMMENDATION.md)                  | Inteligencia                          |
 | 23  | [Guía para alimentar Foxy Brand Brain (MedPlus) y biblioteca de conocimiento](./23_BRAND_BRAIN_MEDPLUS_GUIDE.md)                    | Inteligencia                          |
+| 24  | [WO-HF-V2-UX-REFINEMENT-002: Home, Explorer, Ask Foxy y Brand Brain](./24_WO_HF_V2_UX_REFINEMENT_002.md)                            | Inteligencia                          |
 | DS  | [Design System V2 v0.3](./design-system/HEY_FOXY_V2_DESIGN_SYSTEM.md) · [concepto](./design-system/HEY_FOXY_V2_CONCEPT.png)         | V2                                    |
 | —   | [WORKLOG](./WORKLOG.md) · [TECH_BACKLOG](./TECH_BACKLOG.md)                                                                         | Seguimiento                           |
 
