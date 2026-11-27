@@ -6,6 +6,8 @@
 | Estado    | **Propuesta.** Sin contratar, sin activar, sin llamadas con costo, sin datos reales enviados |
 | Fuentes   | Documentación oficial de Anthropic consultada el 2026-11-26 (enlaces al final)               |
 
+> **Actualización 2026-11-27:** la guía de activación, la decisión de integrar por API REST y la retención de datos confirmada están en el doc [25](./25_AI_ACTIVATION_GUIDE.md). La duda del §5 queda resuelta: la Messages API no conserva por defecto el contenido de las conversaciones, salvo en los Covered Models (Fable y Mythos), que exigen 30 días. Batch, en cambio, lo conserva 29 días, por lo que el piloto no lo usa.
+
 Hoy Foxy funciona con un **motor local por reglas** (doc 21). Este documento prepara la activación de un proveedor de IA generativa sin asumir que un solo modelo sirve para todo.
 
 ## 1. Modelos verificados (documentación oficial)

@@ -1,12 +1,12 @@
 # 24 — WO-HF-V2-UX-REFINEMENT-002: Intelligence Home, Social Explorer, Ask Foxy y Brand Brain
 
-| Propiedad   | Valor                                                                                                                                 |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| Fecha       | 2026-11-26                                                                                                                            |
-| Estado      | **Implementada en local.** Sin Preview, sin despliegue, sin migraciones remotas. Gate D abierto                                       |
-| Origen      | Validación del Preview `b499fe1` (WORKLOG del 26-11) y la WO de refinamiento                                                          |
-| Motor de IA | Motor local por reglas (sin IA generativa, sin llamadas con costo, sin datos enviados fuera)                                          |
-| Capturas    | `/Volumes/MediaFOX_DEV/QA/HeyFoxy/V2/2026-11-26/ux-refinement-002/{antes,despues}` (fuera de Git), primera pantalla y página completa |
+| Propiedad   | Valor                                                                                                                                                 |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Fecha       | 2026-11-26                                                                                                                                            |
+| Estado      | **Desplegada en Preview y aprobada visualmente** (2026-11-27): `dpl_8nDjTKxVHZztFtU4PPUZmYVnAxes`, SHA `1c70e0b`; 0008 aplicada en QA. Gate D abierto |
+| Origen      | Validación del Preview `b499fe1` (WORKLOG del 26-11) y la WO de refinamiento                                                                          |
+| Motor de IA | Motor local por reglas (sin IA generativa, sin llamadas con costo, sin datos enviados fuera)                                                          |
+| Capturas    | `/Volumes/MediaFOX_DEV/QA/HeyFoxy/V2/2026-11-26/ux-refinement-002/{antes,despues}` (fuera de Git), primera pantalla y página completa                 |
 
 ## 1. Hallazgos del Preview b499fe1 → resolución
 
@@ -69,3 +69,10 @@ Durante la validación aparecieron y se corrigieron: un error de hidratación de
 1. GO de Preview por SHA exacto.
 2. GO para aplicar 0008 en heyfoxy-qa y crear `HF_MIGRATION_0008_APPLIED`.
 3. Opcional: GO para limpiar los datos de prueba de Clínica Aurora en QA.
+
+## 7. GO y despliegue (2026-11-27)
+
+- **0008 en `heyfoxy-qa`**: versión `20261127053414`, md5 `7606f434…` idéntico al archivo; historial 0001–0007 verificado por hash; 15/15 aserciones remotas (transacción revertida), sin residuos; huellas de usuarios, organizaciones, membresías, contextos, aprendizajes, 14 publicaciones y 16 mediciones de MedPlus, 45 políticas y 381 permisos idénticas antes y después.
+- **Variable** `HF_MIGRATION_0008_APPLIED` solo en Preview (Sensitive).
+- **Preview** `dpl_8nDjTKxVHZztFtU4PPUZmYVnAxes` (`heyfoxy-62reibbdu-mediafox.vercel.app`), SHA `1c70e0b1f8f3267586ac9be2d8786dd4d4fdb249`; sin alias, protección `all`, 0 bypass; Production, alias V1 y Previews anteriores intactos.
+- **Revisión visual de Álvaro**: evolución satisfactoria como base para la IA generativa. Refinamientos registrados en TECH_BACKLOG (HF-UX-22 a 24, HF-AI-14 y 15, HF-MC-04); sin otra WO solo de diseño.
