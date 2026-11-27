@@ -245,11 +245,58 @@ Consolida los hallazgos de la validación del Preview `b499fe1`. Código nuevo: 
 - **Detalle de publicación:** cabecera y navegación → 4 KPI a todo el ancho → publicación original (5 col.) junto a distribución y rendimiento comparable (7 col.) → evolución a todo el ancho → Foxy Intelligence con pestañas → preguntas al copiloto → comentarios y cobertura (8 col.) junto a Brand Brain (4 col.).
 - Validado sin desbordamiento a 390, 500, 820, 1440, 1536 y 1920 px, en claro, oscuro y clásico.
 
+## Foxy Intelligence Engine (v0.5 · WO-HF-AI-ENGINE-001)
+
+Estados del motor de inteligencia, con IA generativa preparada pero sin activar. Código nuevo: `components/ds/ai-engine.tsx`, `ai-engine-client.tsx`; ampliados `intel-client.tsx` (conversación en streaming), `copilot.tsx` e `intel.tsx`. Sin tokens nuevos: se usan los semánticos (`ai`, `warning`, `critical`, `muted`).
+
+### Regla de honestidad
+
+Cada respuesta y cada análisis dicen qué motor los produjo:
+
+- **Motor local por reglas.**
+- **IA generativa**, con el modelo exacto.
+- **Simulación con fixtures · sin IA real**, solo en desarrollo local.
+- **Respaldo: motor local por reglas**, con el motivo.
+
+Nunca se presenta una respuesta simulada o de reglas como IA generativa.
+
+### Componentes
+
+| Componente                    | Anatomía                                                                                                                                              | Estados y reglas                                                                                                                                                                                                  |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **EngineBadge / MetaBadge**   | Píldora con icono (CPU, destello, matraz, prohibido) y etiqueta truncable                                                                             | `local` (neutro) · `available` y `generative` (AI) · `simulated` y `fallback` (advertencia)                                                                                                                       |
+| **AiStateNotice**             | Borde y fondo semánticos · icono · título · detalle · acción opcional                                                                                 | `info`, `warning`, `critical` (`role=alert`), `neutral`                                                                                                                                                           |
+| **FallbackNotice**            | AiStateNotice con el título del motivo                                                                                                                | No activada · sin configurar · interruptor · datos no autorizados · contenido sensible · presupuesto agotado · error del proveedor · salida descartada · aislamiento                                              |
+| **BrandContextNotice**        | «Contexto estratégico no disponible / incompleto (Brand Brain vN)» + «Completar Foxy Brand Brain»                                                     | Sin contexto no se evalúa la alineación estratégica ni se supone                                                                                                                                                  |
+| **MediaCoverageNote**         | Insignia o aviso de cobertura visual                                                                                                                  | Imagen completa analizada · Portada de carrusel analizada (1 de N) · Miniatura de video analizada (no el video) · Imagen no disponible · Imagen caducada                                                          |
+| **AdjustmentsNote**           | `<details>` «Verificación aplicada por Hey Foxy (n)»                                                                                                  | Referencias inventadas descartadas; reglas de negocio aplicadas (comparación entre redes, sentimiento sin comentarios, causalidad, muestra insuficiente, pilar o campaña inexistente, estrategia sin Brand Brain) |
+| **GenerativeAnalysisControl** | Botón «Analizar con IA generativa» o «Actualizar análisis con IA» · aviso «Análisis desactualizado» · aviso de resultado                              | El análisis tiene costo y solo se hace a petición de owner, admin o analyst. Pasa de «Generando análisis…» a completado. Con el motor local por defecto no se muestra (la cabecera ya lo dice)                    |
+| **ConversationalAnswer**      | Respuesta principal (prosa) · interpretación · Evidencia (n) desplegable · recomendaciones con su evidencia · limitaciones · preguntas de seguimiento | Se muestra por partes durante el streaming, con un cursor e «Escribiendo…». Avisa si la respuesta está incompleta o no cita evidencia                                                                             |
+| **AskBox** (revisado)         | Campo + enviar; durante la respuesta, «Detener respuesta» (cuadrado)                                                                                  | Cancelar corta la generación también en el proveedor; lo recibido queda atenuado y marcado como incompleto                                                                                                        |
+
+### Estados cubiertos (WO §12)
+
+| Estado                            | Cómo se muestra                                             |
+| --------------------------------- | ----------------------------------------------------------- |
+| Motor local                       | EngineBadge `local`                                         |
+| IA generativa disponible          | EngineBadge `available` y botón de análisis                 |
+| Generando análisis                | El botón cambia a «Generando análisis…»                     |
+| Respuesta en streaming            | ConversationalAnswer parcial                                |
+| Análisis completado               | MetaBadge con modelo, versión de Brand Brain, fecha y costo |
+| Error de proveedor                | FallbackNotice crítico y respuesta local                    |
+| Presupuesto agotado               | FallbackNotice de presupuesto                               |
+| Contexto estratégico insuficiente | BrandContextNotice                                          |
+| Evidencia no disponible           | Nota «Evidencia no disponible»                              |
+| Análisis multimodal parcial       | MediaCoverageNote                                           |
+
+Validado sin desbordamiento a 390, 820, 1440 y 1536 px, en claro y oscuro (capturas con fixtures en `/Volumes/MediaFOX_DEV/QA/HeyFoxy/V2/2026-11-27/ai-engine-001`).
+
 ## Historial
 
 | Versión | Fecha      | Cambios                                                                                                                                                                                                                                                                                                                                                                                         |
 | ------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 0.1     | 2026-11-14 | Dirección conceptual, tokens propuestos, componentes y cinco espacios                                                                                                                                                                                                                                                                                                                           |
 | 0.2     | 2026-11-20 | Decisiones de Álvaro: Home integra el Resumen (A); Foxy como SVG original; Benchmark/Audiencia «Próximamente / Sin datos disponibles»; claro y oscuro con adopción progresiva por ámbito; componentes de medios, autores y comentarios. Contraste: `border.control`, textos de estado y restricción de `brand.secondary`. Superficies por módulo                                                |
+| 0.5     | 2026-11-27 | Foxy Intelligence Engine: EngineBadge, AiStateNotice, FallbackNotice, BrandContextNotice, MediaCoverageNote, AdjustmentsNote, GenerativeAnalysisControl, ConversationalAnswer; AskBox con «Detener respuesta»; regla de honestidad del motor y diez estados                                                                                                                                     |
 | 0.4     | 2026-11-26 | Inteligencia estratégica: FoxyExecutiveBrief, ExecutiveInsightSummary, IntelligenceTabs, EvidenceDisclosure, ContextualCopilotPanel, FoxyAnswer, PerformanceComparison, ResponsiveIntelligenceLayout, LearningReviewCard, CoverageStatus; InteractionBreakdown, BrandContextCard y PerformanceMetricCard revisados; reglas de datos de las visualizaciones; nueva composición de Home y detalle |
 | 0.3     | 2026-11-26 | Inteligencia de contenido: tokens de métricas e interacciones; PerformanceMetricCard, MetricAvailabilityState, InteractionBreakdown, PerformanceTimeline, FoxyContentIntelligence, hallazgos por naturaleza, EvidenceReference, AskFoxyContextual, RecommendationAction, BrandContextCard, AccountIdentity, MediaViewer, ExpandableCopy; composición del detalle                                |

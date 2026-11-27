@@ -496,3 +496,12 @@ Ejecutado, sin contratar, migrar ni desplegar:
 - **Decisión de producto: Brand Knowledge Library** (doc 00, HF-BB-04): biblioteca documental con extracción, referencias, versionado y validación humana; el formulario de Brand Brain queda como editor del conocimiento estructurado. No implementada.
 - **Guía de activación de IA generativa** ([25](./25_AI_ACTIVATION_GUIDE.md)): Anthropic por API REST (sin tocar el lockfile), modelos por tarea, cuenta/clave/variables, presupuesto, privacidad (retención confirmada en la documentación oficial), pruebas sintéticas, multimodal y GO-IA-0 a 7.
 - **Sin cambios** en Production, Metricool (sin sincronizar), comentarios, WhatsApp, Storage, MediaFOX OS ni MOVOS; ningún proveedor activado ni llamadas con costo. Gate D abierto.
+
+## 2026-11-27 — GO-IA-0 + GO-IA-1: WO-HF-AI-ENGINE-001 (local)
+
+- **Modelos y tarifas re-verificados** con la documentación oficial (Haiku, Sonnet y Opus 5.5; API `2026-10-21`); sin discrepancias. Catálogo verificado en código; un modelo no verificado bloquea la activación.
+- **Foxy Intelligence Engine** ([26](./26_WO_HF_AI_ENGINE_001.md)): adaptador Anthropic por API REST (sin dependencias, lockfile intacto), proveedor intercambiable, Content Intelligence generativo bajo demanda, Ask Foxy en streaming con cancelación (general, lateral y contextual), multimodal preparado con protección SSRF, Brand Brain con versión registrada y análisis desactualizados, control de costos con reserva previa, límites y respaldo local identificado, minimización por capas, reglas de negocio verificadas por código.
+- **Migración 0009** preparada y probada solo en local (17 aserciones, rollback a 0008).
+- **Design System v0.5**: estados del motor (diez estados de la WO).
+- **Pruebas**: vitest 270 (52 nuevas, sin red), tipos, ESLint, Prettier, compilación, Playwright 198 superadas y 0 fallidas, axe sin violaciones nuevas; 3 referencias clásicas de `/uso` regrabadas tras revisión. Capturas con fixtures en `/Volumes/MediaFOX_DEV/QA/HeyFoxy/V2/2026-11-27/ai-engine-001/`.
+- **Sin** proveedor activado, claves, llamadas con costo, datos reales enviados, migraciones remotas, despliegue, cambios en Production, MediaFOX OS ni MOVOS. Gate D abierto. Siguiente: GO-IA-2.

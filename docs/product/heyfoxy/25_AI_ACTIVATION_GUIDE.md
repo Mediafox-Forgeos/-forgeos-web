@@ -1,11 +1,11 @@
 # 25 — Guía de activación: Foxy Intelligence Engine con IA generativa
 
-| Propiedad | Valor                                                                                                                                         |
-| --------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| Fecha     | 2026-11-27                                                                                                                                    |
-| Estado    | **Guía para GO.** Ningún proveedor activado, sin llamadas con costo, sin datos reales enviados, sin claves creadas                            |
-| Base      | Doc [22](./22_AI_PROVIDER_RECOMMENDATION.md) (recomendación) + documentación oficial de Anthropic consultada el 2026-11-27 (enlaces al final) |
-| Decisión  | Integración por **API REST** (`fetch` a `/v1/messages`) sin añadir dependencias: no cambia el lockfile compartido de MediaFOX OS ni MOVOS     |
+| Propiedad | Valor                                                                                                                                                                                |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Fecha     | 2026-11-27                                                                                                                                                                           |
+| Estado    | **GO-IA-0 y GO-IA-1 aprobados (2026-11-27); adaptador implementado en local (doc [26](./26_WO_HF_AI_ENGINE_001.md)).** Ningún proveedor activado, sin claves, sin llamadas con costo |
+| Base      | Doc [22](./22_AI_PROVIDER_RECOMMENDATION.md) (recomendación) + documentación oficial de Anthropic consultada el 2026-11-27 (enlaces al final)                                        |
+| Decisión  | Integración por **API REST** (`fetch` a `/v1/messages`) sin añadir dependencias: no cambia el lockfile compartido de MediaFOX OS ni MOVOS                                            |
 
 Hoy Foxy funciona con el motor local por reglas. Esta guía dice qué se usará, dónde se configura, cuánto cuesta, qué condiciones de datos aplican y qué GO hacen falta, en orden. **No se ha activado nada.**
 
@@ -47,7 +47,7 @@ El repositorio ya integra un proveedor por `fetch` (`lib/ai/providers.ts`, clasi
 
 Alternativa descartada por ahora: el SDK oficial `@anthropic-ai/sdk` cambia la entrada de `next` de MediaFOX OS y MOVOS en el lockfile compartido (HF-AI-10). Se puede reconsiderar con autorización de sus responsables.
 
-**El adaptador todavía no existe**: hay que desarrollarlo (GO-IA-1). Las pruebas del adaptador usan `fetch` simulado con respuestas grabadas; no generan costo.
+**Adaptador implementado en local (GO-IA-1, doc 26).** Las pruebas usan `fetch` simulado con respuestas grabadas; no generan costo. En el Preview (Supabase) requiere además la migración 0009 aplicada y `HF_MIGRATION_0009_APPLIED`; el procedimiento exacto de GO-IA-2 está en el doc 26 §9: la clave se carga en GO-IA-2 y `HF_AI_CONTENT_PROVIDER=anthropic` se crea recién en GO-IA-3, para que GO-IA-2 no produzca ninguna llamada.
 
 ## 3. Cuenta, API Key y variables
 
