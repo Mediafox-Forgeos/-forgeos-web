@@ -12,6 +12,7 @@ import { brainAvailability, getBrandContext } from '@/lib/brain/store';
 import { cn } from '@/lib/cn';
 import { PLATFORM_LABEL } from '@/lib/format';
 import { inWindow } from '@/lib/home-insights';
+import { engineBadge } from '@/lib/intel/ai/runtime';
 import { askFoxy } from '@/lib/intel/engine';
 import { BRAND_QUESTIONS } from '@/lib/intel/local';
 import {
@@ -104,6 +105,7 @@ export default async function FoxyPage({
             suggestions={BRAND_QUESTIONS}
             scopeLabel={scope}
             postHrefPattern={withPeriod('/publicaciones/{id}', period)}
+            engine={engineBadge(active.organization.id)}
           />
           <div className="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-2">
             <Panel aria-labelledby="foxy-top">

@@ -21,9 +21,11 @@ import type { ReactNode } from 'react';
 import type { BrandContext, StoredBrandContext } from '@/lib/brain/types';
 import { brandContextCompleteness, emptyBrandContext } from '@/lib/brain/types';
 import { cn } from '@/lib/cn';
+import type { GenMeta } from '@/lib/intel/ai/engine';
 import { BRIEF_AREA_LABEL, type BriefItem } from '@/lib/intel/brand';
 import type { Finding, IntelMeta, PostIntel } from '@/lib/intel/schema';
 import { summarizePostIntel } from '@/lib/intel/summary';
+import { MetaBadge } from './ai-engine';
 import { FoxyMark } from './foxy';
 import { IntelligenceTabs, RecommendationAction } from './intel-client';
 import {
@@ -107,6 +109,9 @@ export function FoxyContentIntelligence({
   saveDisabledReason,
   brandHref,
   disabledReason,
+  genMeta = null,
+  engineControl,
+  notices,
 }: {
   intel: PostIntel | null;
   meta: IntelMeta;
@@ -116,6 +121,12 @@ export function FoxyContentIntelligence({
   saveDisabledReason?: string;
   brandHref: string;
   disabledReason?: string;
+  /** Metadatos del análisis generativo mostrado (null: motor local). */
+  genMeta?: GenMeta | null;
+  /** Control para solicitar o actualizar el análisis con IA generativa. */
+  engineControl?: ReactNode;
+  /** Avisos de estado (contexto estratégico, cobertura visual, respaldo…). */
+  notices?: ReactNode;
 }) {
   const save = (title: string, body: string) => (
     <RecommendationAction
@@ -147,15 +158,46 @@ export function FoxyContentIntelligence({
           >
             ¿Qué podemos aprender de esta publicación?
           </h2>
-          <p className="text-muted-foreground mt-1 text-xs">
-            {meta.local
-              ? 'Motor local por reglas · sin IA generativa'
-              : `${meta.provider} · ${meta.model}`}
-            {meta.cached ? ' · análisis en caché (sin cambios)' : ''}
-            {meta.syntheticInput ? ' · datos sintéticos de prueba' : ''}
-          </p>
+          {genMeta ? (
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs">
+              <MetaBadge meta={genMeta} />
+              <span className="text-muted-foreground">
+                {genMeta.brandVersion != null
+                  ? `Brand Brain v${genMeta.brandVersion}`
+                  : 'Sin Brand Brain'}
+                {' · '}
+                {new Date(genMeta.generatedAt).toLocaleString('es-CO', {
+                  dateStyle: 'medium',
+                  timeStyle: 'short',
+                  timeZone: 'America/Bogota',
+                })}
+                {genMeta.costUsd > 0
+                  ? ` · US$${genMeta.costUsd.toFixed(4)}`
+                  : genMeta.simulated
+                    ? ' · sin costo (simulación)'
+                    : ''}
+                {genMeta.syntheticInput ? ' · datos sintéticos de prueba' : ''}
+              </span>
+            </div>
+          ) : (
+            <p className="text-muted-foreground mt-1 text-xs">
+              {meta.local
+                ? 'Motor local por reglas · sin IA generativa'
+                : `${meta.provider} · ${meta.model}`}
+              {meta.cached ? ' · análisis en caché (sin cambios)' : ''}
+              {meta.syntheticInput ? ' · datos sintéticos de prueba' : ''}
+            </p>
+          )}
         </div>
+        {engineControl && (
+          <div className="w-full sm:w-auto sm:max-w-xs">{engineControl}</div>
+        )}
       </header>
+      {notices && (
+        <div className="bg-card border-border space-y-2 border-b px-4 py-3 sm:px-5">
+          {notices}
+        </div>
+      )}
       {!intel || !summary ? (
         <p className="bg-card rounded-b-panel p-5 text-sm">
           {disabledReason ?? 'Análisis no disponible.'}

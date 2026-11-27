@@ -22,6 +22,7 @@ import { FoxyMark } from '@/components/ds/foxy';
 import { Avatar } from '@/components/ds/primitives';
 import { DemoBanner } from '@/components/ui';
 import { cn } from '@/lib/cn';
+import { engineBadge } from '@/lib/intel/ai/runtime';
 import { PERIODS, periodRange, type PeriodKey } from '@/lib/period';
 import type { ShellContext } from '@/lib/shell';
 import { UI_THEME_LABEL, type UiTheme } from '@/lib/ui-theme';
@@ -372,7 +373,10 @@ export function AppShell({
           </div>
         </div>
         <Suspense>
-          <ContextualCopilotPanel orgName={ctx.active.organization.name} />
+          <ContextualCopilotPanel
+            orgName={ctx.active.organization.name}
+            engine={engineBadge(ctx.active.organization.id)}
+          />
         </Suspense>
       </div>
     </CopilotProvider>

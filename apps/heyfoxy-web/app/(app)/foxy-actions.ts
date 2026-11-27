@@ -7,6 +7,9 @@ import {
   brainAvailability,
 } from '@/lib/brain/store';
 import { MemoryKindSchema } from '@/lib/brain/types';
+import { analyzePostGenerative } from '@/lib/intel/ai/content';
+import { engineDeps } from '@/lib/intel/ai/runtime';
+import { loadFoxyScope } from '@/lib/intel/ai/scope';
 import { askFoxy } from '@/lib/intel/engine';
 import type { AskAnswer, IntelMeta } from '@/lib/intel/schema';
 import { parsePeriod, periodDays, periodLabel } from '@/lib/period';
@@ -95,4 +98,58 @@ export async function saveLearningAction(input: {
   } catch (e) {
     return { error: (e as Error).message };
   }
+}
+
+/**
+ * Análisis generativo de una publicación BAJO DEMANDA (WO-HF-AI-ENGINE-001 §5): tiene costo,
+ * así que lo pide una persona (owner, admin o analyst) y nunca se dispara al abrir la página.
+ * El contexto se reconstruye en el servidor para la organización activa. Si la IA generativa
+ * no está disponible (sin GO, sin presupuesto, datos no autorizados, error del proveedor), se
+ * devuelve el motivo y la página sigue mostrando el motor local.
+ */
+export async function analyzePostGenerativeAction(input: {
+  postId: string;
+  period: string;
+}): Promise<
+  | {
+      ok: true;
+      engine: 'generative' | 'simulated' | 'local';
+      fallback: { code: string; reason: string } | null;
+      costUsd: number;
+      cached: boolean;
+    }
+  | { error: string }
+> {
+  const { viewer, active, repo } = await requireContext();
+  if (!['owner', 'admin', 'analyst'].includes(active.role))
+    return { error: 'Tu rol no puede solicitar análisis con IA generativa.' };
+  const orgId = active.organization.id;
+  const scope = await loadFoxyScope(repo, orgId, {
+    postId: String(input.postId ?? '').slice(0, 80),
+    period: String(input.period ?? '30d'),
+  });
+  if ('error' in scope) return { error: scope.error };
+  const r = await analyzePostGenerative(engineDeps(), {
+    orgId,
+    userId: viewer.userId,
+    post: scope.post!,
+    peers: scope.peers,
+    brand: scope.brand,
+    brandOrgId: scope.brandOrgId,
+    learnings: scope.learnings,
+    learningsOrgId: scope.learningsOrgId,
+    periodLabel: scope.periodLabel,
+  });
+  return {
+    ok: true,
+    engine:
+      r.meta.state === 'generative'
+        ? 'generative'
+        : r.meta.state === 'simulated'
+          ? 'simulated'
+          : 'local',
+    fallback: r.meta.fallback,
+    costUsd: r.meta.costUsd,
+    cached: r.meta.cached,
+  };
 }

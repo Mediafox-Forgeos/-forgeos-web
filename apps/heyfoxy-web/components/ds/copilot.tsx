@@ -15,6 +15,7 @@ import {
 } from 'react';
 import { cn } from '@/lib/cn';
 import { FoxyMark } from './foxy';
+import { EngineBadge, type EngineBadgeState } from './ai-engine';
 import {
   AskBox,
   FoxyThread,
@@ -27,7 +28,7 @@ import {
  * disponible en todas las pantallas V2 sin abandonarlas. Conserva el contexto activo que
  * declara cada pantalla (organización, marca, publicación, red, periodo, filtros) y la
  * conversación por contexto mientras dure la sesión de navegación. En móvil, pantalla completa.
- * Motor local por reglas: nunca se presenta como IA generativa.
+ * Cada respuesta declara su motor: IA generativa (modelo), simulación o motor local.
  */
 
 export interface CopilotContextValue {
@@ -146,8 +147,13 @@ function Conversation({
   initial: Turn[];
   onTurns: (t: Turn[]) => void;
 }) {
-  const { turns, ask, pending } = useFoxyConversation(
-    { postId: scope.postId, platform: scope.platform, period },
+  const { turns, ask, pending, cancel } = useFoxyConversation(
+    {
+      postId: scope.postId,
+      platform: scope.platform,
+      period,
+      scopeLabel: `${scope.screen} · ${scope.label}`,
+    },
     initial,
   );
   useEffect(() => onTurns(turns), [turns, onTurns]);
@@ -160,7 +166,8 @@ function Conversation({
   const endRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     endRef.current?.scrollIntoView?.({ block: 'end' });
-  }, [turns.length]);
+    // Sigue la respuesta mientras llega (streaming) y al añadir turnos.
+  }, [turns]);
   const postHref = (id: string) =>
     scope.postHrefPattern.replace('{id}', encodeURIComponent(id));
   return (
@@ -199,13 +206,29 @@ function Conversation({
         <div ref={endRef} />
       </div>
       <div className="border-border bg-card border-t p-3">
-        <AskBox id="copilot-ask" onAsk={ask} pending={pending} autoFocus />
+        <AskBox
+          id="copilot-ask"
+          onAsk={ask}
+          pending={pending}
+          onCancel={cancel}
+          autoFocus
+        />
       </div>
     </>
   );
 }
 
-export function ContextualCopilotPanel({ orgName }: { orgName: string }) {
+export function ContextualCopilotPanel({
+  orgName,
+  engine = {
+    state: 'local',
+    label: 'Motor local por reglas · sin IA generativa',
+  },
+}: {
+  orgName: string;
+  /** Motor disponible según el servidor; cada respuesta declara el que la produjo. */
+  engine?: { state: EngineBadgeState; label: string };
+}) {
   const { open, setOpen, scope } = useCopilot();
   const sp = useSearchParams();
   const period = sp.get('periodo') ?? '30d';
@@ -267,9 +290,9 @@ export function ContextualCopilotPanel({ orgName }: { orgName: string }) {
           >
             {effective.screen} · {effective.label}
           </p>
-          <p className="text-muted-foreground mt-0.5 text-[11px] font-bold">
-            Motor local por reglas · sin IA generativa
-          </p>
+          <div className="mt-1">
+            <EngineBadge state={engine.state} label={engine.label} />
+          </div>
         </div>
         <button
           type="button"

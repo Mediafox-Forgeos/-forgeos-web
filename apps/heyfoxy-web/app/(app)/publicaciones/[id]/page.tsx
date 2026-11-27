@@ -37,7 +37,16 @@ import {
   StatusPill,
   SyntheticBadge,
 } from '@/components/ds/primitives';
+import { GenerativeAnalysisControl } from '@/components/ds/ai-engine-client';
+import {
+  AdjustmentsNote,
+  BrandContextNotice,
+  MediaCoverageNote,
+} from '@/components/ds/ai-engine';
 import { requireContext } from '@/lib/auth/session';
+import { cachedContentAnalysis } from '@/lib/intel/ai/content';
+import { engineDeps, publicAiStatus } from '@/lib/intel/ai/runtime';
+import { loadFoxyScope } from '@/lib/intel/ai/scope';
 import { brainAvailability, getBrandContext } from '@/lib/brain/store';
 import { explorerQuery, parseExplorerFilters } from '@/lib/explorer-filters';
 import { PLATFORM_LABEL, fmtDateTime } from '@/lib/format';
@@ -129,6 +138,33 @@ export default async function PostDetailPage({
     ['owner', 'admin', 'analyst'].includes(active.role) &&
     availability === 'ready';
   const net = PLATFORM_LABEL[post.platform];
+
+  // Foxy Intelligence Engine generativo: análisis guardado (sin llamar al proveedor), si existe,
+  // y si quedó desactualizado frente a los datos o al Brand Brain vigentes.
+  const aiStatus = publicAiStatus(orgId);
+  const aiAvailable =
+    aiStatus.mode === 'generative' || aiStatus.mode === 'simulated';
+  let gen: Awaited<ReturnType<typeof cachedContentAnalysis>> = null;
+  if (aiAvailable) {
+    const scope = await loadFoxyScope(repo, orgId, { postId: post.id, period });
+    if (!('error' in scope))
+      gen = await cachedContentAnalysis(engineDeps(), {
+        orgId,
+        post: scope.post!,
+        peers: scope.peers,
+        brand: scope.brand,
+        brandOrgId: scope.brandOrgId,
+        learnings: scope.learnings,
+        learningsOrgId: scope.learningsOrgId,
+        periodLabel: scope.periodLabel,
+      }).catch(() => null);
+  }
+  const staleText = !gen?.stale
+    ? null
+    : gen.stale.reason === 'brand_changed'
+      ? `Se generó con Brand Brain v${gen.stale.previousBrandVersion ?? '—'}; la versión vigente es v${stored?.version ?? '—'}. Actualízalo para usar el contexto estratégico actual.`
+      : 'Las métricas, el copy o las publicaciones del periodo cambiaron desde el último análisis.';
+  const canRequestAi = ['owner', 'admin', 'analyst'].includes(active.role);
 
   const reach = readMetric(post, 'reach');
   const engagement = readMetric(post, 'engagement');
@@ -349,8 +385,36 @@ export default async function PostDetailPage({
 
         {/* 7. Foxy Intelligence */}
         <FoxyContentIntelligence
-          intel={status === 'ok' ? intel : null}
+          intel={gen ? gen.intel : status === 'ok' ? intel : null}
           meta={meta}
+          genMeta={gen?.meta ?? null}
+          engineControl={
+            // Con el motor local por defecto la cabecera ya lo dice: no se repite.
+            aiStatus.mode === 'local' ? undefined : (
+              <GenerativeAnalysisControl
+                postId={post.id}
+                period={period}
+                available={aiAvailable}
+                canRequest={canRequestAi}
+                hasResult={!!gen}
+                stale={staleText}
+                unavailableReason={`IA generativa no disponible: ${aiStatus.reason}`}
+              />
+            )
+          }
+          notices={
+            gen ? (
+              <>
+                <BrandContextNotice
+                  status={gen.meta.brandStatus}
+                  version={gen.meta.brandVersion}
+                  href={withPeriod('/brand-brain', period)}
+                />
+                <MediaCoverageNote meta={gen.meta} />
+                <AdjustmentsNote meta={gen.meta} />
+              </>
+            ) : null
+          }
           postId={post.id}
           postHref={linkTo}
           canSave={canSave}

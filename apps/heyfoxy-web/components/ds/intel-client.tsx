@@ -8,19 +8,24 @@ import {
   LoaderCircle,
   Send,
   Sparkles,
+  Square,
 } from 'lucide-react';
-import {
-  useRef,
-  useState,
-  useTransition,
-  type FormEvent,
-  type ReactNode,
-} from 'react';
-import { askFoxyAction, saveLearningAction } from '@/app/(app)/foxy-actions';
+import { useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { saveLearningAction } from '@/app/(app)/foxy-actions';
 import { cn } from '@/lib/cn';
+import type { GenAnswer, GenAnswerDraft } from '@/lib/intel/ai/answer';
+import type { GenMeta } from '@/lib/intel/ai/engine';
 import type { AskAnswer, IntelMeta } from '@/lib/intel/schema';
+import {
+  AdjustmentsNote,
+  AiStateNotice,
+  EngineBadge,
+  FallbackNotice,
+  MetaBadge,
+  type EngineBadgeState,
+} from './ai-engine';
 import { AreaTrend } from './charts-client';
-import { FindingCard } from './intel-findings';
+import { EvidenceDisclosure, FindingCard } from './intel-findings';
 
 /* Componentes interactivos de Foxy Intelligence (DS V2 · addendum §6–§9). */
 
@@ -145,12 +150,19 @@ export function PerformanceTimeline({ series }: { series: TimelineSeries[] }) {
   );
 }
 
-export type TurnStatus = 'pending' | 'streaming' | 'done' | 'error';
+export type TurnStatus =
+  'pending' | 'streaming' | 'done' | 'error' | 'cancelled';
 export type Turn = {
+  id?: string;
   q: string;
   status: TurnStatus;
+  /** Respuesta del motor local por reglas (o de respaldo). */
   a?: AskAnswer;
-  meta?: IntelMeta;
+  /** Respuesta generativa validada (o simulada con fixtures, siempre identificada). */
+  gen?: GenAnswer;
+  /** Secciones parciales mientras llega el flujo. */
+  draft?: GenAnswerDraft;
+  meta?: GenMeta | IntelMeta;
   error?: string;
 };
 
@@ -158,36 +170,295 @@ export interface FoxyScope {
   postId: string | null;
   period: string;
   platform?: string | null;
+  /** Pantalla y alcance legibles (marca · red · formato · periodo · filtros). */
+  scopeLabel?: string;
+  filters?: string[];
 }
 
+const isGenMeta = (m: Turn['meta']): m is GenMeta =>
+  !!m && 'state' in m && 'modelLabel' in m;
+
+/** Texto plano ya mostrado de un turno (para dar continuidad a la conversación). */
+function turnSummary(t: Turn): string {
+  if (t.gen)
+    return [t.gen.answer, t.gen.interpretation].filter(Boolean).join(' ');
+  if (t.a)
+    return t.a.unanswerable ?? t.a.headline ?? t.a.findings[0]?.title ?? '';
+  return '';
+}
+
+const rid = () =>
+  globalThis.crypto?.randomUUID?.().replace(/-/g, '') ??
+  `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+
 /**
- * Conversación con Foxy (motor local hoy; preparada para streaming: cada turno tiene estado
- * pending → streaming → done, y la respuesta puede completarse por partes cuando un proveedor
- * autorizado la entregue en flujo).
+ * Conversación con Foxy en streaming (WO-HF-AI-ENGINE-001 §7). Cada turno pasa por
+ * pending → streaming → done | error | cancelled. El servidor decide el motor (IA
+ * generativa autorizada, simulación con fixtures en desarrollo o motor local) y lo declara
+ * en cada respuesta. «Detener» cancela la generación (también en el proveedor).
  */
 export function useFoxyConversation(scope: FoxyScope, initial: Turn[] = []) {
   const [turns, setTurns] = useState<Turn[]>(initial);
-  const [pending, start] = useTransition();
+  const [pending, setPending] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
+  const turnsRef = useRef(turns);
+  turnsRef.current = turns;
+
+  const patch = (id: string, fn: (t: Turn) => Turn) =>
+    setTurns((all) => all.map((t) => (t.id === id ? fn(t) : t)));
+
   const ask = (question: string) => {
     const q = question.trim();
     if (q.length < 3 || pending) return;
-    setTurns((t) => [...t, { q, status: 'pending' }]);
-    start(async () => {
-      const r = await askFoxyAction({ question: q, ...scope });
-      setTurns((t) => {
-        const next = [...t];
-        next[next.length - 1] =
-          'error' in r
-            ? { q, status: 'error', error: r.error }
-            : { q, status: 'done', a: r.answer, meta: r.meta };
-        return next;
-      });
-    });
+    const id = rid();
+    const history = turnsRef.current
+      .filter((t) => t.status === 'done')
+      .slice(-4)
+      .map((t) => ({ q: t.q, a: turnSummary(t).slice(0, 1_400) }));
+    setTurns((t) => [...t, { id, q, status: 'pending' }]);
+    setPending(true);
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    void (async () => {
+      try {
+        const res = await fetch('/api/foxy/ask', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            question: q,
+            postId: scope.postId,
+            period: scope.period,
+            platform: scope.platform ?? null,
+            scopeLabel: scope.scopeLabel ?? 'Marca',
+            filters: scope.filters ?? [],
+            history,
+            requestId: id,
+          }),
+          signal: ctrl.signal,
+        });
+        if (!res.ok || !res.body) {
+          let msg = 'Foxy no pudo responder. Inténtalo de nuevo.';
+          try {
+            msg = ((await res.json()) as { error?: string }).error ?? msg;
+          } catch {
+            /* sin cuerpo */
+          }
+          patch(id, (t) => ({ ...t, status: 'error', error: msg }));
+          return;
+        }
+        const reader = res.body.getReader();
+        const dec = new TextDecoder();
+        let buf = '';
+        let finished = false;
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+          let nl: number;
+          while ((nl = buf.indexOf('\n')) !== -1) {
+            const line = buf.slice(0, nl).trim();
+            buf = buf.slice(nl + 1);
+            if (!line) continue;
+            let ev: AskStreamEvent;
+            try {
+              ev = JSON.parse(line) as AskStreamEvent;
+            } catch {
+              continue;
+            }
+            if (ev.type === 'meta')
+              patch(id, (t) => ({ ...t, status: 'streaming', meta: ev.meta }));
+            else if (ev.type === 'draft')
+              patch(id, (t) => ({
+                ...t,
+                status: 'streaming',
+                draft: ev.draft,
+              }));
+            else if (ev.type === 'final') {
+              finished = true;
+              patch(id, (t) => ({
+                ...t,
+                status: 'done',
+                gen: ev.answer,
+                draft: undefined,
+                meta: ev.meta,
+              }));
+            } else if (ev.type === 'local') {
+              finished = true;
+              patch(id, (t) => ({
+                ...t,
+                status: 'done',
+                a: ev.answer,
+                draft: undefined,
+                meta: ev.meta,
+                // Si hubo un error del proveedor, se conserva su aviso junto al respaldo local.
+                error: t.error,
+              }));
+            } else if (ev.type === 'error') {
+              patch(id, (t) => ({
+                ...t,
+                status: ev.code === 'cancelled' ? 'cancelled' : 'error',
+                error: ev.message,
+              }));
+            }
+          }
+        }
+        if (!finished)
+          patch(id, (t) =>
+            t.status === 'cancelled' || t.status === 'error'
+              ? t
+              : {
+                  ...t,
+                  status: 'error',
+                  error:
+                    'La conexión se cortó antes de terminar: la respuesta quedó incompleta.',
+                },
+          );
+      } catch {
+        patch(id, (t) =>
+          ctrl.signal.aborted
+            ? { ...t, status: 'cancelled', error: 'Generación cancelada.' }
+            : {
+                ...t,
+                status: 'error',
+                error:
+                  'Sin conexión con Hey Foxy. Revisa tu red e inténtalo de nuevo.',
+              },
+        );
+      } finally {
+        abortRef.current = null;
+        setPending(false);
+      }
+    })();
   };
-  return { turns, ask, pending, setTurns };
+  const cancel = () => abortRef.current?.abort();
+  return { turns, ask, pending, setTurns, cancel };
 }
 
-/** Respuesta de Foxy: principal, evidencias expandibles, limitaciones, recomendaciones y seguimiento. */
+type AskStreamEvent =
+  | { type: 'meta'; meta: GenMeta }
+  | { type: 'draft'; draft: GenAnswerDraft }
+  | { type: 'final'; answer: GenAnswer; meta: GenMeta }
+  | { type: 'local'; answer: AskAnswer; meta: GenMeta }
+  | { type: 'error'; message: string; code: string };
+
+const SectionLabel = ({ children }: { children: ReactNode }) => (
+  <p className="text-muted-foreground text-[11px] font-extrabold uppercase tracking-wider">
+    {children}
+  </p>
+);
+
+/**
+ * Respuesta generativa conversacional (DS v0.5 · ConversationalAnswer): respuesta principal,
+ * interpretación, evidencias expandibles, recomendaciones, limitaciones y seguimiento. Se
+ * muestra por partes mientras llega el flujo.
+ */
+function FoxyGenAnswer({
+  gen,
+  draft,
+  streaming,
+  postHref,
+  onFollowUp,
+  disabled,
+}: {
+  gen?: GenAnswer;
+  draft?: GenAnswerDraft;
+  streaming: boolean;
+  postHref: (id: string) => string;
+  onFollowUp: (q: string) => void;
+  disabled?: boolean;
+}) {
+  const a = gen ?? draft;
+  if (!a) return null;
+  const recs = gen ? gen.recommendations : (draft?.recommendations ?? []);
+  return (
+    <div className="space-y-2.5">
+      {a.answer && (
+        <p className="text-[15px] leading-relaxed">
+          {a.answer}
+          {streaming && !a.interpretation && (
+            <span
+              aria-hidden
+              className="bg-ai-fg ml-0.5 inline-block h-4 w-1.5 animate-pulse align-middle"
+            />
+          )}
+        </p>
+      )}
+      {a.interpretation && (
+        <p className="text-muted-foreground text-[13.5px] leading-relaxed">
+          {a.interpretation}
+        </p>
+      )}
+      {gen && gen.evidence.length > 0 && (
+        <EvidenceDisclosure evidence={gen.evidence} postHref={postHref} />
+      )}
+      {gen && gen.evidence.length === 0 && (
+        <p className="text-muted-foreground text-[12px] italic">
+          Evidencia no disponible: la respuesta no citó datos verificables del
+          contexto.
+        </p>
+      )}
+      {recs.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="text-success-fg text-[11px] font-extrabold uppercase tracking-wider">
+            Recomendaciones
+          </p>
+          <ul className="space-y-1.5">
+            {recs.map((r, i) => (
+              <li
+                key={i}
+                className="bg-card border-border rounded-xl border px-3 py-2 text-[13px]"
+              >
+                {r.text}
+                {r.evidence.length > 0 && (
+                  <EvidenceDisclosure
+                    evidence={r.evidence}
+                    postHref={postHref}
+                  />
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {a.limitations.length > 0 && (
+        <div className="bg-muted/70 rounded-xl px-3 py-2">
+          <SectionLabel>Limitaciones</SectionLabel>
+          <ul className="text-muted-foreground mt-1 space-y-0.5 text-[12px]">
+            {a.limitations.map((l) => (
+              <li key={l}>· {l}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {gen && !gen.complete && (
+        <p className="text-warning-fg text-xs font-bold">
+          Respuesta incompleta: el proveedor la cortó antes de terminar. Tómala
+          con cautela.
+        </p>
+      )}
+      {gen && gen.followUps.length > 0 && (
+        <div>
+          <SectionLabel>Preguntas de seguimiento</SectionLabel>
+          <div className="mt-1 flex flex-wrap gap-1.5">
+            {gen.followUps.map((s) => (
+              <button
+                key={s}
+                type="button"
+                disabled={disabled}
+                onClick={() => onFollowUp(s)}
+                className="bg-card hover:border-ai-fg/40 border-border rounded-full border px-2.5 py-1 text-left text-[12px] font-bold disabled:opacity-60"
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Respuesta de Foxy: identifica el motor y muestra la respuesta generativa o la local. */
 export function FoxyAnswer({
   turn,
   postHref,
@@ -199,15 +470,91 @@ export function FoxyAnswer({
   onFollowUp: (q: string) => void;
   disabled?: boolean;
 }) {
+  const genMeta = isGenMeta(turn.meta) ? turn.meta : null;
+  const badge = genMeta ? <MetaBadge meta={genMeta} /> : null;
   if (turn.status === 'pending')
     return (
-      <p className="text-muted-foreground flex items-center gap-2 text-sm">
+      <p
+        className="text-muted-foreground flex items-center gap-2 text-sm"
+        role="status"
+      >
         <LoaderCircle aria-hidden className="h-4 w-4 animate-spin" /> Foxy está
         analizando…
       </p>
     );
-  if (turn.status === 'error')
-    return <p className="text-critical-fg text-sm font-bold">{turn.error}</p>;
+  if (turn.status === 'streaming')
+    return (
+      <div className="space-y-2" aria-busy="true">
+        <div className="flex flex-wrap items-center gap-2">
+          {badge}
+          <span
+            className="text-ai-fg inline-flex items-center gap-1 text-[11px] font-extrabold"
+            role="status"
+          >
+            <LoaderCircle aria-hidden className="h-3.5 w-3.5 animate-spin" />{' '}
+            Escribiendo…
+          </span>
+        </div>
+        <FoxyGenAnswer
+          draft={turn.draft}
+          streaming
+          postHref={postHref}
+          onFollowUp={onFollowUp}
+          disabled
+        />
+      </div>
+    );
+  if (
+    (turn.status === 'error' || turn.status === 'cancelled') &&
+    !turn.a &&
+    !turn.gen
+  )
+    return (
+      <div className="space-y-2">
+        {turn.draft && (
+          <div className="opacity-70">
+            <FoxyGenAnswer
+              draft={turn.draft}
+              streaming={false}
+              postHref={postHref}
+              onFollowUp={onFollowUp}
+              disabled
+            />
+          </div>
+        )}
+        <AiStateNotice
+          tone={turn.status === 'cancelled' ? 'neutral' : 'critical'}
+          title={
+            turn.status === 'cancelled'
+              ? 'Generación detenida'
+              : 'No se pudo completar la respuesta'
+          }
+        >
+          {turn.status === 'cancelled'
+            ? 'Detuviste la respuesta. Lo recibido hasta ese momento queda incompleto y no se usa como evidencia.'
+            : turn.error}
+        </AiStateNotice>
+      </div>
+    );
+  if (turn.gen && genMeta)
+    return (
+      <div className="space-y-2.5">
+        <div className="flex flex-wrap items-center gap-2">{badge}</div>
+        <FoxyGenAnswer
+          gen={turn.gen}
+          streaming={false}
+          postHref={postHref}
+          onFollowUp={onFollowUp}
+          disabled={disabled}
+        />
+        {genMeta.syntheticInput && (
+          <p className="text-warning-fg text-xs font-bold">
+            Datos sintéticos de prueba: no describen una marca real.
+          </p>
+        )}
+        <AdjustmentsNote meta={genMeta} />
+      </div>
+    );
   const a = turn.a!;
   const info = a.findings.filter((f) => f.kind !== 'recommendation');
   const recs = a.findings.filter((f) => f.kind === 'recommendation');
@@ -216,6 +563,17 @@ export function FoxyAnswer({
   ] as string[];
   return (
     <div className="space-y-2.5">
+      {genMeta && genMeta.state === 'fallback' && (
+        <div className="flex flex-wrap items-center gap-2">{badge}</div>
+      )}
+      {turn.error && genMeta?.state === 'fallback' && (
+        <AiStateNotice tone="critical" title="Error del proveedor de IA">
+          {turn.error}
+        </AiStateNotice>
+      )}
+      {genMeta && genMeta.state === 'fallback' && !turn.error && (
+        <FallbackNotice meta={genMeta} />
+      )}
       {a.unanswerable ? (
         <p className="bg-card border-border rounded-xl border p-3 text-sm">
           {a.unanswerable}
@@ -294,16 +652,19 @@ export function AskBox({
   onAsk,
   pending,
   autoFocus,
+  onCancel,
 }: {
   id: string;
   onAsk: (q: string) => void;
   pending: boolean;
   autoFocus?: boolean;
+  /** Si se indica, mientras hay una respuesta en curso el botón permite detenerla. */
+  onCancel?: () => void;
 }) {
   const [q, setQ] = useState('');
   const submit = (e?: FormEvent) => {
     e?.preventDefault();
-    if (q.trim().length < 3) return;
+    if (pending || q.trim().length < 3) return;
     onAsk(q);
     setQ('');
   };
@@ -325,18 +686,29 @@ export function AskBox({
         placeholder="Pregúntale lo que quieras a Foxy..."
         className="bg-card border-border focus-visible:ring-primary-text min-h-[44px] flex-1 resize-none rounded-xl border px-3.5 py-2.5 text-sm"
       />
-      <button
-        type="submit"
-        disabled={pending || q.trim().length < 3}
-        className="bg-brand text-brand-foreground flex h-11 w-11 shrink-0 items-center justify-center rounded-xl disabled:opacity-50"
-        aria-label="Enviar pregunta"
-      >
-        {pending ? (
-          <LoaderCircle aria-hidden className="h-5 w-5 animate-spin" />
-        ) : (
-          <Send aria-hidden className="h-5 w-5" />
-        )}
-      </button>
+      {pending && onCancel ? (
+        <button
+          type="button"
+          onClick={onCancel}
+          className="border-border bg-card hover:bg-muted flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border"
+          aria-label="Detener respuesta"
+        >
+          <Square aria-hidden className="h-4 w-4 fill-current" />
+        </button>
+      ) : (
+        <button
+          type="submit"
+          disabled={pending || q.trim().length < 3}
+          className="bg-brand text-brand-foreground flex h-11 w-11 shrink-0 items-center justify-center rounded-xl disabled:opacity-50"
+          aria-label="Enviar pregunta"
+        >
+          {pending ? (
+            <LoaderCircle aria-hidden className="h-5 w-5 animate-spin" />
+          ) : (
+            <Send aria-hidden className="h-5 w-5" />
+          )}
+        </button>
+      )}
     </form>
   );
 }
@@ -381,6 +753,10 @@ export function AskFoxyContextual({
   suggestions,
   scopeLabel,
   postHrefPattern,
+  engine = {
+    state: 'local',
+    label: 'Motor local por reglas · sin IA generativa',
+  },
 }: {
   postId: string | null;
   period: string;
@@ -389,13 +765,16 @@ export function AskFoxyContextual({
   scopeLabel: string;
   /** Patrón del enlace a una publicación citada como evidencia («{id}» se sustituye). */
   postHrefPattern: string;
+  /** Motor disponible según el servidor (cada respuesta declara además el que la produjo). */
+  engine?: { state: EngineBadgeState; label: string };
 }) {
   const postHref = (id: string) =>
     postHrefPattern.replace('{id}', encodeURIComponent(id));
-  const { turns, ask, pending } = useFoxyConversation({
+  const { turns, ask, pending, cancel } = useFoxyConversation({
     postId,
     period,
     platform,
+    scopeLabel,
   });
   return (
     <section
@@ -415,9 +794,7 @@ export function AskFoxyContextual({
             Contexto: {scopeLabel}
           </p>
         </div>
-        <span className="bg-card text-muted-foreground rounded-full px-2.5 py-0.5 text-[11px] font-bold">
-          Motor local por reglas · sin IA generativa
-        </span>
+        <EngineBadge state={engine.state} label={engine.label} />
       </header>
       <div className="mt-3 flex flex-wrap gap-1.5">
         {suggestions.map((s) => (
@@ -441,7 +818,12 @@ export function AskFoxyContextual({
         />
       </div>
       <div className="mt-4">
-        <AskBox id={`ask-${postId ?? 'brand'}`} onAsk={ask} pending={pending} />
+        <AskBox
+          id={`ask-${postId ?? 'brand'}`}
+          onAsk={ask}
+          pending={pending}
+          onCancel={cancel}
+        />
       </div>
     </section>
   );
