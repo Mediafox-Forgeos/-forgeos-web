@@ -247,6 +247,8 @@ function deps(
     budget?: MemoryBudgetStore;
     cache?: MemoryGenCache;
     fetchImage?: EngineDeps['fetchImage'];
+    readSyntheticImage?: EngineDeps['readSyntheticImage'];
+    orgIsDemo?: EngineDeps['orgIsDemo'];
   } = {},
 ): EngineDeps & { budget: MemoryBudgetStore } {
   const config = readAiConfig({
@@ -262,8 +264,11 @@ function deps(
     cache: o.cache ?? new MemoryGenCache(),
     dataMode: 'demo',
     migration0009: false,
+    migration0010: true,
+    orgIsDemo: o.orgIsDemo ?? (async () => true),
     orgBudget: async () => ({ monthlyUsd: 15, dailyItems: 200 }),
     fetchImage: o.fetchImage,
+    readSyntheticImage: o.readSyntheticImage,
     newId: () => `req-${Math.random().toString(36).slice(2, 12)}`,
   } as EngineDeps & { budget: MemoryBudgetStore };
 }
@@ -440,7 +445,14 @@ describe('configuración y modelos', () => {
         .reason,
     ).toContain('0009');
     expect(
-      engineReadiness(ok, { dataMode: 'supabase', migration0009: true }).ready,
+      engineReadiness(ok, { dataMode: 'supabase', migration0009: true }).reason,
+    ).toContain('0010');
+    expect(
+      engineReadiness(ok, {
+        dataMode: 'supabase',
+        migration0009: true,
+        migration0010: true,
+      }).ready,
     ).toBe(true);
   });
 
@@ -1503,5 +1515,385 @@ describe('presupuesto y concurrencia (almacén en memoria)', () => {
       code: 'budget',
     });
     expect((await b.summary(ORG, 15)).reservedUsd).toBe(10);
+  });
+});
+
+// ============================================================================================
+// Preparación GO-IA-3: barrera de organización (HF-BB-05), imágenes sintéticas propias
+// (HF-QA-08) y topes acumulados de campaña.
+describe('GO-IA-3 · barrera de organización antes de construir la solicitud', () => {
+  const spyDeps = (orgIsDemo: () => Promise<boolean>, env = {}) => {
+    const f = mockFetch([]);
+    const d = deps({
+      provider: anthropic(f.impl),
+      orgIsDemo: vi.fn(orgIsDemo),
+      env,
+      fetchImage: vi.fn(async () => ({
+        mediaType: 'image/png',
+        base64: 'AAAA',
+        bytes: 3,
+      })),
+      readSyntheticImage: vi.fn(async () => ({
+        mediaType: 'image/png',
+        base64: 'AAAA',
+        bytes: 3,
+      })),
+    });
+    const reserve = vi.spyOn(d.budget, 'reserve');
+    const note = vi.spyOn(d.budget, 'note');
+    const cacheGet = vi.spyOn(d.cache, 'get');
+    return { d, f, reserve, note, cacheGet };
+  };
+  const askBase = (o: Partial<Parameters<typeof askGenerative>[1]> = {}) => {
+    const p = post();
+    return {
+      orgId: ORG,
+      userId: 'u-1',
+      question: '¿Qué funcionó mejor?',
+      scopeLabel: 'Ask Foxy',
+      post: null,
+      peers: [p, ...peersIg()],
+      brand: brand(),
+      brandOrgId: ORG,
+      learnings: [],
+      learningsOrgId: ORG,
+      periodLabel: '30 días',
+      platformFilter: null as string | null,
+      filters: [] as string[],
+      history: [],
+      ...o,
+    } as Parameters<typeof askGenerative>[1];
+  };
+  const nothingSent = (s: ReturnType<typeof spyDeps>) => {
+    expect(s.f.calls).toHaveLength(0);
+    expect(s.reserve).not.toHaveBeenCalled();
+    expect(s.cacheGet).not.toHaveBeenCalled();
+    expect(s.d.fetchImage).not.toHaveBeenCalled();
+    expect(s.d.readSyntheticImage).not.toHaveBeenCalled();
+  };
+
+  it('organización real no autorizada: el análisis de contenido se corta antes de caché, presupuesto, imagen y proveedor', async () => {
+    const s = spyDeps(async () => false);
+    const p = post({
+      media: [{ kind: 'image', url: '/synthetic-media/aurora/a01.jpg' }],
+    });
+    const r = await analyzePostGenerative(s.d, contentArgs(p, peersIg()));
+    expect(r.meta.fallback?.code).toBe('not_authorized_data');
+    expect(r.meta.local).toBe(true);
+    expect(s.d.orgIsDemo).toHaveBeenCalledWith(ORG);
+    nothingSent(s);
+    expect(s.note).not.toHaveBeenCalled();
+  });
+
+  it('la marca sintética de los datos no basta: una organización real con datos «sintéticos» sigue bloqueada', async () => {
+    const s = spyDeps(async () => false);
+    const r = await analyzePostGenerative(
+      s.d,
+      contentArgs(post({ isSynthetic: true }), peersIg(), brand(2, true)),
+    );
+    expect(r.meta.fallback?.code).toBe('not_authorized_data');
+    nothingSent(s);
+  });
+
+  it('Ask Foxy general, lateral y contextual de una organización real: respuesta local sin llamar al proveedor', async () => {
+    for (const o of [
+      {},
+      { post: post(), scopeLabel: 'Detalle de publicación' },
+      { platformFilter: 'instagram', filters: ['formato: imagen'] },
+    ]) {
+      const s = spyDeps(async () => false);
+      const ev = await collect(askGenerative(s.d, askBase(o)));
+      expect(ev).toHaveLength(1);
+      expect(ev[0]!.type).toBe('local');
+      expect(ev[0]!.type === 'local' ? ev[0]!.meta.fallback?.code : null).toBe(
+        'not_authorized_data',
+      );
+      nothingSent(s);
+    }
+  });
+
+  it('si no se puede verificar la organización, se trata como real (nada sale)', async () => {
+    const s = spyDeps(async () => {
+      throw new Error('base caída');
+    });
+    const r = await analyzePostGenerative(s.d, contentArgs(post(), peersIg()));
+    expect(r.meta.fallback?.code).toBe('not_authorized_data');
+    nothingSent(s);
+    const ev = await collect(askGenerative(s.d, askBase()));
+    expect(ev[0]!.type).toBe('local');
+  });
+
+  it('organización demo con un dato no sintético: bloqueada (todo el contexto debe ser sintético)', async () => {
+    const s = spyDeps(async () => true);
+    const r = await analyzePostGenerative(
+      s.d,
+      contentArgs(post({ isSynthetic: false }), peersIg()),
+    );
+    expect(r.meta.fallback?.code).toBe('not_authorized_data');
+    expect(s.f.calls).toHaveLength(0);
+    expect(s.reserve).not.toHaveBeenCalled();
+  });
+
+  it('organización real autorizada (HF_AI_REAL_DATA_ORGS) no puede usar imágenes sintéticas propias', async () => {
+    const f = mockFetch([json(messageBody(genJson(['E1'])))]);
+    const d = deps({
+      provider: anthropic(f.impl),
+      orgIsDemo: async () => false,
+      env: { HF_AI_REAL_DATA_ORGS: ORG, HF_AI_MULTIMODAL_ORGS: ORG },
+      readSyntheticImage: vi.fn(async () => ({
+        mediaType: 'image/png',
+        base64: 'AAAA',
+        bytes: 3,
+      })),
+    });
+    const p = post({
+      isSynthetic: false,
+      body: 'Publicación de marca sin datos personales',
+      media: [{ kind: 'image', url: '/synthetic-media/aurora/a01.jpg' }],
+    });
+    const r = await analyzePostGenerative(
+      d,
+      contentArgs(
+        p,
+        peersIg().map((x) => ({ ...x, isSynthetic: false })),
+        null,
+      ),
+    );
+    expect(d.readSyntheticImage).not.toHaveBeenCalled();
+    expect(r.meta.mediaCoverage).toBe('unavailable');
+    const sent = JSON.stringify(f.calls[0]?.body ?? {});
+    expect(sent).not.toContain('"type":"image"');
+  });
+});
+
+describe('GO-IA-3 · imágenes sintéticas propias', () => {
+  it('traduce solo el host reservado y valida rutas de forma estricta', async () => {
+    const { displayMediaUrl, parseSyntheticMediaPath } =
+      await import('@/lib/intel/ai/synthetic-media');
+    expect(
+      displayMediaUrl('https://synthetic-media.heyfoxy.invalid/aurora/a01.jpg'),
+    ).toBe('/synthetic-media/aurora/a01.jpg');
+    expect(displayMediaUrl('https://scontent.cdninstagram.com/a.jpg')).toBe(
+      'https://scontent.cdninstagram.com/a.jpg',
+    );
+    expect(
+      displayMediaUrl('https://synthetic-media.heyfoxy.invalid/medplus/a.jpg'),
+    ).toBe('https://synthetic-media.heyfoxy.invalid/medplus/a.jpg');
+    for (const bad of [
+      '/synthetic-media/aurora/../secret.jpg',
+      '/synthetic-media/aurora/A01.jpg',
+      '/synthetic-media/aurora/a01.jpg?x=1',
+      '/synthetic-media/aurora/a01.svg',
+      '/synthetic-media/otra/a01.jpg',
+      '/synthetic-media//a01.jpg',
+      '/synthetic-media/aurora/a01.jpg/..',
+    ])
+      expect(parseSyntheticMediaPath(bad)).toBeNull();
+    expect(
+      parseSyntheticMediaPath('/synthetic-media/horizonte/h-ig-03.png'),
+    ).toMatchObject({
+      folder: 'horizonte',
+      name: 'h-ig-03',
+      ext: 'png',
+    });
+  });
+
+  it('análisis multimodal en organización demo: lee la imagen propia del disco, nunca por red', async () => {
+    const f = mockFetch([json(messageBody(genJson(['E1'])))]);
+    const read = vi.fn(async () => ({
+      mediaType: 'image/jpeg',
+      base64: '/9j/',
+      bytes: 3,
+    }));
+    const fetchImg = vi.fn();
+    const d = deps({
+      provider: anthropic(f.impl),
+      orgIsDemo: async () => true,
+      readSyntheticImage: read,
+      fetchImage: fetchImg as unknown as EngineDeps['fetchImage'],
+    });
+    const p = post({
+      contentType: 'reel',
+      media: [
+        {
+          kind: 'video',
+          url: '/synthetic-media/aurora/a-reel-01.jpg',
+          previewUrl: '/synthetic-media/aurora/a-reel-01.jpg',
+        },
+      ],
+    });
+    const r = await analyzePostGenerative(d, contentArgs(p, peersIg()));
+    expect(read).toHaveBeenCalledWith('/synthetic-media/aurora/a-reel-01.jpg');
+    expect(fetchImg).not.toHaveBeenCalled();
+    expect(r.meta.mediaCoverage).toBe('video_thumbnail');
+    expect(JSON.stringify(f.calls[0]!.body)).toContain(
+      '"media_type":"image/jpeg"',
+    );
+  });
+
+  it('las imágenes publicadas existen, son JPEG/PNG válidos y de tamaño contenido', async () => {
+    const { readSyntheticImage } =
+      await import('@/lib/intel/ai/synthetic-media-server');
+    const { readdirSync } = await import('node:fs');
+    let count = 0;
+    for (const folder of ['aurora', 'horizonte']) {
+      for (const file of readdirSync(`public/synthetic-media/${folder}`)) {
+        if (!/\.(jpg|png)$/.test(file)) continue;
+        const img = await readSyntheticImage(
+          `/synthetic-media/${folder}/${file}`,
+        );
+        expect(['image/jpeg', 'image/png']).toContain(img.mediaType);
+        expect(img.bytes).toBeLessThan(600_000);
+        count++;
+      }
+    }
+    expect(count).toBeGreaterThanOrEqual(20);
+    await expect(
+      readSyntheticImage('/synthetic-media/aurora/no-existe.jpg'),
+    ).rejects.toThrow('no_encontrada');
+    await expect(readSyntheticImage('/etc/passwd')).rejects.toThrow(
+      'ruta_no_permitida',
+    );
+  });
+});
+
+describe('GO-IA-3 · topes acumulados de campaña', () => {
+  const campLimits = (
+    usd: number | null,
+    calls: number | null,
+  ): BudgetLimits => ({
+    ...limits,
+    campaign: { usd, calls, since: '2026-11-01T00:00:00.000Z' },
+  });
+  const input = (requestId: string, estUsd: number, l: BudgetLimits) => ({
+    orgId: ORG,
+    userId: 'u',
+    task: 'ask' as const,
+    model: 'claude-sonnet-5-5',
+    estUsd,
+    requestId,
+    synthetic: true,
+    limits: l,
+  });
+
+  it('no se reinicia con el mes y cuenta solo llamadas reales', async () => {
+    let now = new Date('2026-11-29T10:00:00Z');
+    const b = new MemoryBudgetStore(() => now);
+    const l = campLimits(0.1, 3);
+    const r1 = await b.reserve(input('req-c-0001', 0.04, l));
+    expect(r1.ok).toBe(true);
+    if (r1.ok)
+      await b.settle({
+        reservation: r1.reservation,
+        provider: 'anthropic',
+        usage: {
+          inputTokens: 1,
+          outputTokens: 1,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+        },
+        costUsd: 0.05,
+        status: 'ok',
+        brandVersion: 1,
+        promptVersion: 'x',
+      });
+    // Respaldo local y reutilización por caché: no cuentan como llamadas reales.
+    await b.note({
+      orgId: ORG,
+      userId: 'u',
+      task: 'ask',
+      provider: 'local',
+      model: 'reglas',
+      status: 'fallback',
+      cacheHit: false,
+      synthetic: true,
+      brandVersion: 1,
+    });
+    await b.note({
+      orgId: ORG,
+      userId: 'u',
+      task: 'ask',
+      provider: 'anthropic',
+      model: 'm',
+      status: 'ok',
+      cacheHit: true,
+      synthetic: true,
+      brandVersion: 1,
+    });
+    now = new Date('2026-12-02T10:00:00Z'); // nuevo mes: el mensual se reinicia, la campaña no
+    const over = await b.reserve(input('req-c-0002', 0.06, l));
+    expect(over).toMatchObject({ ok: false, code: 'campaign_budget' });
+    const r2 = await b.reserve(input('req-c-0003', 0.01, l));
+    expect(r2.ok).toBe(true);
+    if (r2.ok)
+      await b.settle({
+        reservation: r2.reservation,
+        provider: 'anthropic',
+        usage: {
+          inputTokens: 1,
+          outputTokens: 1,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+        },
+        costUsd: 0.01,
+        status: 'error',
+        brandVersion: 1,
+        promptVersion: 'x',
+      });
+    const r3 = await b.reserve(input('req-c-0004', 0.001, l));
+    expect(r3.ok).toBe(true);
+    const r4 = await b.reserve(input('req-c-0005', 0.001, l));
+    expect(r4).toMatchObject({ ok: false, code: 'campaign_calls' });
+    expect(await b.campaignUsage(ORG, '2026-11-01T00:00:00.000Z')).toEqual({
+      spentUsd: 0.06,
+      realCalls: 2,
+    });
+  });
+
+  it('el análisis vuelve al motor local con el motivo de campaña y sin llamar al proveedor', async () => {
+    const f = mockFetch([]);
+    const d = deps({ provider: anthropic(f.impl) });
+    d.orgBudget = async () => ({
+      monthlyUsd: 15,
+      dailyItems: 200,
+      campaign: { usd: 0.0001, calls: 20, since: null },
+    });
+    const r = await analyzePostGenerative(d, contentArgs(post(), peersIg()));
+    expect(r.meta.fallback?.code).toBe('budget');
+    expect(r.meta.fallback?.reason).toContain('campaña');
+    expect(f.calls).toHaveLength(0);
+  });
+});
+
+describe('GO-IA-3 · latencias por llamada', () => {
+  it('Ask Foxy registra la latencia total y hasta el primer fragmento; el análisis, la total', async () => {
+    const d = deps({ provider: new FixtureProvider(0) });
+    const p = post();
+    for await (const _ of askGenerative(d, {
+      orgId: ORG,
+      userId: 'u-lat',
+      question: '¿Qué funcionó mejor?',
+      scopeLabel: 'Ask Foxy',
+      post: null,
+      peers: [p, ...peersIg()],
+      brand: brand(),
+      brandOrgId: ORG,
+      learnings: [],
+      learningsOrgId: ORG,
+      periodLabel: '30 días',
+      platformFilter: null,
+      filters: [],
+      history: [],
+    }))
+      void _;
+    await analyzePostGenerative(d, contentArgs(post(), peersIg()));
+    const rows = d.budget.rows.filter((r) => r.costUsd >= 0 && !r.cacheHit);
+    const ask = rows.find((r) => r.task === 'ask')!;
+    const content = rows.find((r) => r.task === 'content_analysis')!;
+    expect(ask.latencyMs).toBeGreaterThanOrEqual(0);
+    expect(ask.firstTokenMs).toBeGreaterThanOrEqual(0);
+    expect(ask.firstTokenMs!).toBeLessThanOrEqual(ask.latencyMs!);
+    expect(content.latencyMs).toBeGreaterThanOrEqual(0);
+    expect(content.firstTokenMs ?? null).toBeNull();
   });
 });

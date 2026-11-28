@@ -188,7 +188,11 @@ export function readAiConfig(env: Env = process.env): AiConfig {
  */
 export function engineReadiness(
   cfg: AiConfig,
-  opts: { dataMode: 'demo' | 'supabase'; migration0009: boolean },
+  opts: {
+    dataMode: 'demo' | 'supabase';
+    migration0009: boolean;
+    migration0010?: boolean;
+  },
 ): { ready: boolean; reason: string } {
   if (cfg.killSwitch)
     return {
@@ -213,6 +217,12 @@ export function engineReadiness(
       reason:
         'La IA generativa requiere la migración 0009 (presupuesto y registro de consumo) aplicada: pendiente de GO.',
     };
+  if (opts.dataMode === 'supabase' && !opts.migration0010)
+    return {
+      ready: false,
+      reason:
+        'La IA generativa requiere la migración 0010 (clasificación sintética en la base y topes de campaña) aplicada: pendiente de GO.',
+    };
   return { ready: true, reason: 'IA generativa disponible.' };
 }
 
@@ -221,8 +231,10 @@ export function dataClearance(
   cfg: AiConfig,
   orgId: string,
   syntheticInput: boolean,
+  orgIsDemo: boolean,
 ): { allowed: boolean; reason: string } {
-  if (syntheticInput)
+  // La marca sintética solo vale en una organización de demostración (decidido en servidor).
+  if (syntheticInput && orgIsDemo)
     return { allowed: true, reason: 'Entrada sintética de prueba.' };
   if (cfg.realDataOrgs.includes(orgId.toLowerCase()))
     return {
@@ -241,6 +253,11 @@ export function multimodalClearance(
   cfg: AiConfig,
   orgId: string,
   syntheticInput: boolean,
+  orgIsDemo: boolean,
 ) {
-  return syntheticInput || cfg.multimodalOrgs.includes(orgId.toLowerCase());
+  return (
+    (syntheticInput && orgIsDemo) ||
+    (cfg.realDataOrgs.includes(orgId.toLowerCase()) &&
+      cfg.multimodalOrgs.includes(orgId.toLowerCase()))
+  );
 }

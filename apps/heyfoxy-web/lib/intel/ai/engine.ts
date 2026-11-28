@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { modelInfo, type ModelTier } from './catalog';
-import type { BudgetLimits, BudgetStore } from './budget';
+import type { BudgetLimits, BudgetStore, CampaignLimits } from './budget';
 import { dataClearance, engineReadiness, type AiConfig } from './config';
 import type { MediaCoverage } from './media';
 import type { GenerativeProvider } from './provider';
@@ -113,13 +113,27 @@ export interface EngineDeps {
   cache: GenCacheStore;
   dataMode: 'demo' | 'supabase';
   migration0009: boolean;
+  /** 0010: clasificación sintética impuesta por la base y topes de campaña (HF-BB-05). */
+  migration0010: boolean;
+  /**
+   * ¿La organización es de demostración? Lo decide el SERVIDOR (organizations.is_demo, que
+   * ningún usuario puede cambiar). La marca sintética de los datos solo vale si es true.
+   */
+  orgIsDemo: (orgId: string) => Promise<boolean>;
   /** Presupuesto configurado en la base para la organización (usage_budgets). */
-  orgBudget: (
-    orgId: string,
-  ) => Promise<{ monthlyUsd: number; dailyItems: number }>;
+  orgBudget: (orgId: string) => Promise<{
+    monthlyUsd: number;
+    dailyItems: number;
+    /** Tope acumulado de la campaña de pruebas (0010); null = sin tope de campaña. */
+    campaign?: CampaignLimits | null;
+  }>;
   fetchImage?: (
     url: string,
     signal?: AbortSignal,
+  ) => Promise<{ mediaType: string; base64: string; bytes: number }>;
+  /** Imágenes sintéticas propias empaquetadas (solo organizaciones demo; sin red). */
+  readSyntheticImage?: (
+    path: string,
   ) => Promise<{ mediaType: string; base64: string; bytes: number }>;
   newId?: () => string;
 }
@@ -128,13 +142,11 @@ export type GenDecision =
   | { use: 'generative'; tier: ModelTier; model: string }
   | { use: 'local'; code: FallbackCode; reason: string };
 
-export async function decideGenerative(
-  deps: EngineDeps,
-  args: { orgId: string; syntheticInput: boolean; tier: ModelTier },
-): Promise<GenDecision> {
+function readinessDecision(deps: EngineDeps): GenDecision | null {
   const ready = engineReadiness(deps.config, {
     dataMode: deps.dataMode,
     migration0009: deps.migration0009,
+    migration0010: deps.migration0010,
   });
   if (!ready.ready || !deps.provider)
     return {
@@ -146,13 +158,72 @@ export async function decideGenerative(
           : 'misconfigured',
       reason: ready.reason,
     };
+  return null;
+}
+
+export type OrgGate =
+  | { use: 'continue'; isDemo: boolean }
+  | { use: 'local'; code: FallbackCode; reason: string; isDemo: boolean };
+
+/**
+ * Primera barrera, ANTES de cargar o construir cualquier contexto o solicitud: una
+ * organización real que no figura en HF_AI_REAL_DATA_ORGS nunca llega al proveedor, por
+ * ninguna ruta (análisis de contenido, Ask Foxy general, lateral o contextual). Si el motor
+ * no está habilitado también se corta aquí. No consulta presupuesto ni proveedor.
+ */
+export async function orgGate(
+  deps: EngineDeps,
+  orgId: string,
+): Promise<OrgGate> {
+  const notReady = readinessDecision(deps);
+  if (notReady && notReady.use === 'local')
+    return { ...notReady, isDemo: false };
+  let isDemo = false;
+  try {
+    isDemo = await deps.orgIsDemo(orgId);
+  } catch {
+    return {
+      use: 'local',
+      code: 'not_authorized_data',
+      reason:
+        'No se pudo verificar la clasificación de la organización: no se envía nada al proveedor.',
+      isDemo: false,
+    };
+  }
+  if (!isDemo && !deps.config.realDataOrgs.includes(orgId.toLowerCase()))
+    return {
+      use: 'local',
+      code: 'not_authorized_data',
+      reason:
+        'Datos reales no autorizados para IA generativa en esta organización (HF_AI_REAL_DATA_ORGS): se usa el motor local por reglas.',
+      isDemo,
+    };
+  return { use: 'continue', isDemo };
+}
+
+export async function decideGenerative(
+  deps: EngineDeps,
+  args: {
+    orgId: string;
+    syntheticInput: boolean;
+    orgIsDemo: boolean;
+    tier: ModelTier;
+  },
+): Promise<GenDecision> {
+  const notReady = readinessDecision(deps);
+  if (notReady) return notReady;
   if (await deps.budget.killSwitch())
     return {
       use: 'local',
       code: 'kill_switch',
       reason: 'Interruptor de emergencia de IA activo (ai_kill_switch).',
     };
-  const clearance = dataClearance(deps.config, args.orgId, args.syntheticInput);
+  const clearance = dataClearance(
+    deps.config,
+    args.orgId,
+    args.syntheticInput,
+    args.orgIsDemo,
+  );
   if (!clearance.allowed)
     return {
       use: 'local',
@@ -176,6 +247,7 @@ export async function limitsFor(
   const b = await deps.orgBudget(orgId);
   return {
     orgMonthlyUsd: Math.min(b.monthlyUsd, deps.config.limits.orgMonthlyCapUsd),
+    campaign: b.campaign ?? null,
     orgDailyItems: b.dailyItems,
     syntheticCapUsd: deps.config.limits.syntheticCapUsd,
     userDailyRequests: deps.config.limits.userDailyRequests,

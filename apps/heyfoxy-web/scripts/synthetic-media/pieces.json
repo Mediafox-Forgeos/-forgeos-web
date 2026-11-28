@@ -1,0 +1,273 @@
+{
+  "_nota": "Piezas publicitarias SINTÉTICAS propias de las organizaciones de prueba (GO-IA-3, HF-QA-08). Marcas, personas y datos ficticios. La fuente de verdad de las publicaciones es supabase/seed/qa_synthetic_go_ia_3.sql; este archivo describe solo la imagen.",
+  "aurora": {
+    "brand": "Clínica Aurora",
+    "palette": {
+      "bg": "#0F766E",
+      "bg2": "#134E4A",
+      "accent": "#F97362",
+      "soft": "#CCFBF1",
+      "ink": "#042F2E"
+    },
+    "pieces": [
+      {
+        "file": "a-ig-01",
+        "format": "square",
+        "layout": "question",
+        "icon": "calendar",
+        "kicker": "Chequeo a tiempo",
+        "title": "¿Cuándo fue tu último chequeo?",
+        "sub": "Agenda tu control preventivo en la app"
+      },
+      {
+        "file": "a-ig-02",
+        "format": "portrait",
+        "layout": "list",
+        "icon": "heart",
+        "kicker": "Educación en salud",
+        "title": "5 hábitos para cuidar tu corazón",
+        "sub": "Desliza y guarda esta guía",
+        "carousel": 5
+      },
+      {
+        "file": "a-ig-03",
+        "format": "square",
+        "layout": "scene",
+        "icon": "stethoscope",
+        "kicker": "Confianza y servicio",
+        "title": "Un equipo que te escucha",
+        "sub": "Enfermería de turno 24 horas"
+      },
+      {
+        "file": "a-ig-04",
+        "format": "portrait",
+        "layout": "split",
+        "icon": "shield",
+        "kicker": "Educación en salud",
+        "title": "Mitos y verdades de la vacunación",
+        "sub": "Información verificada por especialistas",
+        "carousel": 6
+      },
+      {
+        "file": "a-ig-05",
+        "format": "square",
+        "layout": "cta",
+        "icon": "phone",
+        "kicker": "Chequeo a tiempo",
+        "title": "Tu chequeo en 3 toques",
+        "sub": "Descarga la app y elige tu horario"
+      },
+      {
+        "file": "a-reel-01",
+        "format": "story",
+        "layout": "video",
+        "icon": "drop",
+        "kicker": "Tu salud en 60 segundos",
+        "title": "Hidratación: ¿cuánta agua necesitas?",
+        "sub": "Episodio 1",
+        "duration": "0:45"
+      },
+      {
+        "file": "a-reel-02",
+        "format": "story",
+        "layout": "video",
+        "icon": "moon",
+        "kicker": "Tu salud en 60 segundos",
+        "title": "Dormir bien también es prevenir",
+        "sub": "Episodio 2",
+        "duration": "0:52"
+      },
+      {
+        "file": "a-reel-03",
+        "format": "story",
+        "layout": "video",
+        "icon": "stethoscope",
+        "kicker": "Confianza y servicio",
+        "title": "Un día en urgencias, contado por el equipo",
+        "sub": "Detrás de cámaras",
+        "duration": "1:10"
+      },
+      {
+        "file": "a-reel-04",
+        "format": "story",
+        "layout": "video",
+        "icon": "calendar",
+        "kicker": "Chequeo a tiempo",
+        "title": "Tu chequeo preventivo, paso a paso",
+        "sub": "Guía rápida",
+        "duration": "0:38"
+      },
+      {
+        "file": "a-fb-01",
+        "format": "landscape",
+        "layout": "split",
+        "icon": "calendar",
+        "kicker": "Chequeo a tiempo",
+        "title": "Jornada de chequeo preventivo este sábado",
+        "sub": "Cupos limitados · inscripción en la app"
+      },
+      {
+        "file": "a-fb-02",
+        "format": "landscape",
+        "layout": "list",
+        "icon": "shield",
+        "kicker": "Educación en salud",
+        "title": "¿Urgencias o consulta? Guía para decidir",
+        "sub": "Descarga la guía"
+      },
+      {
+        "file": "a-fb-03",
+        "format": "landscape",
+        "layout": "cta",
+        "icon": "clock",
+        "kicker": "Confianza y servicio",
+        "title": "Nuevos horarios extendidos",
+        "sub": "Lunes a sábado de 6:00 a 22:00"
+      },
+      {
+        "file": "a-fb-04",
+        "format": "landscape",
+        "layout": "question",
+        "icon": "chat",
+        "kicker": "Aurora te escucha",
+        "title": "¿Cómo fue tu última visita?",
+        "sub": "Responde la encuesta en 2 minutos"
+      }
+    ]
+  },
+  "horizonte": {
+    "brand": "Banco Horizonte",
+    "palette": {
+      "bg": "#1E3A8A",
+      "bg2": "#172554",
+      "accent": "#F5B83D",
+      "soft": "#DBEAFE",
+      "ink": "#0B1533"
+    },
+    "pieces": [
+      {
+        "file": "h-ig-01",
+        "format": "portrait",
+        "layout": "list",
+        "icon": "coins",
+        "kicker": "Mi primer presupuesto",
+        "title": "3 pasos para tu primer presupuesto",
+        "sub": "Guárdalo para fin de mes",
+        "carousel": 4
+      },
+      {
+        "file": "h-ig-02",
+        "format": "square",
+        "layout": "split",
+        "icon": "chart",
+        "kicker": "Educación financiera",
+        "title": "La regla 50/30/20, explicada",
+        "sub": "Necesidades · gustos · ahorro"
+      },
+      {
+        "file": "h-ig-03",
+        "format": "square",
+        "layout": "question",
+        "icon": "lock",
+        "kicker": "Seguro en línea",
+        "title": "¿Te pidieron tu clave por mensaje?",
+        "sub": "El banco nunca la solicita"
+      },
+      {
+        "file": "h-ig-04",
+        "format": "square",
+        "layout": "cta",
+        "icon": "piggy",
+        "kicker": "Soluciones financieras",
+        "title": "Ahorro programado desde la app",
+        "sub": "Elige monto y fecha, nosotros lo apartamos"
+      },
+      {
+        "file": "h-ig-05",
+        "format": "portrait",
+        "layout": "scene",
+        "icon": "card",
+        "kicker": "Educación financiera",
+        "title": "Mitos del crédito que te cuestan dinero",
+        "sub": "Desliza",
+        "carousel": 5
+      },
+      {
+        "file": "h-fb-01",
+        "format": "landscape",
+        "layout": "split",
+        "icon": "house",
+        "kicker": "Hogar Horizonte",
+        "title": "Simula tu crédito de vivienda en minutos",
+        "sub": "Sin compromiso · resultado inmediato"
+      },
+      {
+        "file": "h-fb-02",
+        "format": "landscape",
+        "layout": "question",
+        "icon": "lock",
+        "kicker": "Seguro en línea",
+        "title": "Así intentan estafarte (y cómo evitarlo)",
+        "sub": "Alerta de seguridad"
+      },
+      {
+        "file": "h-fb-03",
+        "format": "landscape",
+        "layout": "scene",
+        "icon": "chart",
+        "kicker": "Mi primer presupuesto",
+        "title": "Taller gratuito de finanzas personales",
+        "sub": "Jueves 7:00 p. m. · virtual"
+      },
+      {
+        "file": "h-fb-04",
+        "format": "landscape",
+        "layout": "cta",
+        "icon": "phone",
+        "kicker": "Soluciones financieras",
+        "title": "Transferencias seguras desde la nueva app",
+        "sub": "Con doble verificación"
+      },
+      {
+        "file": "h-fbv-01",
+        "format": "landscape",
+        "layout": "video",
+        "icon": "piggy",
+        "kicker": "Finanzas en 1 minuto",
+        "title": "Tu fondo de emergencia, explicado",
+        "sub": "Episodio 1",
+        "duration": "0:58"
+      },
+      {
+        "file": "h-fbv-02",
+        "format": "landscape",
+        "layout": "video",
+        "icon": "card",
+        "kicker": "Finanzas en 1 minuto",
+        "title": "Tarjeta de crédito sin sustos",
+        "sub": "Episodio 2",
+        "duration": "1:02"
+      },
+      {
+        "file": "h-fbv-03",
+        "format": "landscape",
+        "layout": "video",
+        "icon": "lock",
+        "kicker": "Seguro en línea",
+        "title": "Cómo reconocer un mensaje falso",
+        "sub": "Alerta",
+        "duration": "0:41"
+      },
+      {
+        "file": "h-fbv-04",
+        "format": "landscape",
+        "layout": "video",
+        "icon": "house",
+        "kicker": "Hogar Horizonte",
+        "title": "Historia ficticia: la primera casa de Ana",
+        "sub": "Serie Hogar",
+        "duration": "1:25"
+      }
+    ]
+  }
+}

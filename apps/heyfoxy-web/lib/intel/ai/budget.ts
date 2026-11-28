@@ -33,9 +33,20 @@ export const AI_TASK_LABEL: Record<AiTask, string> = {
 export type UsageStatus =
   'ok' | 'error' | 'cancelled' | 'refusal' | 'incomplete' | 'fallback';
 
+/**
+ * Tope ACUMULADO de una campaña de pruebas (0010): costo y llamadas reales al proveedor desde
+ * `since`. No se reinicia con el mes. Respaldos locales y reutilizaciones por caché no cuentan.
+ */
+export interface CampaignLimits {
+  usd: number | null;
+  calls: number | null;
+  since: string | null;
+}
+
 export interface BudgetLimits {
   /** Límite mensual efectivo de la organización en US$. */
   orgMonthlyUsd: number;
+  campaign?: CampaignLimits | null;
   orgDailyItems: number;
   syntheticCapUsd: number;
   userDailyRequests: number;
@@ -60,7 +71,9 @@ export type ReserveFailure =
   | 'user_limit'
   | 'daily_items'
   | 'concurrency'
-  | 'duplicate';
+  | 'duplicate'
+  | 'campaign_budget'
+  | 'campaign_calls';
 
 export const RESERVE_FAILURE_LABEL: Record<ReserveFailure, string> = {
   kill_switch: 'Interruptor de emergencia de IA activo.',
@@ -75,6 +88,10 @@ export const RESERVE_FAILURE_LABEL: Record<ReserveFailure, string> = {
   concurrency:
     'Hay otras generaciones en curso en esta organización; inténtalo en unos segundos.',
   duplicate: 'Esta solicitud ya se está procesando.',
+  campaign_budget:
+    'Presupuesto acumulado de la campaña de pruebas agotado: Foxy usa el motor local por reglas.',
+  campaign_calls:
+    'Se alcanzó el máximo de llamadas reales de la campaña de pruebas: Foxy usa el motor local por reglas.',
 };
 
 export interface Reservation {
@@ -100,6 +117,9 @@ export interface SettleInput {
   status: UsageStatus;
   brandVersion: number | null;
   promptVersion: string;
+  /** Tiempo total de la llamada y hasta el primer fragmento (streaming), en ms. */
+  latencyMs?: number | null;
+  firstTokenMs?: number | null;
 }
 
 export interface UsageRecord {
@@ -115,6 +135,8 @@ export interface UsageRecord {
   synthetic: boolean;
   brandVersion: number | null;
   createdAt: string;
+  latencyMs?: number | null;
+  firstTokenMs?: number | null;
 }
 
 export interface AiUsageSummary {
@@ -150,7 +172,17 @@ export interface BudgetStore {
     rec: Omit<UsageRecord, 'createdAt' | 'usage' | 'costUsd'>,
   ): Promise<void>;
   summary(orgId: string, limitUsd: number): Promise<AiUsageSummary>;
+  /** Consumo acumulado de la campaña de pruebas: costo y llamadas reales al proveedor. */
+  campaignUsage(
+    orgId: string,
+    since: string | null,
+  ): Promise<{ spentUsd: number; realCalls: number }>;
 }
+
+/** Llamada real al proveedor (excluye respaldos locales y reutilizaciones por caché). */
+export const isRealCall = (
+  r: Pick<UsageRecord, 'provider' | 'status' | 'cacheHit'>,
+) => r.provider !== 'local' && r.status !== 'fallback' && !r.cacheHit;
 
 const monthStart = (now: Date) =>
   new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
@@ -244,6 +276,22 @@ export class MemoryBudgetStore implements BudgetStore {
       i.limits.orgMonthlyUsd
     )
       return fail('budget');
+    const camp = i.limits.campaign;
+    if (camp && (camp.usd != null || camp.calls != null)) {
+      const since = camp.since ?? '';
+      const inCampaign = this.rows.filter(
+        (r) => r.orgId === i.orgId && r.createdAt >= since,
+      );
+      if (
+        camp.usd != null &&
+        inCampaign.reduce((s, r) => s + r.costUsd, 0) + reserved + i.estUsd >
+          camp.usd
+      )
+        return fail('campaign_budget');
+      const calls = inCampaign.filter(isRealCall).length;
+      if (camp.calls != null && calls + orgActive.length >= camp.calls)
+        return fail('campaign_calls');
+    }
     if (i.synthetic) {
       const synthReserved = [...this.active.values()]
         .filter((r) => r.synthetic)
@@ -298,6 +346,8 @@ export class MemoryBudgetStore implements BudgetStore {
       synthetic: s.reservation.synthetic,
       brandVersion: s.brandVersion,
       createdAt: this.now().toISOString(),
+      latencyMs: s.latencyMs ?? null,
+      firstTokenMs: s.firstTokenMs ?? null,
     });
   }
 
@@ -317,6 +367,16 @@ export class MemoryBudgetStore implements BudgetStore {
       costUsd: 0,
       createdAt: this.now().toISOString(),
     });
+  }
+
+  async campaignUsage(orgId: string, since: string | null) {
+    const rows = this.rows.filter(
+      (r) => r.orgId === orgId && r.createdAt >= (since ?? ''),
+    );
+    return {
+      spentUsd: Math.round(rows.reduce((s, r) => s + r.costUsd, 0) * 1e6) / 1e6,
+      realCalls: rows.filter(isRealCall).length,
+    };
   }
 
   async summary(orgId: string, limitUsd: number) {

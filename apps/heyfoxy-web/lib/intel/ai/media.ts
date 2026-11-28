@@ -182,7 +182,8 @@ export function validateMediaUrl(raw: string, allowedHosts: string[]): URL {
   return u;
 }
 
-function sniff(bytes: Uint8Array): string | null {
+/** Tipo de imagen por firma binaria (JPEG, PNG, GIF, WebP); null si no es una imagen admitida. */
+export function sniffImage(bytes: Uint8Array): string | null {
   const b = (i: number) => bytes[i] ?? -1;
   if (b(0) === 0xff && b(1) === 0xd8 && b(2) === 0xff) return 'image/jpeg';
   if (b(0) === 0x89 && b(1) === 0x50 && b(2) === 0x4e && b(3) === 0x47)
@@ -299,7 +300,7 @@ export async function fetchImageSafely(
         bytes.set(c, off);
         off += c.byteLength;
       }
-      const real = sniff(bytes);
+      const real = sniffImage(bytes);
       if (!real || real !== declared)
         throw new MediaRejected('firma_no_coincide');
       return {

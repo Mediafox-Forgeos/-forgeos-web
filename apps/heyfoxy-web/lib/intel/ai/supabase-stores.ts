@@ -3,6 +3,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { serviceKeyKind, serviceKeyUsable } from '@/lib/sync/guards';
 import {
   RESERVE_FAILURE_LABEL,
+  isRealCall,
   summarize,
   type AiTask,
   type AiUsageSummary,
@@ -29,6 +30,11 @@ export function aiPersistenceReady(): boolean {
     Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL) &&
     serviceKeyUsable(serviceKeyKind(process.env.HF_SUPABASE_SERVICE_ROLE_KEY))
   );
+}
+
+/** 0010 aplicada: clasificación sintética impuesta por la base y topes de campaña. */
+export function aiSafetyReady(): boolean {
+  return process.env.HF_MIGRATION_0010_APPLIED === 'true';
 }
 
 let client: SupabaseClient | null = null;
@@ -117,6 +123,8 @@ export class SupabaseBudgetStore implements BudgetStore {
       p_cost: s.costUsd,
       p_brand_version: s.brandVersion,
       p_prompt_version: s.promptVersion,
+      p_latency_ms: s.latencyMs ?? null,
+      p_first_token_ms: s.firstTokenMs ?? null,
     });
     fail(error, 'el registro de consumo');
   }
@@ -140,6 +148,30 @@ export class SupabaseBudgetStore implements BudgetStore {
       p_brand_version: rec.brandVersion,
     });
     fail(error, 'el registro de consumo');
+  }
+
+  async campaignUsage(orgId: string, since: string | null) {
+    let q = db()
+      .from('ai_usage')
+      .select('provider, status, cache_hit, cost_usd')
+      .eq('organization_id', orgId);
+    if (since) q = q.gte('created_at', since);
+    const { data, error } = await q;
+    fail(error, 'la lectura del consumo de campaña');
+    const rows = (data ?? []) as Array<Record<string, unknown>>;
+    return {
+      spentUsd:
+        Math.round(
+          rows.reduce((s, x) => s + Number(x.cost_usd ?? 0), 0) * 1e6,
+        ) / 1e6,
+      realCalls: rows.filter((x) =>
+        isRealCall({
+          provider: String(x.provider),
+          status: (x.status as UsageStatus) ?? 'ok',
+          cacheHit: x.cache_hit === true,
+        }),
+      ).length,
+    };
   }
 
   async summary(orgId: string, limitUsd: number): Promise<AiUsageSummary> {
@@ -257,4 +289,42 @@ export class SupabaseGenCache implements GenCacheStore {
       );
     fail(error, 'la caché de análisis');
   }
+}
+
+/**
+ * ¿Es la organización de demostración? Se lee en el servidor (service role) de
+ * organizations.is_demo, que ningún usuario puede modificar. Ante cualquier error: false
+ * (se trata como real y no sale nada al proveedor).
+ */
+export async function orgIsDemoDb(orgId: string): Promise<boolean> {
+  const { data, error } = await db()
+    .from('organizations')
+    .select('is_demo')
+    .eq('id', orgId)
+    .maybeSingle();
+  if (error || !data) return false;
+  return data.is_demo === true;
+}
+
+/** Topes de campaña (0010) de usage_budgets. */
+export async function campaignLimitsDb(orgId: string): Promise<{
+  usd: number | null;
+  calls: number | null;
+  since: string | null;
+} | null> {
+  const { data, error } = await db()
+    .from('usage_budgets')
+    .select('ai_campaign_usd, ai_campaign_calls, ai_campaign_since')
+    .eq('organization_id', orgId)
+    .maybeSingle();
+  if (error)
+    throw new Error('Foxy IA: no se pudieron leer los topes de campaña');
+  if (!data || (data.ai_campaign_usd == null && data.ai_campaign_calls == null))
+    return null;
+  return {
+    usd: data.ai_campaign_usd == null ? null : Number(data.ai_campaign_usd),
+    calls:
+      data.ai_campaign_calls == null ? null : Number(data.ai_campaign_calls),
+    since: data.ai_campaign_since ? String(data.ai_campaign_since) : null,
+  };
 }

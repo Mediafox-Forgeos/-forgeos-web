@@ -17,13 +17,20 @@ import {
   type GenAnswer,
   type GenAnswerDraft,
 } from './answer';
-import { buildFoxyContext, IsolationError, type FoxyContext } from './context';
+import {
+  brandStatusOf,
+  buildFoxyContext,
+  inputLooksSynthetic,
+  IsolationError,
+  type FoxyContext,
+} from './context';
 import {
   FALLBACK_NOTED,
   decideGenerative,
   limitsFor,
   localMeta,
   newRequestId,
+  orgGate,
   type EngineDeps,
   type FallbackCode,
   type GenMeta,
@@ -185,6 +192,22 @@ export async function* askGenerative(
   args: AskArgs,
 ): AsyncGenerator<AskEvent> {
   const q = args.question.trim().slice(0, 500);
+  // Barrera de organización ANTES de construir contexto o solicitud alguna.
+  const gate = await orgGate(deps, args.orgId);
+  if (gate.use === 'local') {
+    yield {
+      type: 'local',
+      answer: localAnswer({ ...args, question: q }),
+      meta: localMeta({
+        promptVersion: PROMPT_VERSION,
+        syntheticInput: inputLooksSynthetic(args),
+        brandVersion: args.brand?.version ?? null,
+        brandStatus: brandStatusOf(args.brand),
+        fallback: { code: gate.code, reason: gate.reason },
+      }),
+    };
+    return;
+  }
   let ctx: FoxyContext;
   try {
     ctx = buildFoxyContext({
@@ -242,6 +265,7 @@ export async function* askGenerative(
   const decision = await decideGenerative(deps, {
     orgId: args.orgId,
     syntheticInput: ctx.syntheticInput,
+    orgIsDemo: gate.isDemo,
     tier: 'content',
   });
   if (decision.use === 'local') {
@@ -333,6 +357,8 @@ export async function* askGenerative(
 
   let text = '';
   let lastDraft = 0;
+  const t0 = Date.now();
+  let firstTokenMs: number | null = null;
   try {
     for await (const ev of provider.stream(
       {
@@ -348,6 +374,7 @@ export async function* askGenerative(
       args.signal,
     )) {
       if (ev.type === 'delta') {
+        firstTokenMs ??= Date.now() - t0;
         text += ev.text;
         if (text.length - lastDraft >= 24) {
           lastDraft = text.length;
@@ -365,6 +392,8 @@ export async function* askGenerative(
         status: truncated ? 'incomplete' : 'ok',
         brandVersion: ctx.brandVersion,
         promptVersion: GEN_ASK_PROMPT_VERSION,
+        latencyMs: Date.now() - t0,
+        firstTokenMs,
       });
       const fin = finalizeAnswer(text, ctx, { truncated });
       const ruled = applyAnswerRules(fin, ctx);
@@ -406,6 +435,8 @@ export async function* askGenerative(
               : 'error',
       brandVersion: ctx.brandVersion,
       promptVersion: GEN_ASK_PROMPT_VERSION,
+      latencyMs: Date.now() - t0,
+      firstTokenMs,
     });
     if (pe.kind === 'cancelled') {
       yield {

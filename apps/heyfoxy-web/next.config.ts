@@ -6,6 +6,11 @@ const nextConfig: NextConfig = {
   // Raíz del monorepo: con pnpm, `next` y sus dependencias viven en ../../node_modules.
   // Con process.cwd() el trazado excluía el runtime de Next y la función fallaba en Vercel.
   outputFileTracingRoot: path.join(__dirname, '../..'),
+  // Imágenes sintéticas propias (GO-IA-3, HF-QA-08): el análisis multimodal las lee del disco
+  // en el servidor (sin red). Solo la ruta del detalle de publicación, donde vive la acción.
+  outputFileTracingIncludes: {
+    '/publicaciones/[id]': ['./public/synthetic-media/**/*'],
+  },
   poweredByHeader: false,
   async headers() {
     return [

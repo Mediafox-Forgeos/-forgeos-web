@@ -18,7 +18,11 @@ import {
   SupabaseBudgetStore,
   SupabaseGenCache,
   aiPersistenceReady,
+  aiSafetyReady,
+  campaignLimitsDb,
+  orgIsDemoDb,
 } from './supabase-stores';
+import { readSyntheticImage } from './synthetic-media-server';
 
 /**
  * Ensambla el motor generativo desde el entorno del servidor (WO-HF-AI-ENGINE-001 §3, §11).
@@ -54,6 +58,9 @@ export function engineDeps(): EngineDeps {
     cache: persistent ? new SupabaseGenCache() : g.__hfAiDemo!.cache,
     dataMode: mode,
     migration0009: persistent,
+    migration0010: mode === 'demo' || (persistent && aiSafetyReady()),
+    // Demo: todas las organizaciones son ficticias (memoria del proceso, sin base).
+    orgIsDemo: async (orgId) => (mode === 'demo' ? true : orgIsDemoDb(orgId)),
     orgBudget: async (orgId) => {
       if (mode === 'demo')
         return { monthlyUsd: config.limits.orgMonthlyCapUsd, dailyItems: 200 };
@@ -68,9 +75,11 @@ export function engineDeps(): EngineDeps {
           data?.ai_monthly_usd ?? config.limits.orgMonthlyCapUsd,
         ),
         dailyItems: Number(data?.ai_daily_items ?? 200),
+        campaign: aiSafetyReady() ? await campaignLimitsDb(orgId) : null,
       };
     },
     fetchImage: (url, signal) => fetchImageSafely(url, { signal }),
+    readSyntheticImage,
   };
 }
 
@@ -103,6 +112,15 @@ export interface PublicAiStatus {
   persistence: 'memory' | 'supabase' | 'pending_0009';
 }
 
+/** Campaña de pruebas en curso para «Uso y presupuestos» (0010). */
+export interface CampaignStatus {
+  usd: number | null;
+  calls: number | null;
+  since: string | null;
+  spentUsd: number;
+  realCalls: number;
+}
+
 export function publicAiStatus(orgId?: string): PublicAiStatus {
   const cfg = readAiConfig();
   const mode = dataMode();
@@ -110,6 +128,7 @@ export function publicAiStatus(orgId?: string): PublicAiStatus {
   const ready = engineReadiness(cfg, {
     dataMode: mode,
     migration0009: persistent,
+    migration0010: mode === 'demo' || (persistent && aiSafetyReady()),
   });
   const m: PublicAiStatus['mode'] =
     cfg.provider === 'local'
@@ -153,14 +172,24 @@ export function publicAiStatus(orgId?: string): PublicAiStatus {
 
 export async function aiUsageSummary(
   orgId: string,
-): Promise<AiUsageSummary | null> {
+): Promise<(AiUsageSummary & { campaign: CampaignStatus | null }) | null> {
   const deps = engineDeps();
   if (deps.dataMode === 'supabase' && !deps.migration0009) return null;
   const b = await deps.orgBudget(orgId);
-  return deps.budget.summary(
+  const summary = await deps.budget.summary(
     orgId,
     Math.min(b.monthlyUsd, deps.config.limits.orgMonthlyCapUsd),
   );
+  const camp = b.campaign ?? null;
+  return {
+    ...summary,
+    campaign: camp
+      ? {
+          ...camp,
+          ...(await deps.budget.campaignUsage(orgId, camp.since)),
+        }
+      : null,
+  };
 }
 
 /** Insignia del motor disponible para la organización activa (sin secretos). */

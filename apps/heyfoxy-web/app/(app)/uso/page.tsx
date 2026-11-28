@@ -179,6 +179,27 @@ export default async function UsagePage() {
               {usd(ai.monthSpentUsd)} gastado · {usd(ai.reservedUsd)} reservado
               en curso · límite {usd(ai.limitUsd)} ({pct(used, ai.limitUsd)} %)
             </p>
+            {ai.campaign && (
+              <p
+                className="border-border mt-3 rounded-lg border px-3 py-2 text-sm"
+                data-testid="ai-campaign"
+              >
+                <span className="font-semibold">Campaña de pruebas</span>{' '}
+                (acumulada
+                {ai.campaign.since
+                  ? ` desde ${new Date(ai.campaign.since).toLocaleDateString('es-CO', { timeZone: 'America/Bogota' })}`
+                  : ''}
+                ): {usd(ai.campaign.spentUsd)}
+                {ai.campaign.usd != null
+                  ? ` de ${usd(ai.campaign.usd)}`
+                  : ''} · {num(ai.campaign.realCalls)}
+                {ai.campaign.calls != null
+                  ? ` de ${num(ai.campaign.calls)}`
+                  : ''}{' '}
+                llamadas reales. No se reinicia con el mes; al agotarse, Foxy
+                usa el motor local por reglas.
+              </p>
+            )}
             <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
               <Stat label="Solicitudes" value={num(ai.requests)} />
               <Stat

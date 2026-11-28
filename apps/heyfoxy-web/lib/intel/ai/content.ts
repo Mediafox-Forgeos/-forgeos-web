@@ -14,7 +14,9 @@ import {
 } from './catalog';
 import { multimodalClearance } from './config';
 import {
+  brandStatusOf,
   buildFoxyContext,
+  inputLooksSynthetic,
   IsolationError,
   resolveRefs,
   type FoxyContext,
@@ -25,11 +27,13 @@ import {
   limitsFor,
   localMeta,
   newRequestId,
+  orgGate,
   type EngineDeps,
   type FallbackCode,
   type GenMeta,
 } from './engine';
 import { planMedia, type MediaPlan } from './media';
+import { isSyntheticMediaPath } from './synthetic-media';
 import {
   CONTENT_JSON_SCHEMA,
   CONTENT_SYSTEM,
@@ -297,6 +301,10 @@ export async function analyzePostGenerative(
     periodLabel: args.periodLabel,
   });
   const allowed = [args.post.id, ...args.peers.map((p) => p.id)];
+  // Barrera de organización ANTES de construir contexto, imagen o solicitud alguna.
+  const gate = await orgGate(deps, args.orgId);
+  if (gate.use === 'local')
+    return fallback(local, allowed, null, gate.code, gate.reason, args, null);
   let ctx: FoxyContext;
   try {
     ctx = buildFoxyContext({
@@ -340,6 +348,7 @@ export async function analyzePostGenerative(
   const decision = await decideGenerative(deps, {
     orgId: args.orgId,
     syntheticInput: ctx.syntheticInput,
+    orgIsDemo: gate.isDemo,
     tier: 'content',
   });
   if (decision.use === 'local') return fb(decision.code, decision.reason);
@@ -351,11 +360,26 @@ export async function analyzePostGenerative(
 
   const model = modelInfo(decision.model)!;
   let plan = planMedia(args.post);
+  // Imágenes sintéticas propias: solo publicaciones sintéticas de organizaciones demo, leídas
+  // del disco del despliegue. El resto, por la descarga segura (CDN de Meta).
+  const ownSynthetic = isSyntheticMediaPath(plan.url);
+  const loader = ownSynthetic
+    ? gate.isDemo && args.post.isSynthetic && deps.readSyntheticImage
+      ? deps.readSyntheticImage
+      : null
+    : deps.fetchImage
+      ? (u: string) => deps.fetchImage!(u, args.signal)
+      : null;
   const multimodal =
     model.vision &&
-    multimodalClearance(deps.config, args.orgId, ctx.syntheticInput) &&
+    multimodalClearance(
+      deps.config,
+      args.orgId,
+      ctx.syntheticInput,
+      gate.isDemo,
+    ) &&
     !!plan.url &&
-    !!deps.fetchImage;
+    !!loader;
   if (!multimodal && plan.url)
     plan = {
       ...plan,
@@ -391,7 +415,7 @@ export async function analyzePostGenerative(
   let imgTokens = 0;
   if (multimodal && plan.url) {
     try {
-      const img = await deps.fetchImage!(plan.url, args.signal);
+      const img = await loader!(plan.url);
       blocks.push({
         type: 'image',
         source: { type: 'base64', media_type: img.mediaType, data: img.base64 },
@@ -438,6 +462,8 @@ export async function analyzePostGenerative(
       res.message,
     );
 
+  const t0 = Date.now();
+  const elapsed = () => Date.now() - t0;
   try {
     const out = await deps.provider!.complete(
       {
@@ -468,6 +494,7 @@ export async function analyzePostGenerative(
         status: 'error',
         brandVersion: ctx.brandVersion,
         promptVersion: GEN_CONTENT_PROMPT_VERSION,
+        latencyMs: elapsed(),
       });
       return fb(
         'invalid_output',
@@ -483,6 +510,7 @@ export async function analyzePostGenerative(
       status: 'ok',
       brandVersion: ctx.brandVersion,
       promptVersion: GEN_CONTENT_PROMPT_VERSION,
+      latencyMs: elapsed(),
     });
     const meta: GenMeta = {
       state: deps.provider!.simulated ? 'simulated' : 'generative',
@@ -539,6 +567,7 @@ export async function analyzePostGenerative(
               : 'error',
       brandVersion: ctx.brandVersion,
       promptVersion: GEN_CONTENT_PROMPT_VERSION,
+      latencyMs: elapsed(),
     });
     return fb('provider_error', pe.message);
   }
@@ -586,9 +615,9 @@ function fallback(
     intel: validateIntel(local, allowed),
     meta: localMeta({
       promptVersion: GEN_CONTENT_PROMPT_VERSION,
-      syntheticInput: ctx?.syntheticInput ?? args.post.isSynthetic,
+      syntheticInput: ctx?.syntheticInput ?? inputLooksSynthetic(args),
       brandVersion: ctx?.brandVersion ?? args.brand?.version ?? null,
-      brandStatus: ctx?.brandStatus ?? 'missing',
+      brandStatus: ctx?.brandStatus ?? brandStatusOf(args.brand ?? null),
       fallback: { code, reason },
     }),
     stale,

@@ -1,4 +1,5 @@
 import 'server-only';
+import { displayMediaUrl } from '@/lib/intel/ai/synthetic-media';
 import { mediaExpiresAt } from '@/lib/media-expiry';
 import { applicableMetrics } from '@/lib/metrics-applicability';
 import { supabaseServer } from '@/lib/supabase/server';
@@ -60,8 +61,8 @@ function toMedia(r: Row): Post['media'] {
     const exp = mediaExpiresAt(m.preview_url ?? m.source_url);
     return {
       kind: m.kind,
-      url: m.source_url,
-      previewUrl: m.preview_url ?? null,
+      url: displayMediaUrl(m.source_url),
+      previewUrl: displayMediaUrl(m.preview_url ?? null),
       alt: m.alt_text ?? null,
       width: m.width ?? null,
       height: m.height ?? null,

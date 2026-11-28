@@ -124,13 +124,39 @@ function brandBlock(
     lines.push(
       `- Aprendizaje aprobado [${add({ type: 'brand', label: `Aprendizaje aprobado: ${m.title.slice(0, 120)}`, postId: null, value: null })}]: ${prepareUntrustedText(`${m.title}. ${m.body}`, 400).text}`,
     );
+  return { text: lines.join('\n'), status: brandStatusOf(stored) };
+}
+
+/** Completitud del Brand Brain (sin construir el contexto). */
+export function brandStatusOf(
+  stored: StoredBrandContext | null,
+): FoxyContext['brandStatus'] {
+  if (!stored) return 'missing';
+  const c = stored.context;
   const filled =
     (c.identity.description || c.identity.tone ? 1 : 0) +
     (c.strategy.pillars.length ? 1 : 0) +
     (c.strategy.communicationGoals.length || c.strategy.businessGoals.length
       ? 1
       : 0);
-  return { text: lines.join('\n'), status: filled >= 2 ? 'ok' : 'partial' };
+  return filled >= 2 ? 'ok' : 'partial';
+}
+
+/**
+ * ¿Los datos de entrada están marcados como sintéticos? Solo para ETIQUETAR la respuesta
+ * («Datos sintéticos de prueba»); la autorización de envío exige además que la organización sea
+ * de demostración (orgGate / dataClearance).
+ */
+export function inputLooksSynthetic(args: {
+  post: Post | null;
+  peers: Post[];
+  brand: StoredBrandContext | null;
+}): boolean {
+  return (
+    (args.post?.isSynthetic ?? true) &&
+    args.peers.every((p) => p.isSynthetic) &&
+    (args.brand?.isSynthetic ?? true)
+  );
 }
 
 export function buildFoxyContext(args: {
@@ -257,10 +283,11 @@ export function buildFoxyContext(args: {
   }
 
   const brand = brandBlock(args.brand, args.learnings, add);
-  const syntheticInput =
-    (post?.isSynthetic ?? true) &&
-    args.peers.every((p) => p.isSynthetic) &&
-    (args.brand?.isSynthetic ?? true);
+  const syntheticInput = inputLooksSynthetic({
+    post,
+    peers: args.peers,
+    brand: args.brand,
+  });
   const header = [
     `Periodo: ${args.periodLabel}.`,
     args.platformFilter

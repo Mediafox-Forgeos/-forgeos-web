@@ -91,7 +91,8 @@ export async function saveLearningAction(input: {
           ]
         : [],
       sourcePostId: post?.id ?? null,
-      isSynthetic: (post?.isSynthetic ?? false) || active.organization.isDemo,
+      // Lo decide el servidor (organizations.is_demo); 0010 lo impone también en la base.
+      isSynthetic: active.organization.isDemo,
       createdBy: viewer.userId,
     });
     return { ok: true };
