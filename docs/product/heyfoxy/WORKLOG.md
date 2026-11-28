@@ -516,3 +516,36 @@ Ejecutado, sin contratar, migrar ni desplegar:
 - **Validación** en «Uso y presupuestos» (qa-owner): motor local, clave «Configurada (valor oculto)», modelos verificados, presupuestos de US$2,50, MedPlus sin datos reales autorizados, **consumo generativo real US$0** (0 filas `anthropic`, 0 reservas). Capturas en `/Volumes/MediaFOX_DEV/QA/HeyFoxy/V2/2026-11-28/go-ia-2/`.
 - **Plan GO-IA-3** ([27](./27_GO_IA_2_Y_PLAN_GO_IA_3.md)): 20 llamadas máximo, US$5, solo Aurora y Horizonte. Condiciones detectadas: Brand Brain de Aurora con `is_synthetic = false` (HF-BB-05) y sin imágenes sintéticas analizables (HF-QA-08).
 - **Sin** llamadas a Anthropic, datos de MedPlus enviados, cambios en Production, MediaFOX OS ni MOVOS. Gate D abierto.
+
+## 2026-11-28 — Preparación de GO-IA-3 (local)
+
+- **Decisiones de Álvaro:**
+  - HF-BB-05: corregir la clasificación sintética;
+  - HF-QA-08, opción A: imágenes sintéticas propias;
+  - ampliar los datos sintéticos de Clínica Aurora y Banco Horizonte.
+- **Barrera de organización:** se comprueba antes de cualquier caché, contexto, imagen, reserva o solicitud, en todas las rutas generativas. La marca sintética solo vale en organizaciones demo, y eso lo decide el servidor.
+- **Migración 0010** (solo local, md5 `5c6c98e5…`):
+  - Brand Brain hereda `is_demo`;
+  - una organización real no puede escribir datos sintéticos;
+  - imágenes del host reservado solo en organizaciones demo;
+  - topes acumulados de campaña;
+  - latencias por llamada.
+  - Pruebas: 21 aserciones, rollback exacto a 0009.
+  - Incidencia evitada: el nombre `social_posts_synthetic` ya existía (guard de proveedor de 0002); los triggers nuevos usan `*_synthetic_class` y el guard original se conserva.
+- **26 imágenes publicitarias sintéticas propias** (piezas gráficas, portadas de carrusel y miniaturas de video). Se leen del disco, sin red ni Storage, y la descarga de la CDN de Meta no cambia.
+- **Seed sintético** (md5 `ce161acb…`) con su rollback:
+  - Brand Brain completo de las dos marcas, con 3 pilares y 3 campañas cada una;
+  - 4 aprendizajes validados;
+  - 26 publicaciones, con ≥ 3 comparables por red y formato;
+  - 77 mediciones.
+- **Pruebas:**
+  - vitest: 282 superadas (12 nuevas);
+  - base: aislamiento, 0006 a 0010, seed QA, seed GO-IA-3 y persistencia, todas superadas;
+  - tipos, ESLint, Prettier y compilación correctos; la traza incluye las imágenes;
+  - Playwright: 198 superadas y 0 fallidas;
+  - lockfile sin cambios.
+- **Plan GO-IA-3** ([28](./28_GO_IA_3_PREPARACION.md)):
+  - 16 llamadas planificadas y 4 de reserva; topes de US$2,50 y 12 llamadas para Aurora, US$2,50 y 8 para Horizonte, y US$5 en total;
+  - matriz de calidad con criterios bloqueantes;
+  - procedimientos de activación, desactivación y rollback.
+- **Sin** despliegue, migraciones remotas, proveedor activado ni llamadas con costo. Sin cambios en MedPlus, Production, MediaFOX OS ni MOVOS. Gate D abierto.
