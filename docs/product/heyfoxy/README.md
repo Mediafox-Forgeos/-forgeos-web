@@ -40,6 +40,7 @@ Plataforma SaaS multiempresa de escucha social con IA, monitoreo reputacional, a
 | 24  | [WO-HF-V2-UX-REFINEMENT-002: Home, Explorer, Ask Foxy y Brand Brain](./24_WO_HF_V2_UX_REFINEMENT_002.md)                            | Inteligencia                          |
 | 25  | [Guía de activación de Foxy Intelligence Engine con IA generativa](./25_AI_ACTIVATION_GUIDE.md)                                     | Inteligencia                          |
 | 26  | [WO-HF-AI-ENGINE-001: Foxy Intelligence Engine con IA generativa (local)](./26_WO_HF_AI_ENGINE_001.md)                              | Inteligencia                          |
+| 27  | [GO-IA-2 (credenciales, 0009, Preview) y plan GO-IA-3](./27_GO_IA_2_Y_PLAN_GO_IA_3.md)                                              | Inteligencia                          |
 | DS  | [Design System V2 v0.3](./design-system/HEY_FOXY_V2_DESIGN_SYSTEM.md) · [concepto](./design-system/HEY_FOXY_V2_CONCEPT.png)         | V2                                    |
 | —   | [WORKLOG](./WORKLOG.md) · [TECH_BACKLOG](./TECH_BACKLOG.md)                                                                         | Seguimiento                           |
 

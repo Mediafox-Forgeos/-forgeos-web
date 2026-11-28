@@ -505,3 +505,14 @@ Ejecutado, sin contratar, migrar ni desplegar:
 - **Design System v0.5**: estados del motor (diez estados de la WO).
 - **Pruebas**: vitest 270 (52 nuevas, sin red), tipos, ESLint, Prettier, compilación, Playwright 198 superadas y 0 fallidas, axe sin violaciones nuevas; 3 referencias clásicas de `/uso` regrabadas tras revisión. Capturas con fixtures en `/Volumes/MediaFOX_DEV/QA/HeyFoxy/V2/2026-11-27/ai-engine-001/`.
 - **Sin** proveedor activado, claves, llamadas con costo, datos reales enviados, migraciones remotas, despliegue, cambios en Production, MediaFOX OS ni MOVOS. Gate D abierto. Siguiente: GO-IA-2.
+
+## 2026-11-27/28 — GO-IA-2: credenciales, 0009 en QA y Preview `8cfd701` (proveedor apagado)
+
+- **Anthropic** (configuración asistida en Chrome; inició sesión Álvaro): workspace `heyfoxy-preview` con límite de US$25 al mes, recarga automática desactivada, clave `heyfoxy-preview-engine` limitada al workspace y con vencimiento el 27-12-2026 (HF-AI-19). La clave la creó y la pegó en Vercel Álvaro; no pasó por chat, terminal, capturas ni registros. Organización personal aceptada temporalmente solo para pruebas sintéticas; traslado a una organización corporativa de MediaFOX antes de GO-IA-5 (HF-AI-20). Saldo US$0,01: la recarga la hace Álvaro.
+- **Vercel (solo Preview, Sensitive):** `ANTHROPIC_API_KEY`, `HF_MIGRATION_0009_APPLIED`, `HF_AI_ORG_MONTHLY_CAP_USD=15`, `HF_AI_SYNTHETIC_CAP_USD=5`. Sin `HF_AI_CONTENT_PROVIDER`, `HF_AI_PROVIDER`, `OPENAI_API_KEY` ni organizaciones autorizadas.
+- **Migración 0009 aplicada en `heyfoxy-qa`** (versión `20261128043320`, md5 `f1cb9a87…` idéntico al archivo): historial 0001–0008 verificado, huella previa, ensayo local; **17/17 aserciones remotas** (transacción revertida), sin residuos, huellas y permisos previos idénticos. Asesor: solo INFO intencionado en `ai_reservations`; avisos previos en HF-SEC-08.
+- **Presupuestos:** US$2,50 al mes para Clínica Aurora y Banco Horizonte. MedPlus sin fila (tope de plataforma US$15) y bloqueado por no estar autorizado.
+- **Preview** `dpl_Gp3LvQWReUq6vFcfjDaKp2kivRoo` (`heyfoxy-5wpsxw53p-mediafox.vercel.app`), SHA `8cfd70120f2d4e9a49fd4e772c7ad22226e94d02` igual a origin, sin alias, protección `all`, acceso anónimo bloqueado; Production en `dpl_9YVh…`.
+- **Validación** en «Uso y presupuestos» (qa-owner): motor local, clave «Configurada (valor oculto)», modelos verificados, presupuestos de US$2,50, MedPlus sin datos reales autorizados, **consumo generativo real US$0** (0 filas `anthropic`, 0 reservas). Capturas en `/Volumes/MediaFOX_DEV/QA/HeyFoxy/V2/2026-11-28/go-ia-2/`.
+- **Plan GO-IA-3** ([27](./27_GO_IA_2_Y_PLAN_GO_IA_3.md)): 20 llamadas máximo, US$5, solo Aurora y Horizonte. Condiciones detectadas: Brand Brain de Aurora con `is_synthetic = false` (HF-BB-05) y sin imágenes sintéticas analizables (HF-QA-08).
+- **Sin** llamadas a Anthropic, datos de MedPlus enviados, cambios en Production, MediaFOX OS ni MOVOS. Gate D abierto.

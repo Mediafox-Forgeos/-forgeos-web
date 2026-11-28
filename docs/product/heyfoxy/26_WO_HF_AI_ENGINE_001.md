@@ -1,11 +1,11 @@
 # 26 — WO-HF-AI-ENGINE-001: Foxy Intelligence Engine con IA generativa (GO-IA-0 + GO-IA-1)
 
-| Propiedad | Valor                                                                                                                                                                |
-| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Fecha     | 2026-11-27                                                                                                                                                           |
-| Estado    | **Implementada en local.** Ningún proveedor activado, ninguna clave creada, ninguna llamada real ni con costo. Sin despliegue ni migraciones remotas. Gate D abierto |
-| GO        | GO-IA-0 (arquitectura del doc 25) y GO-IA-1 (desarrollo local), autorizados por Álvaro                                                                               |
-| Capturas  | `/Volumes/MediaFOX_DEV/QA/HeyFoxy/V2/2026-11-27/ai-engine-001/` (fuera de Git, con fixtures sintéticos)                                                              |
+| Propiedad | Valor                                                                                                                                                                                               |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Fecha     | 2026-11-27                                                                                                                                                                                          |
+| Estado    | **Implementada en local; GO-IA-2 completado** (doc 27): 0009 aplicada en heyfoxy-qa, clave y variables en Preview, Preview `8cfd701` con el proveedor apagado. Ninguna llamada real. Gate D abierto |
+| GO        | GO-IA-0 (arquitectura del doc 25) y GO-IA-1 (desarrollo local), autorizados por Álvaro                                                                                                              |
+| Capturas  | `/Volumes/MediaFOX_DEV/QA/HeyFoxy/V2/2026-11-27/ai-engine-001/` (fuera de Git, con fixtures sintéticos)                                                                                             |
 
 ## 1. Verificación de modelos y tarifas (2026-11-27)
 
@@ -273,7 +273,7 @@ Ninguna tiene errores de consola ni desbordamiento horizontal. La referencia de 
 - **Conversación:** se conserva en la sesión del navegador, no en la base.
 - **Cancelación:** la de Ask Foxy está implementada; el análisis de contenido no se puede cancelar desde la interfaz (tiempo máximo de 45 s).
 - **Concurrencia:** en demo es por proceso; en Supabase queda garantizada por 0009.
-- **0009** no está aplicada en remoto. Sin ella, la IA generativa no se activa en el Preview, por diseño.
+- **0009** aplicada en heyfoxy-qa el 2026-11-28 (GO-IA-2, doc 27).
 - **Panel lateral:** cubre el contenido en escritorio (HF-UX-22, sin cambios).
 - **`next build`** muestra un aviso de su paso de ESLint integrado: no encuentra `eslint-plugin-react-hooks` por la resolución del monorepo. ESLint ejecutado directamente está limpio; no se cambiaron dependencias.
 - **Capturas en modo desarrollo:** muestran el indicador «N» de Next en la esquina inferior izquierda.
@@ -281,3 +281,5 @@ Ninguna tiene errores de consola ni desbordamiento horizontal. La referencia de 
 ## 14. Siguiente paso
 
 Detenido aquí. Se solicita **GO-IA-2** (sección 9): aplicar 0009 en heyfoxy-qa, cargar la clave y las variables, y desplegar el Preview protegido **sin encender el proveedor**. GO-IA-3 no se inicia sin su propio GO.
+
+**Actualización 2026-11-28:** GO-IA-2 completado. Plan y condiciones de GO-IA-3 en el [doc 27](./27_GO_IA_2_Y_PLAN_GO_IA_3.md).
